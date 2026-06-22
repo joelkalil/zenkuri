@@ -7,18 +7,23 @@ import {
   finishSyncRun,
   getCredential,
   getGameById,
+  importPlanning,
+  latestSyncByPlatform,
   listAchievements,
   listConfiguredPlatforms,
   listGames,
+  listSyncRuns,
   patchPlanning,
   readPlanning,
   reorderBacklog,
+  resetPlanning,
   setCredential,
 } from './db';
 import type { Platform } from './types';
 import { syncPsnAchievementsForGame, syncPsnLibrary } from './providers/psn';
 import { syncRetroAchievementsForGame, syncRetroAchievementsLibrary } from './providers/retroachievements';
 import { syncSteamAchievementsForGame, syncSteamLibrary } from './providers/steam';
+import { clearMediaCache, serveMedia, warmAchievementMedia, warmGameMedia } from './media';
 
 const app = express();
 const port = Number(process.env.ZENKURI_API_PORT ?? 4343);
@@ -56,6 +61,8 @@ async function syncAchievements(platform: Platform, gameId: number) {
 
 async function syncPlatform(platform: Platform) {
   const count = await syncLibrary(platform);
+  // Mirror every cover + game icon locally (best effort, never blocks the sync).
+  await warmGameMedia(platform).catch(() => 0);
   const games = listGames(platform);
   let achievementSets = 0;
   let detailErrors = 0;
@@ -69,7 +76,10 @@ async function syncPlatform(platform: Platform) {
   for (const game of games.filter(shouldHydrate)) {
     try {
       const synced = await syncAchievements(platform, game.id);
-      if (synced > 0) achievementSets += 1;
+      if (synced > 0) {
+        achievementSets += 1;
+        await warmAchievementMedia(game.id).catch(() => 0);
+      }
     } catch {
       detailErrors += 1;
     }
@@ -80,6 +90,24 @@ async function syncPlatform(platform: Platform) {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+// Local media cache: serves a mirrored file, lazily downloading from the
+// original source on first hit, and falling back to a branded placeholder.
+app.use('/media', async (req, res, next) => {
+  try {
+    const parts = req.path.replace(/^\/+/, '').split('/').filter(Boolean);
+    const resolved = await serveMedia(parts);
+    if (!resolved) return res.status(404).end();
+    const isPlaceholder = resolved.filePath.toLowerCase().endsWith('.svg');
+    res.setHeader('Content-Type', resolved.contentType);
+    // Cached art is immutable; placeholders should be revalidated so a manual
+    // drop-in replacement shows up without a hard refresh.
+    res.setHeader('Cache-Control', isPlaceholder ? 'no-cache' : 'public, max-age=86400');
+    res.end(resolved.body);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/config', (_req, res) => {
@@ -176,8 +204,26 @@ app.post('/api/sync', async (_req, res, next) => {
   }
 });
 
+app.get('/api/sync/runs', (_req, res) => {
+  res.json({ runs: listSyncRuns(12), latest: latestSyncByPlatform() });
+});
+
+app.post('/api/media/clear', (_req, res) => {
+  res.json(clearMediaCache());
+});
+
 app.get('/api/planning', (_req, res) => {
   res.json(readPlanning());
+});
+
+app.post('/api/planning/reset', (req, res) => {
+  const scope = req.body?.scope === 'notes' || req.body?.scope === 'backlog' ? req.body.scope : 'all';
+  resetPlanning(scope);
+  res.json(readPlanning());
+});
+
+app.post('/api/planning/import', (req, res) => {
+  res.json(importPlanning(req.body ?? {}));
 });
 
 app.patch('/api/planning/:gameId', (req, res) => {

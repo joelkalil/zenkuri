@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { ApiAchievement, ApiGame, Platform, PlanningRecord, StoredCredential } from './types';
+import { achievementMediaUrl, coverMediaUrl, iconMediaUrl } from './mediaPaths';
 
 const dbPath = process.env.ZENKURI_DB_PATH ?? join(process.cwd(), 'data', 'zenkuri.sqlite');
 mkdirSync(dirname(dbPath), { recursive: true });
@@ -403,10 +404,10 @@ export function listGames(platform?: Platform): ApiGame[] {
       platform: row.platform,
       platformGameId: row.external_id,
       name: row.title,
-      coverUrl: row.cover_url ?? '',
+      coverUrl: coverMediaUrl(row.platform, row.external_id, row.title),
       playtime_forever: row.playtime_minutes ?? 0,
       playtime_2weeks: row.recent_playtime_minutes ?? undefined,
-      img_icon_url: row.icon_url ?? '',
+      img_icon_url: row.icon_url ? iconMediaUrl(row.platform, row.external_id, row.title) : '',
       has_community_visible_stats: Boolean(row.has_achievements) || total > 0,
       completion: {
         total,
@@ -424,6 +425,8 @@ export function getGameById(id: number) {
 }
 
 export function listAchievements(gameId: number): ApiAchievement[] {
+  const game = db.prepare('select platform, external_id, title from games where id = ?')
+    .get(gameId) as { platform: Platform; external_id: string; title: string } | undefined;
   const rows = db.prepare(`
     select a.*, s.achieved, s.unlock_time
     from achievements a
@@ -432,18 +435,27 @@ export function listAchievements(gameId: number): ApiAchievement[] {
     order by s.achieved desc, s.unlock_time desc, a.display_order asc, a.title collate nocase
   `).all(gameId) as any[];
 
-  return rows.map((row) => ({
-    name: row.external_id,
-    displayName: row.title,
-    description: row.description ?? '',
-    icon: row.icon_url ?? '',
-    icongray: row.locked_icon_url ?? row.icon_url ?? '',
-    hidden: row.hidden ? 1 : 0,
-    achieved: Boolean(row.achieved),
-    unlocktime: row.unlock_time ?? 0,
-    points: row.points ?? undefined,
-    type: row.type ?? undefined,
-  }));
+  return rows.map((row) => {
+    const icon = game && row.icon_url
+      ? achievementMediaUrl(game.platform, game.external_id, game.title, row.external_id, row.title, false)
+      : '';
+    const lockedSource = row.locked_icon_url || row.icon_url;
+    const icongray = game && lockedSource
+      ? achievementMediaUrl(game.platform, game.external_id, game.title, row.external_id, row.title, row.locked_icon_url ? true : false)
+      : icon;
+    return {
+      name: row.external_id,
+      displayName: row.title,
+      description: row.description ?? '',
+      icon,
+      icongray,
+      hidden: row.hidden ? 1 : 0,
+      achieved: Boolean(row.achieved),
+      unlocktime: row.unlock_time ?? 0,
+      points: row.points ?? undefined,
+      type: row.type ?? undefined,
+    };
+  });
 }
 
 export function readPlanning(): PlanningRecord {
@@ -495,6 +507,51 @@ export function patchPlanning(gameId: number, patch: Partial<{
 export function reorderBacklog(ids: string[]) {
   const tx = db.transaction(() => {
     ids.forEach((id, index) => patchPlanning(Number(id), { inBacklog: true, backlogOrder: index }));
+  });
+  tx();
+  return readPlanning();
+}
+
+export function listSyncRuns(limit = 12) {
+  return (db.prepare('select id, platform, started_at, finished_at, status, message from sync_runs order by id desc limit ?')
+    .all(limit) as any[])
+    .map((row) => ({
+      id: row.id as number,
+      platform: row.platform as Platform,
+      startedAt: row.started_at as string,
+      finishedAt: row.finished_at as string | null,
+      status: row.status as string,
+      message: row.message as string | null,
+    }));
+}
+
+/** Latest sync run per platform (for the connection/status panels). */
+export function latestSyncByPlatform() {
+  const rows = db.prepare(`
+    select platform, max(started_at) as started_at, status, finished_at
+    from sync_runs group by platform
+  `).all() as any[];
+  const map: Record<string, { startedAt: string; status: string; finishedAt: string | null }> = {};
+  for (const row of rows) map[row.platform] = { startedAt: row.started_at, status: row.status, finishedAt: row.finished_at };
+  return map;
+}
+
+export function resetPlanning(scope: 'all' | 'notes' | 'backlog') {
+  if (scope === 'all') db.prepare('delete from planning').run();
+  else if (scope === 'notes') db.prepare("update planning set note = ''").run();
+  else if (scope === 'backlog') db.prepare('update planning set in_backlog = 0, backlog_order = null').run();
+}
+
+export function importPlanning(record: Partial<PlanningRecord>) {
+  const tx = db.transaction(() => {
+    db.prepare('delete from planning').run();
+    (record.backlog ?? []).forEach((id, index) => patchPlanning(Number(id), { inBacklog: true, backlogOrder: index }));
+    (record.pinned ?? []).forEach((id) => patchPlanning(Number(id), { pinned: true }));
+    (record.dropped ?? []).forEach((id) => patchPlanning(Number(id), { dropped: true }));
+    Object.entries(record.notes ?? {}).forEach(([id, note]) => patchPlanning(Number(id), { note }));
+    Object.entries(record.effort ?? {}).forEach(([id, effort]) => patchPlanning(Number(id), { effort }));
+    Object.entries(record.schedule ?? {}).forEach(([id, schedule]) => patchPlanning(Number(id), { schedule }));
+    Object.entries(record.guides ?? {}).forEach(([id, guideUrl]) => patchPlanning(Number(id), { guideUrl }));
   });
   tx();
   return readPlanning();

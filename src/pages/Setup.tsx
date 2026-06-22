@@ -18,6 +18,7 @@ import {
 } from '../lib/api';
 import type { Platform } from '../types/steam';
 import { PLATFORM_META } from '../lib/platforms';
+import { Logo } from '../components/Logo';
 
 interface SetupProps {
   onComplete: () => void;
@@ -39,44 +40,46 @@ const EMPTY_FORM: PlatformForm = {
   npsso: '',
 };
 
-const STEPS = ['Platforms', 'Profile', 'Finish'] as const;
+const STEPS = ['Plataformas', 'Perfil', 'Finalizar'] as const;
 
 const PLATFORMS: {
   id: Platform;
   label: string;
   blurb: string;
+  recommended?: boolean;
   /** circular logo container background + ring */
   iconClass: string;
 }[] = [
   {
     id: 'steam',
     label: 'Steam',
-    blurb: 'Import your Steam achievements',
+    blurb: 'Importe suas conquistas da Steam',
+    recommended: true,
     iconClass: 'bg-gradient-to-b from-slate-700 to-slate-900 ring-1 ring-slate-600/50',
   },
   {
     id: 'psn',
     label: 'PlayStation Network',
-    blurb: 'Import your PSN trophies',
+    blurb: 'Importe seus troféus da PSN',
     iconClass: 'bg-gradient-to-b from-blue-500 to-blue-700 ring-1 ring-blue-400/40',
   },
   {
     id: 'retroachievements',
     label: 'RetroAchievements',
-    blurb: 'Import your retro achievements',
+    blurb: 'Importe suas conquistas retrô',
     iconClass: 'bg-gray-950 ring-1 ring-amber-500/50',
   },
 ];
 
 function platformValidation(platform: Platform, form: PlatformForm): string {
   if (platform === 'steam') {
-    if (!form.steamKey.trim()) return 'Steam API Key is required.';
-    if (!/^\d{17}$/.test(form.steamId.trim())) return 'Steam ID must be a 17-digit number.';
+    if (!form.steamKey.trim()) return 'A API Key da Steam é obrigatória.';
+    if (!/^\d{17}$/.test(form.steamId.trim())) return 'O Steam ID deve ter 17 dígitos.';
   }
-  if (platform === 'psn' && !form.npsso.trim()) return 'PSN NPSSO is required.';
+  if (platform === 'psn' && !form.npsso.trim()) return 'O token NPSSO da PSN é obrigatório.';
   if (platform === 'retroachievements') {
-    if (!form.raUsername.trim()) return 'RetroAchievements username is required.';
-    if (!form.raKey.trim()) return 'RetroAchievements Web API key is required.';
+    if (!form.raUsername.trim()) return 'O usuário do RetroAchievements é obrigatório.';
+    if (!form.raKey.trim()) return 'A Web API Key do RetroAchievements é obrigatória.';
   }
   return '';
 }
@@ -144,101 +147,145 @@ export default function Setup({ onComplete }: SetupProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-4xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-100">Welcome to Zenkuri</h1>
-          <p className="text-gray-500 mt-2">Let&apos;s connect at least one platform to get started.</p>
-        </div>
+    <div className="relative flex min-h-screen bg-gray-950">
+      {/* Content panel */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl px-6 py-10 sm:px-10">
+          <Logo size={34} />
 
-        {/* Stepper */}
-        <div className="flex items-center justify-center gap-2 sm:gap-4 mb-10">
-          {STEPS.map((step, index) => {
-            const isActive = index === 0;
-            return (
-              <div key={step} className="flex items-center gap-2 sm:gap-4">
-                <div className="flex items-center gap-2.5">
-                  <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm font-semibold transition-colors ${
-                      isActive
-                        ? 'border-violet-500 text-violet-300 bg-violet-500/10'
-                        : 'border-gray-700 text-gray-500'
-                    }`}
-                  >
-                    {index + 1}
-                  </span>
-                  <span className={`text-sm font-medium ${isActive ? 'text-gray-100' : 'text-gray-500'}`}>
-                    {step}
-                  </span>
-                </div>
-                {index < STEPS.length - 1 && <span className="h-px w-8 sm:w-16 bg-gray-800" />}
-              </div>
-            );
-          })}
-        </div>
+          <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-100">Bem-vindo ao Zenkuri</h1>
+              <p className="mt-2 text-gray-500">Vamos configurar sua jornada de conquistas em poucos passos.</p>
+            </div>
+            {/* Stepper */}
+            <div className="flex shrink-0 items-center gap-2">
+              {STEPS.map((step, index) => {
+                const isActive = index === 0;
+                return (
+                  <div key={step} className="flex items-center gap-2">
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${
+                      isActive ? 'border-violet-500 bg-violet-500/10 text-violet-300' : 'border-gray-700 text-gray-600'
+                    }`}>
+                      {index + 1}
+                    </span>
+                    <span className={`text-xs font-medium ${isActive ? 'text-gray-200' : 'text-gray-600'}`}>{step}</span>
+                    {index < STEPS.length - 1 && <span className="h-px w-5 bg-gray-800" />}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
 
-        {/* Platform cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {PLATFORMS.map(({ id, label, blurb, iconClass }) => {
-            const isConnected = connected.includes(id);
-            return (
-              <div
-                key={id}
-                className={`relative flex flex-col items-center text-center rounded-2xl border p-6 transition-colors ${
-                  isConnected
-                    ? 'border-emerald-600/50 bg-emerald-950/10'
-                    : 'border-gray-800 bg-gray-900/60'
-                }`}
-              >
-                {isConnected && (
-                  <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                    <Check className="h-3 w-3" />
-                    Connected
-                  </span>
-                )}
+          <div className="mt-10">
+            <h2 className="text-lg font-bold text-gray-100">1. Conecte pelo menos uma plataforma</h2>
+            <p className="mt-1 text-sm text-gray-500">Escolha suas plataformas para começar a importar conquistas.</p>
+          </div>
 
-                <div className={`mb-5 flex h-20 w-20 items-center justify-center rounded-full ${iconClass}`}>
-                  <img
-                    src={PLATFORM_META[id].logo}
-                    alt=""
-                    className="max-h-11 max-w-11 object-contain"
-                  />
-                </div>
-
-                <h2 className="text-lg font-bold text-gray-100">{label}</h2>
-                <p className="mt-1.5 text-sm text-gray-500 leading-snug">{blurb}</p>
-
-                <button
-                  type="button"
-                  onClick={() => openModal(id)}
-                  className={`mt-5 w-full rounded-lg py-2.5 text-sm font-semibold transition-colors ${
-                    isConnected
-                      ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-                      : 'bg-violet-600 text-white hover:bg-violet-500'
+          {/* Platform cards */}
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {PLATFORMS.map(({ id, label, blurb, iconClass, recommended }) => {
+              const isConnected = connected.includes(id);
+              return (
+                <div
+                  key={id}
+                  className={`relative flex flex-col items-center rounded-2xl border p-6 text-center transition-colors ${
+                    isConnected ? 'border-emerald-600/50 bg-emerald-950/10' : 'border-gray-800 bg-gray-900/60'
                   }`}
                 >
-                  {isConnected ? 'Reconnect' : 'Connect'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+                  {isConnected ? (
+                    <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                      <Check className="h-3 w-3" /> Conectado
+                    </span>
+                  ) : recommended ? (
+                    <span className="absolute right-3 top-3 rounded-full bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-300">
+                      Recomendado
+                    </span>
+                  ) : null}
 
-        {/* Footer */}
-        <div className="mt-8 flex flex-col items-center gap-4">
-          <button
-            type="button"
-            onClick={onComplete}
-            disabled={!canContinue}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-violet-600"
-          >
-            <span>{canContinue ? 'Continue to Zenkuri' : 'Connect a platform to continue'}</span>
-            {canContinue && <ArrowRight className="h-4 w-4" />}
-          </button>
-          <p className="text-center text-xs text-gray-500">
-            You can connect more platforms later in Settings.
-          </p>
+                  <div className={`mb-5 flex h-20 w-20 items-center justify-center rounded-full ${iconClass}`}>
+                    <img src={PLATFORM_META[id].logo} alt="" className="max-h-11 max-w-11 object-contain" />
+                  </div>
+
+                  <h3 className="text-lg font-bold text-gray-100">{label}</h3>
+                  <p className="mt-1.5 text-sm leading-snug text-gray-500">{blurb}</p>
+
+                  <button
+                    type="button"
+                    onClick={() => openModal(id)}
+                    className={`mt-5 w-full rounded-lg py-2.5 text-sm font-semibold transition-colors ${
+                      isConnected ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-violet-600 text-white hover:bg-violet-500'
+                    }`}
+                  >
+                    {isConnected ? 'Reconectar' : `Conectar ${PLATFORM_META[id].short}`}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 flex items-center gap-2 rounded-xl border border-gray-800 bg-gray-900/40 px-4 py-3 text-xs text-gray-500">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" />
+            Seguro e privado · suas credenciais ficam apenas no seu dispositivo, no SQLite local.
+          </div>
+
+          {/* Footer */}
+          <div className="mt-8 flex items-center justify-between">
+            <a href="https://github.com/joelkalil" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 transition-colors hover:text-gray-300">
+              Precisa de ajuda?
+            </a>
+            <button
+              type="button"
+              onClick={onComplete}
+              disabled={!canContinue}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span>Continuar</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Moonlit hero panel */}
+      <div className="relative hidden w-[34%] shrink-0 overflow-hidden border-l border-gray-800 lg:block">
+        <svg viewBox="0 0 400 800" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full">
+          <defs>
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#2a1a52" />
+              <stop offset="0.5" stopColor="#1a1235" />
+              <stop offset="1" stopColor="#0c0a18" />
+            </linearGradient>
+            <radialGradient id="moon" cx="50%" cy="50%" r="50%">
+              <stop offset="0" stopColor="#e9deff" />
+              <stop offset="0.7" stopColor="#b59bff" />
+              <stop offset="1" stopColor="#b59bff" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="400" height="800" fill="url(#sky)" />
+          <circle cx="250" cy="240" r="150" fill="url(#moon)" opacity="0.5" />
+          <circle cx="250" cy="240" r="74" fill="#f3edff" />
+          <circle cx="250" cy="240" r="74" fill="#1a1235" opacity="0.06" />
+          {/* stars */}
+          <g fill="#fff" opacity="0.7">
+            <circle cx="60" cy="120" r="1.4" /><circle cx="120" cy="80" r="1" /><circle cx="330" cy="120" r="1.2" />
+            <circle cx="90" cy="300" r="1" /><circle cx="350" cy="320" r="1.3" /><circle cx="40" cy="220" r="1" />
+          </g>
+          {/* mountains */}
+          <path d="M0 560 L90 460 L170 540 L250 430 L330 530 L400 470 L400 800 L0 800 Z" fill="#150f2c" />
+          <path d="M0 640 L80 560 L180 630 L260 540 L360 620 L400 580 L400 800 L0 800 Z" fill="#0e0a20" />
+          {/* lone warrior on a ledge */}
+          <path d="M150 632 l60 0 l-6 14 l-48 0 Z" fill="#080610" />
+          <g fill="#080610">
+            <ellipse cx="180" cy="628" rx="5" ry="6" />
+            <rect x="177" y="606" width="6" height="20" rx="3" />
+            <path d="M183 612 l16 -26 l3 2 l-15 27 Z" />
+          </g>
+        </svg>
+        <div className="absolute inset-0 bg-gradient-to-l from-transparent to-gray-950/40" />
+        <div className="absolute bottom-0 left-0 right-0 p-8">
+          <p className="text-lg font-bold text-white">Todos os seus troféus.</p>
+          <p className="text-lg font-bold text-violet-300">Cada plataforma. Um só plano.</p>
         </div>
       </div>
 
@@ -258,7 +305,7 @@ export default function Setup({ onComplete }: SetupProps) {
                   <img src={PLATFORM_META[modal].logo} alt="" className="max-h-6 max-w-6 object-contain" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-100">Connect {activeMeta.label}</h3>
+                  <h3 className="text-base font-bold text-gray-100">Conectar {activeMeta.label}</h3>
                   <p className="text-xs text-gray-500">{activeMeta.blurb}</p>
                 </div>
               </div>
@@ -284,11 +331,11 @@ export default function Setup({ onComplete }: SetupProps) {
                       type="password"
                       value={form.steamKey}
                       onChange={(e) => updateForm('steamKey', e.target.value)}
-                      placeholder="Paste your Steam Web API key"
+                      placeholder="Cole sua Steam Web API Key"
                       className={inputClass}
                     />
                     <p className="mt-1.5 text-xs text-gray-500">
-                      Get yours at{' '}
+                      Obtenha a sua em{' '}
                       <a
                         href="https://steamcommunity.com/dev/apikey"
                         target="_blank"
@@ -308,7 +355,7 @@ export default function Setup({ onComplete }: SetupProps) {
                       type="text"
                       value={form.steamId}
                       onChange={(e) => updateForm('steamId', e.target.value)}
-                      placeholder="e.g. 76561198000000000"
+                      placeholder="ex. 76561198000000000"
                       className={`${inputClass} font-mono`}
                     />
                   </div>
@@ -325,11 +372,11 @@ export default function Setup({ onComplete }: SetupProps) {
                     type="password"
                     value={form.npsso}
                     onChange={(e) => updateForm('npsso', e.target.value)}
-                    placeholder="Paste your NPSSO token"
+                    placeholder="Cole seu token NPSSO"
                     className={`${inputClass} font-mono`}
                   />
                   <p className="mt-1.5 text-xs text-gray-500">
-                    NPSSO is sensitive, like a password. It stays in your local SQLite database.
+                    O NPSSO é sensível, como uma senha. Ele fica apenas no seu SQLite local.
                   </p>
                 </div>
               )}
@@ -339,13 +386,13 @@ export default function Setup({ onComplete }: SetupProps) {
                   <div>
                     <label className={labelClass}>
                       <User className="h-3.5 w-3.5" />
-                      Username
+                      Usuário
                     </label>
                     <input
                       type="text"
                       value={form.raUsername}
                       onChange={(e) => updateForm('raUsername', e.target.value)}
-                      placeholder="RetroAchievements username"
+                      placeholder="Usuário do RetroAchievements"
                       className={inputClass}
                     />
                   </div>
@@ -358,7 +405,7 @@ export default function Setup({ onComplete }: SetupProps) {
                       type="password"
                       value={form.raKey}
                       onChange={(e) => updateForm('raKey', e.target.value)}
-                      placeholder="RA Web API key"
+                      placeholder="RA Web API Key"
                       className={inputClass}
                     />
                   </div>
@@ -380,10 +427,10 @@ export default function Setup({ onComplete }: SetupProps) {
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Connecting &amp; syncing…
+                    Conectando e sincronizando…
                   </>
                 ) : (
-                  'Connect & Sync'
+                  'Conectar e Sincronizar'
                 )}
               </button>
             </div>

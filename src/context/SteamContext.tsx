@@ -17,8 +17,14 @@ interface SteamContextValue {
   scanning: boolean;
   scanProgress: { done: number; total: number };
   configuredPlatforms: Platform[];
+  /** epoch ms of the last successful sync, or null if never synced this install */
+  lastSyncAt: number | null;
+  /** average completion across tracked games (0–100) */
+  overallPercent: number;
   sync: () => void;
 }
+
+const LAST_SYNC_KEY = 'zenkuri-last-sync';
 
 const SteamContext = createContext<SteamContextValue | null>(null);
 
@@ -29,6 +35,10 @@ export function SteamProvider({ children }: { children: React.ReactNode }) {
   const [scanning, setScanning] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [configuredPlatforms, setConfiguredPlatforms] = useState<Platform[]>([]);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(() => {
+    const raw = localStorage.getItem(LAST_SYNC_KEY);
+    return raw ? Number(raw) : null;
+  });
 
   const loadGames = useCallback(async () => {
     setLoading(true);
@@ -62,7 +72,12 @@ export function SteamProvider({ children }: { children: React.ReactNode }) {
     setScanning(true);
     setError(null);
     syncAllPlatforms()
-      .then(() => setRefreshToken((token) => token + 1))
+      .then(() => {
+        const now = Date.now();
+        localStorage.setItem(LAST_SYNC_KEY, String(now));
+        setLastSyncAt(now);
+        setRefreshToken((token) => token + 1);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to sync platforms'))
       .finally(() => setScanning(false));
   }, []);
@@ -82,6 +97,13 @@ export function SteamProvider({ children }: { children: React.ReactNode }) {
     [games, completionMap],
   );
 
+  const overallPercent = useMemo(() => {
+    const entries = [...completionMap.values()];
+    if (entries.length === 0) return 0;
+    const sum = entries.reduce((acc, entry) => acc + entry.percent, 0);
+    return Math.round(sum / entries.length);
+  }, [completionMap]);
+
   return (
     <SteamContext.Provider value={{
       games,
@@ -92,6 +114,8 @@ export function SteamProvider({ children }: { children: React.ReactNode }) {
       scanning,
       scanProgress: { done: scanning ? 0 : games.length, total: games.length },
       configuredPlatforms,
+      lastSyncAt,
+      overallPercent,
       sync,
     }}>
       {children}

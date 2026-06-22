@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, CircleSlash, Clock3, Crosshair, Library, Medal, Play, Pin, Target, Trophy, Zap } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
-import { GameCard } from '../components/GameCard';
 import { ProgressBar, completionTextColor } from '../components/ProgressBar';
 import { SkeletonCard } from '../components/SkeletonCard';
 import { GameCover } from '../components/GameCover';
@@ -17,6 +16,7 @@ function StatCell({
   icon: Icon,
   image,
   accentText,
+  accentBar,
   valueClass = 'text-gray-100',
   hint,
   span = false,
@@ -27,6 +27,7 @@ function StatCell({
   icon: ElementType;
   image?: string;
   accentText: string;
+  accentBar: string;
   valueClass?: string;
   hint: string;
   span?: boolean;
@@ -35,16 +36,17 @@ function StatCell({
   return (
     <button
       onClick={onClick}
-      className={`group relative flex flex-col gap-3 bg-gray-900 p-4 text-left transition-colors hover:bg-gray-800/40 focus:outline-none focus-visible:bg-gray-800/40 ${span ? 'col-span-2 sm:col-span-1' : ''}`}
+      className={`group relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/70 p-4 text-left transition-colors hover:border-gray-700 hover:bg-gray-900 focus:outline-none focus-visible:border-violet-600 ${span ? 'col-span-2 sm:col-span-1' : ''}`}
     >
+      <span className={`absolute inset-x-0 top-0 h-[3px] ${accentBar}`} />
       <div className="flex items-center justify-between">
-        <span className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gray-800/70 ${accentText}`}>
+        <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gray-800/70 ${accentText}`}>
           {image ? <img src={image} alt="" className="h-[18px] w-[18px] object-contain" /> : <Icon className="h-[18px] w-[18px]" />}
         </span>
         <ChevronRight className="h-4 w-4 -translate-x-1 text-gray-600 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" />
       </div>
       <div>
-        <p className={`text-[1.75rem] font-bold leading-none tabular-nums ${valueClass}`}>{value}</p>
+        <p className={`text-[1.9rem] font-bold leading-none tabular-nums ${valueClass}`}>{value}</p>
         <p className="mt-1.5 text-sm font-medium text-gray-300">{label}</p>
         <p className="mt-0.5 truncate text-xs text-gray-600">{hint}</p>
       </div>
@@ -54,6 +56,22 @@ function StatCell({
 
 function platformQuery(platform: PlatformFilter) {
   return platform === 'all' ? '' : `&platform=${platform}`;
+}
+
+/** "2h ago" from Steam's rtime_last_played, falling back to recent playtime. */
+function lastPlayedLabel(game: Game): string {
+  const lastPlayed = Number((game.metadata as Record<string, unknown> | undefined)?.rtime_last_played ?? 0);
+  if (lastPlayed > 0) {
+    const diff = Date.now() - lastPlayed * 1000;
+    const hours = Math.floor(diff / 3_600_000);
+    if (hours < 1) return 'agora';
+    if (hours < 24) return `${hours}h atrás`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d atrás`;
+    return `${Math.floor(days / 30)}mês atrás`;
+  }
+  const recent = game.playtime_2weeks ?? 0;
+  return recent >= 60 ? `+${Math.round(recent / 60)}h` : `+${recent}m`;
 }
 
 function MetricPill({
@@ -160,7 +178,7 @@ function PlatformSpecificPanel({ platform, games }: { platform: PlatformFilter; 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { games, gamesWithStats, loading, completionMap } = useSteam();
-  const { db, toggleBacklog, togglePinned } = useLocalDb();
+  const { db } = useLocalDb();
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('common');
 
@@ -200,7 +218,7 @@ export default function Dashboard() {
       .map((g) => ({ game: g, c: completionMap.get(g.appid) }))
       .filter((x) => x.c && x.c.percent > 0 && x.c.percent < 100 && !db.dropped.includes(String(x.game.appid)))
       .sort((a, b) => b.c!.percent - a.c!.percent)
-      .slice(0, 8);
+      .slice(0, 6);
   }, [scopedGamesWithStats, completionMap, db.dropped]);
 
   const recentlyPlayed = useMemo(
@@ -219,12 +237,12 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-8">
       <div>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-100">Mission Control</h1>
-            <p className="text-gray-500 text-sm mt-1">{platformLabel(platform, true)} insights at a glance</p>
+            <p className="text-gray-500 text-sm mt-1">Visão geral do que você está completando e conquistando</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {(['all', 'steam', 'psn', 'retroachievements'] as PlatformFilter[]).map((item) => (
@@ -248,11 +266,11 @@ export default function Dashboard() {
                   key={mode}
                   onClick={() => setViewMode(mode)}
                   disabled={mode === 'platform' && platform === 'all'}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
                     viewMode === mode ? 'bg-gray-800 text-gray-100' : 'text-gray-500 hover:text-gray-200 disabled:opacity-40'
                   }`}
                 >
-                  {mode}
+                  {mode === 'common' ? 'Comum' : 'Por Plataforma'}
                 </button>
               ))}
             </div>
@@ -260,12 +278,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-gray-800 bg-gray-800 sm:grid-cols-5">
-        <StatCell label="Targets" value={stats.total} icon={Library} accentText="text-gray-300" hint="Synced with achievements" onClick={() => navigate(`/library?status=all${platformQuery(platform)}`)} />
-        <StatCell label="100%" value={stats.completed} icon={Trophy} image="/trophies/achievement-100.png" accentText="text-emerald-400" valueClass="text-emerald-400" hint="Fully completed" onClick={() => navigate(`/library?status=completed${platformQuery(platform)}`)} />
-        <StatCell label="Platinums" value={stats.platinums} icon={Medal} image="/trophies/platinum.png" accentText="text-amber-400" valueClass="text-amber-400" hint="PSN platinum trophies" onClick={() => navigate('/library?status=platinum&platform=psn')} />
-        <StatCell label="In progress" value={stats.inProgress} icon={Zap} accentText="text-violet-400" hint="Started, not done" onClick={() => navigate(`/library?status=inprogress${platformQuery(platform)}`)} />
-        <StatCell label="Dropped" value={stats.dropped} icon={CircleSlash} accentText="text-gray-500" valueClass={stats.dropped > 0 ? 'text-gray-100' : 'text-gray-500'} hint="Manual flag" span onClick={() => navigate(`/library?status=dropped${platformQuery(platform)}`)} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <StatCell label="Targets" value={stats.total} icon={Library} accentText="text-gray-300" accentBar="bg-gray-600" hint="Sincronizados com conquistas" onClick={() => navigate(`/library?status=all${platformQuery(platform)}`)} />
+        <StatCell label="100%" value={stats.completed} icon={Trophy} image="/trophies/achievement-100.png" accentText="text-emerald-400" accentBar="bg-emerald-500" valueClass="text-emerald-400" hint="Totalmente completos" onClick={() => navigate(`/library?status=completed${platformQuery(platform)}`)} />
+        <StatCell label="Platinums" value={stats.platinums} icon={Medal} image="/trophies/platinum.png" accentText="text-amber-400" accentBar="bg-amber-500" valueClass="text-amber-400" hint="Troféus de platina PSN" onClick={() => navigate('/library?status=platinum&platform=psn')} />
+        <StatCell label="Em Progresso" value={stats.inProgress} icon={Zap} accentText="text-violet-400" accentBar="bg-violet-500" valueClass="text-violet-300" hint="Iniciados, não concluídos" onClick={() => navigate(`/library?status=inprogress${platformQuery(platform)}`)} />
+        <StatCell label="Dropados" value={stats.dropped} icon={CircleSlash} accentText="text-red-400" accentBar="bg-red-500/70" valueClass={stats.dropped > 0 ? 'text-red-300' : 'text-gray-500'} hint="Marcação manual" span onClick={() => navigate(`/library?status=dropped${platformQuery(platform)}`)} />
       </div>
 
       {viewMode === 'platform' && <PlatformSpecificPanel platform={platform} games={scopedGamesWithStats} />}
@@ -274,20 +292,26 @@ export default function Dashboard() {
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Crosshair className="w-5 h-5 text-emerald-400" />
-          <h2 className="text-base font-bold text-gray-100">Almost Done</h2>
-          <span className="text-xs text-gray-600 ml-1">— closest to 100%</span>
+          <h2 className="text-base font-bold text-gray-100">Quase Lá</h2>
+          <span className="text-xs text-gray-600 ml-1">— mais perto dos 100%</span>
+          <button
+            onClick={() => navigate(`/library?status=inprogress${platformQuery(platform)}`)}
+            className="ml-auto text-xs font-semibold text-violet-400 hover:text-violet-300 transition-colors"
+          >
+            Ver todos
+          </button>
         </div>
 
         {loading && almostDone.length === 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : almostDone.length === 0 ? (
           <div className="bg-gray-900/50 border border-dashed border-gray-800 rounded-2xl p-8 text-center">
-            <p className="text-gray-600 text-sm">Scanning your library… check back in a moment.</p>
+            <p className="text-gray-600 text-sm">Analisando sua biblioteca… volte em instantes.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {almostDone.map(({ game, c }) => (
               <div
                 key={game.appid}
@@ -296,7 +320,7 @@ export default function Dashboard() {
               >
                 <GameCover
                   game={game}
-                  className="w-full h-32"
+                  className="w-full h-24"
                   imgClassName="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
@@ -315,39 +339,75 @@ export default function Dashboard() {
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {pinnedGames.length > 0 && (
+        {recentlyPlayed.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Pin className="w-4 h-4 text-violet-400" />
-              <h2 className="text-base font-bold text-gray-100">Priority Games</h2>
+              <Play className="w-4 h-4 text-blue-400" />
+              <h2 className="text-base font-bold text-gray-100">Jogados Recentemente</h2>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              {pinnedGames.map((g) => (
-                <GameCard key={g.appid} game={g} completion={completionMap.get(g.appid) ?? null}
-                  isPinned inBacklog={db.backlog.includes(String(g.appid))}
-                  isDropped={db.dropped.includes(String(g.appid))}
-                  onTogglePinned={togglePinned} onToggleBacklog={toggleBacklog} compact />
+            <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900 divide-y divide-gray-800">
+              {recentlyPlayed.map((g) => (
+                <button
+                  key={g.appid}
+                  onClick={() => navigate(`/game/${g.appid}`)}
+                  className="group flex w-full items-center gap-3 p-2.5 text-left transition-colors hover:bg-gray-800/50"
+                >
+                  <GameCover game={g} className="h-10 w-16 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-100">{g.name}</p>
+                    <p className="text-xs text-gray-500">{platformLabel(g.platform as PlatformFilter)}</p>
+                  </div>
+                  <span className="shrink-0 text-xs font-medium text-blue-400/80">{lastPlayedLabel(g)}</span>
+                </button>
               ))}
             </div>
           </section>
         )}
 
-        {recentlyPlayed.length > 0 && (
-          <section>
+        <section>
             <div className="flex items-center gap-2 mb-4">
-              <Play className="w-4 h-4 text-blue-400" />
-              <h2 className="text-base font-bold text-gray-100">Recently Played</h2>
+              <Pin className="w-4 h-4 text-violet-400" />
+              <h2 className="text-base font-bold text-gray-100">Jogos Prioritários</h2>
+              <button
+                onClick={() => navigate('/backlog')}
+                className="ml-auto text-xs font-semibold text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                Reordenar
+              </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {recentlyPlayed.map((g) => (
-                <GameCard key={g.appid} game={g} completion={completionMap.get(g.appid) ?? null}
-                  isPinned={db.pinned.includes(String(g.appid))} inBacklog={db.backlog.includes(String(g.appid))}
-                  isDropped={db.dropped.includes(String(g.appid))}
-                  onTogglePinned={togglePinned} onToggleBacklog={toggleBacklog} />
-              ))}
+            {pinnedGames.length === 0 ? (
+              <div className="flex h-[calc(100%-2.5rem)] min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-800 bg-gray-900/40 p-8 text-center">
+                <Pin className="h-6 w-6 text-gray-700" />
+                <p className="text-sm text-gray-600">Fixe jogos como prioridade para vê-los aqui.</p>
+              </div>
+            ) : (
+            <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900 divide-y divide-gray-800">
+              {pinnedGames.map((g, index) => {
+                const c = completionMap.get(g.appid);
+                return (
+                  <button
+                    key={g.appid}
+                    onClick={() => navigate(`/game/${g.appid}`)}
+                    className="group flex w-full items-center gap-3 p-2.5 text-left transition-colors hover:bg-gray-800/50"
+                  >
+                    <span className="w-5 shrink-0 text-center text-sm font-bold tabular-nums text-gray-600">{index + 1}</span>
+                    <GameCover game={g} className="h-10 w-16 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-gray-100">{g.name}</p>
+                      <p className="text-xs text-gray-500">{platformLabel(g.platform as PlatformFilter)}</p>
+                    </div>
+                    {c && (
+                      <div className="flex w-28 shrink-0 items-center gap-2">
+                        <ProgressBar percent={c.percent} height="h-1.5" />
+                        <span className={`w-9 text-right text-xs font-bold font-mono ${completionTextColor(c.percent)}`}>{c.percent}%</span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+            )}
           </section>
-        )}
       </div>
     </div>
   );

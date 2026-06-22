@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
-import { ArrowLeft, CircleSlash, Pin, BookmarkPlus, BookmarkCheck, Clock, Trophy, Link as LinkIcon } from 'lucide-react';
+import { ChevronRight, CircleSlash, Pin, BookmarkPlus, BookmarkCheck, Clock, Link as LinkIcon } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useGameDetails } from '../hooks/useSteamApi';
 import { useLocalDb } from '../hooks/useLocalDb';
@@ -8,15 +8,22 @@ import { AchievementList } from '../components/AchievementList';
 import { ProgressBar, completionTextColor } from '../components/ProgressBar';
 import { SkeletonRow } from '../components/SkeletonCard';
 import { GameCover } from '../components/GameCover';
-import { PLATFORM_META, psnTrophyBreakdown, type ViewMode } from '../lib/platforms';
-import type { EffortLevel, Game } from '../types/steam';
+import { PLATFORM_META, psnTrophyBreakdown } from '../lib/platforms';
+import type { AchievementWithStatus, EffortLevel, Game } from '../types/steam';
 
 const EFFORT_OPTIONS: { key: EffortLevel; label: string; color: string }[] = [
-  { key: 'easy', label: 'Easy', color: 'text-emerald-400 border-emerald-700 bg-emerald-900/20' },
-  { key: 'medium', label: 'Medium', color: 'text-amber-400 border-amber-700 bg-amber-900/20' },
-  { key: 'hard', label: 'Hard', color: 'text-orange-400 border-orange-700 bg-orange-900/20' },
-  { key: 'grind', label: 'Grind', color: 'text-red-400 border-red-700 bg-red-900/20' },
+  { key: 'easy', label: 'Fácil', color: 'text-emerald-300 border-emerald-600/60 bg-emerald-900/30' },
+  { key: 'medium', label: 'Médio', color: 'text-amber-300 border-amber-600/60 bg-amber-900/30' },
+  { key: 'hard', label: 'Difícil', color: 'text-orange-300 border-orange-600/60 bg-orange-900/30' },
+  { key: 'grind', label: 'Insano', color: 'text-red-300 border-red-600/60 bg-red-900/30' },
 ];
+
+const TABS = [
+  { key: 'trophies', label: 'Troféus' },
+  { key: 'stats', label: 'Estatísticas' },
+  { key: 'activity', label: 'Atividade' },
+] as const;
+type DetailTab = (typeof TABS)[number]['key'];
 
 function fmt(minutes: number): string {
   if (minutes < 60) return `${minutes}m`;
@@ -29,55 +36,43 @@ function platformLabel(platform?: string) {
   return 'Steam';
 }
 
-function PlatformGamePanel({ game, achievements }: { game: Game; achievements: { achieved: boolean; points?: number; type?: string }[] }) {
-  if (game.platform === 'psn') {
-    const breakdown = psnTrophyBreakdown(game);
-    const rows = breakdown
-      ? [
-          ['Platinum', breakdown.platinum.earned, breakdown.platinum.total, 'text-slate-200'],
-          ['Gold', breakdown.gold.earned, breakdown.gold.total, 'text-yellow-400'],
-          ['Silver', breakdown.silver.earned, breakdown.silver.total, 'text-gray-300'],
-          ['Bronze', breakdown.bronze.earned, breakdown.bronze.total, 'text-orange-400'],
-        ] as const
-      : [];
-    return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <h2 className="text-sm font-semibold text-gray-300 mb-3">PSN Trophy View</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {rows.map(([label, earned, total, color]) => (
-            <div key={label} className="rounded-lg border border-gray-800 bg-gray-950 p-3">
-              <p className={`text-lg font-bold ${color}`}>{earned}/{total}</p>
-              <p className="text-xs text-gray-500">{label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+function fmtDate(ts: number): string {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleDateString('pt-BR', { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
+const TROPHY_ROWS = [
+  { key: 'platinum', icon: '/trophies/platinum.png', color: 'text-slate-200' },
+  { key: 'gold', icon: '/trophies/gold.png', color: 'text-yellow-300' },
+  { key: 'silver', icon: '/trophies/silver.png', color: 'text-gray-300' },
+  { key: 'bronze', icon: '/trophies/bronze.png', color: 'text-orange-300' },
+] as const;
+
+function StatsPanel({ game, achievements }: { game: Game; achievements: AchievementWithStatus[] }) {
+  const cells: { label: string; value: string; color: string }[] = [];
   if (game.platform === 'retroachievements') {
-    const points = achievements.reduce((sum, achievement) => sum + (achievement.achieved ? Number(achievement.points ?? 0) : 0), 0);
-    const totalPoints = achievements.reduce((sum, achievement) => sum + Number(achievement.points ?? 0), 0);
-    return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <h2 className="text-sm font-semibold text-gray-300 mb-3">RetroAchievements View</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <div className="rounded-lg border border-gray-800 bg-gray-950 p-3"><p className="text-lg font-bold text-amber-300">{points}/{totalPoints}</p><p className="text-xs text-gray-500">Points</p></div>
-          <div className="rounded-lg border border-gray-800 bg-gray-950 p-3"><p className="text-lg font-bold text-emerald-400">{game.completion?.percent ?? 0}%</p><p className="text-xs text-gray-500">Hardcore progress</p></div>
-          <div className="rounded-lg border border-gray-800 bg-gray-950 p-3"><p className="text-lg font-bold text-gray-200">{achievements.length}</p><p className="text-xs text-gray-500">Achievements</p></div>
-        </div>
-      </div>
+    const points = achievements.reduce((s, a) => s + (a.achieved ? Number(a.points ?? 0) : 0), 0);
+    const totalPoints = achievements.reduce((s, a) => s + Number(a.points ?? 0), 0);
+    cells.push(
+      { label: 'Pontos', value: `${points}/${totalPoints}`, color: 'text-amber-300' },
+      { label: 'Progresso hardcore', value: `${game.completion?.percent ?? 0}%`, color: 'text-emerald-400' },
+      { label: 'Conquistas', value: String(achievements.length), color: 'text-gray-200' },
+    );
+  } else {
+    cells.push(
+      { label: 'Conclusão', value: game.completion?.percent === 100 ? 'Perfeito' : `${game.completion?.percent ?? 0}%`, color: 'text-emerald-400' },
+      { label: game.platform === 'psn' ? 'Troféus' : 'Conquistas', value: `${game.completion?.unlocked ?? 0}/${game.completion?.total ?? 0}`, color: 'text-sky-400' },
+      { label: 'Tempo de jogo', value: fmt(game.playtime_forever), color: 'text-violet-300' },
     );
   }
-
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-      <h2 className="text-sm font-semibold text-gray-300 mb-3">Steam Achievement View</h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        <div className="rounded-lg border border-gray-800 bg-gray-950 p-3"><p className="text-lg font-bold text-emerald-400">{game.completion?.percent === 100 ? 'Perfect' : `${game.completion?.percent ?? 0}%`}</p><p className="text-xs text-gray-500">Completion</p></div>
-        <div className="rounded-lg border border-gray-800 bg-gray-950 p-3"><p className="text-lg font-bold text-sky-400">{game.completion?.unlocked ?? 0}/{game.completion?.total ?? 0}</p><p className="text-xs text-gray-500">Achievements</p></div>
-        <div className="rounded-lg border border-gray-800 bg-gray-950 p-3"><p className="text-lg font-bold text-violet-400">{fmt(game.playtime_forever)}</p><p className="text-xs text-gray-500">Playtime</p></div>
-      </div>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {cells.map((cell) => (
+        <div key={cell.label} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <p className={`text-2xl font-bold ${cell.color}`}>{cell.value}</p>
+          <p className="mt-0.5 text-xs text-gray-500">{cell.label}</p>
+        </div>
+      ))}
     </div>
   );
 }
@@ -105,194 +100,190 @@ export default function GameDetail() {
   const schedule = db.schedule[appStr] ?? '';
   const guide = db.guides[appStr] ?? '';
 
-  // Use detail data if loaded, fall back to scanned completion from context
   const contextCompletion = completionMap.get(numId ?? 0);
-  const displayPercent = data?.completionPercent ?? contextCompletion?.percent;
-  const displayUnlocked = data?.unlocked ?? contextCompletion?.unlocked;
-  const displayTotal = data?.total ?? contextCompletion?.total;
+  const displayPercent = data?.completionPercent ?? contextCompletion?.percent ?? game?.completion?.percent ?? 0;
+  const displayUnlocked = data?.unlocked ?? contextCompletion?.unlocked ?? game?.completion?.unlocked ?? 0;
+  const displayTotal = data?.total ?? contextCompletion?.total ?? game?.completion?.total ?? 0;
 
   const [noteText, setNoteText] = useState(db.notes[appStr] ?? '');
   const [guideText, setGuideText] = useState(guide);
-  const [viewMode, setViewMode] = useState<ViewMode>('common');
+  const [tab, setTab] = useState<DetailTab>('trophies');
 
-  function saveNote() {
-    setNote(appStr, noteText);
-  }
+  const breakdown = psnTrophyBreakdown(game);
+  const noun = game?.platform === 'psn' ? 'Troféus' : 'Conquistas';
+  const metaLine = game
+    ? [platformLabel(game.platform), `${fmt(game.playtime_forever)} jogados`, `${displayTotal} ${noun.toLowerCase()}`].join(' · ')
+    : '';
 
-  function saveGuide() {
-    setGuide(appStr, guideText);
-  }
+  const activity = useMemo(
+    () => (data?.merged ?? []).filter((a) => a.achieved && a.unlocktime > 0).sort((a, b) => b.unlocktime - a.unlocktime),
+    [data],
+  );
+
+  function saveNote() { setNote(appStr, noteText); }
+  function saveGuide() { setGuide(appStr, guideText); }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-gray-500 hover:text-gray-200 text-sm mb-6 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back
-      </button>
+    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto">
+      {/* breadcrumb */}
+      <div className="mb-5 flex items-center gap-2 text-sm">
+        <button onClick={() => navigate('/library')} className="text-gray-500 transition-colors hover:text-gray-300">Library</button>
+        <ChevronRight className="h-3.5 w-3.5 text-gray-700" />
+        <span className="truncate text-gray-300">{game?.name ?? `App ${appid}`}</span>
+      </div>
 
-      {/* Hero */}
-      <div className="relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden mb-6">
-        {game && (
-          <GameCover
-            game={game}
-            className="w-full h-48 opacity-60"
-            imgClassName="object-cover"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/70 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 p-5">
-          <h1 className="text-xl font-bold text-gray-100">{game?.name ?? `App ${appid}`}</h1>
+      {/* hero */}
+      <div className="relative mb-6 overflow-hidden rounded-2xl border border-gray-800">
+        {game && <GameCover game={game} className="absolute inset-0 h-full w-full" imgClassName="object-cover scale-110 opacity-25 blur-2xl" />}
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/90 to-gray-950/50" />
+        <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
           {game && (
-            <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
-              <span className="text-gray-400">{platformLabel(game.platform)}</span>
-              <span className="flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" />
-                {fmt(game.playtime_forever)} total
+            <GameCover
+              game={game}
+              className="h-28 w-48 shrink-0 overflow-hidden rounded-xl border border-gray-700 shadow-lg shadow-black/40"
+              imgClassName="object-cover"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-extrabold uppercase tracking-tight text-white sm:text-3xl">{game?.name ?? `App ${appid}`}</h1>
+            <p className="mt-1 text-sm text-gray-400">{metaLine}</p>
+            <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-4">
+              <div className="shrink-0">
+                <p className={`text-5xl font-extrabold leading-none tabular-nums ${completionTextColor(displayPercent)}`}>{displayPercent}%</p>
+                <p className="mt-1.5 text-xs text-gray-400">{displayUnlocked} / {displayTotal} {noun.toLowerCase()}</p>
+              </div>
+              <div className="min-w-44 flex-1">
+                <ProgressBar percent={displayPercent} height="h-2" />
+              </div>
+              {breakdown && (
+                <div className="flex items-center gap-3">
+                  {TROPHY_ROWS.map((row) => {
+                    const b = breakdown[row.key];
+                    return (
+                      <span key={row.key} className="flex items-center gap-1.5" title={`${b.earned}/${b.total} ${row.key}`}>
+                        <img src={row.icon} alt="" className="h-5 w-5 object-contain" />
+                        <span className={`text-sm font-bold tabular-nums ${row.color}`}>{b.earned}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* main column */}
+        <div className="space-y-4 lg:col-span-2">
+          {/* platform switch (siblings) */}
+          {siblingGames.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <span className="flex items-center gap-2 rounded-lg border border-violet-600/60 bg-violet-600/15 px-3 py-1.5 text-xs font-semibold text-violet-200">
+                {game?.platform && <img src={PLATFORM_META[game.platform].logo} alt="" className="h-4 w-4 object-contain" />}
+                {platformLabel(game?.platform)}
               </span>
-              {game.playtime_2weeks && (
-                <span className="text-blue-400">+{fmt(game.playtime_2weeks)} this 2 weeks</span>
+              {siblingGames.map((sibling) => (
+                <button key={sibling.appid} onClick={() => navigate(`/game/${sibling.appid}`)}
+                  className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-400 hover:border-gray-700 hover:text-gray-200">
+                  {sibling.platform && <img src={PLATFORM_META[sibling.platform].logo} alt="" className="h-4 w-4 object-contain grayscale opacity-70" />}
+                  {platformLabel(sibling.platform)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* tabs */}
+          <div className="flex gap-1 border-b border-gray-800">
+            {TABS.map((t) => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
+                  tab === t.key ? 'text-violet-200' : 'text-gray-500 hover:text-gray-300'
+                }`}>
+                {t.label}
+                {tab === t.key && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-violet-400" />}
+              </button>
+            ))}
+          </div>
+
+          {error && <p className="py-4 text-sm text-red-400">{error}</p>}
+
+          {tab === 'trophies' && (
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Todos os {displayTotal} {noun.toLowerCase()}</p>
+              {loading ? (
+                <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</div>
+              ) : data ? (
+                <AchievementList achievements={data.merged} />
+              ) : (
+                <p className="py-4 text-sm text-gray-600">Carregando conquistas…</p>
+              )}
+            </div>
+          )}
+
+          {tab === 'stats' && game && <StatsPanel game={game} achievements={data?.merged ?? []} />}
+
+          {tab === 'activity' && (
+            <div>
+              {activity.length === 0 ? (
+                <p className="py-8 text-center text-sm text-gray-600">Nenhuma conquista desbloqueada ainda.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {activity.slice(0, 30).map((a) => (
+                    <li key={a.name} className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 p-3">
+                      <img src={a.icon} alt="" className="h-10 w-10 rounded-lg" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-gray-100">{a.displayName || a.name}</p>
+                        <p className="text-xs text-blue-400/80">Desbloqueado em {fmtDate(a.unlocktime)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           )}
         </div>
-      </div>
 
-      {game && (
-        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-gray-800 bg-gray-900 p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="flex items-center gap-2 rounded-lg border border-violet-500 bg-violet-600/15 px-3 py-2 text-xs font-semibold text-violet-300"
-            >
-              {game.platform && <img src={PLATFORM_META[game.platform].logo} alt="" className="h-4 w-4 object-contain" />}
-              {platformLabel(game.platform)}
-            </button>
-            {siblingGames.map((sibling) => (
-              <button
-                key={sibling.appid}
-                onClick={() => navigate(`/game/${sibling.appid}`)}
-                className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs font-semibold text-gray-400 hover:border-gray-700 hover:text-gray-200"
-              >
-                {sibling.platform && <img src={PLATFORM_META[sibling.platform].logo} alt="" className="h-4 w-4 object-contain grayscale opacity-70" />}
-                {platformLabel(sibling.platform)}
-              </button>
-            ))}
-          </div>
-          <div className="flex rounded-lg border border-gray-800 bg-gray-950 p-1">
-            {(['common', 'platform'] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
-                  viewMode === mode ? 'bg-gray-800 text-gray-100' : 'text-gray-500 hover:text-gray-200'
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left — achievements */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Progress */}
-          {displayPercent !== undefined && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-yellow-400" />
-                  <span className="text-sm font-semibold text-gray-200">Achievements</span>
-                </div>
-                <span className={`text-lg font-bold font-mono ${completionTextColor(displayPercent)}`}>
-                  {displayPercent}%
-                </span>
-              </div>
-              <ProgressBar percent={displayPercent} height="h-2" />
-              <p className="text-xs text-gray-600 mt-1.5">
-                {displayUnlocked} / {displayTotal} unlocked
-              </p>
-            </div>
-          )}
-
-          {game && viewMode === 'platform' && (
-            <PlatformGamePanel game={game} achievements={data?.merged ?? []} />
-          )}
-
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h2 className="text-sm font-semibold text-gray-300 mb-3">Achievement List</h2>
-            {error && <p className="text-red-400 text-sm py-4">{error}</p>}
-            {loading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}
-              </div>
-            ) : data ? (
-              <AchievementList achievements={data.merged} />
-            ) : (
-              <p className="text-gray-600 text-sm py-4">Loading achievements…</p>
-            )}
-          </div>
-        </div>
-
-        {/* Right — controls */}
+        {/* right column — Ações */}
         <div className="space-y-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-2">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Actions</h2>
+          <div className="space-y-2 rounded-2xl border border-gray-800 bg-gray-900 p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Ações</h2>
             {game?.relatedPlatforms && game.relatedPlatforms.length > 0 && (
               <div className="rounded-lg border border-blue-800/30 bg-blue-950/20 px-3 py-2 text-xs text-blue-200">
-                Also tracked on {game.relatedPlatforms.map(platformLabel).join(', ')}. Each platform keeps its own completion target.
+                Também rastreado em {game.relatedPlatforms.map(platformLabel).join(', ')}. Cada plataforma mantém sua própria meta.
               </div>
             )}
-            <button
-              onClick={() => toggleBacklog(appStr)}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                inBacklog
-                  ? 'bg-blue-600/20 text-blue-300 border border-blue-700/30 hover:bg-blue-600/30'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-              }`}
-            >
-              {inBacklog ? <BookmarkCheck className="w-4 h-4" /> : <BookmarkPlus className="w-4 h-4" />}
-              {inBacklog ? 'In backlog' : 'Add to backlog'}
+            <button onClick={() => toggleBacklog(appStr)}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                inBacklog ? 'border border-blue-700/30 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}>
+              {inBacklog ? <BookmarkCheck className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
+              {inBacklog ? 'No backlog' : 'Adicionar ao backlog'}
             </button>
-            <button
-              onClick={() => togglePinned(appStr)}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isPinned
-                  ? 'bg-violet-600/20 text-violet-300 border border-violet-700/30 hover:bg-violet-600/30'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-              }`}
-            >
-              <Pin className="w-4 h-4" />
-              {isPinned ? 'Pinned as priority' : 'Pin as priority'}
+            <button onClick={() => togglePinned(appStr)}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                isPinned ? 'border border-violet-700/30 bg-violet-600/20 text-violet-300 hover:bg-violet-600/30' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}>
+              <Pin className="h-4 w-4" />
+              {isPinned ? 'Fixado como prioridade' : 'Fixar jogo'}
             </button>
-            <button
-              onClick={() => toggleDropped(appStr)}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isDropped
-                  ? 'bg-red-600/20 text-red-300 border border-red-700/30 hover:bg-red-600/30'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-              }`}
-            >
-              <CircleSlash className="w-4 h-4" />
-              {isDropped ? 'Marked as dropped' : 'Mark as dropped'}
+            <button onClick={() => toggleDropped(appStr)}
+              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                isDropped ? 'border border-red-700/30 bg-red-600/20 text-red-300 hover:bg-red-600/30' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}>
+              <CircleSlash className="h-4 w-4" />
+              {isDropped ? 'Marcado como dropado' : 'Marcar como dropado'}
             </button>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Effort Tag</h2>
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Esforço previsto</h2>
             <div className="grid grid-cols-2 gap-1.5">
               {EFFORT_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setEffort(appStr, opt.key)}
-                  className={`px-2 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    effort === opt.key
-                      ? opt.color
-                      : 'text-gray-600 border-gray-800 bg-gray-950 hover:border-gray-700 hover:text-gray-400'
-                  }`}
-                >
+                <button key={opt.key} onClick={() => setEffort(appStr, opt.key)}
+                  className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors ${
+                    effort === opt.key ? opt.color : 'border-gray-800 bg-gray-950 text-gray-600 hover:border-gray-700 hover:text-gray-400'
+                  }`}>
                   {opt.label}
                 </button>
               ))}
@@ -300,59 +291,41 @@ export default function GameDetail() {
           </div>
 
           {inBacklog && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Target Month</h2>
-              <input
-                type="month"
-                value={schedule}
-                onChange={(e) => setSchedule(appStr, e.target.value)}
-                className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-gray-600 transition-colors"
-              />
+            <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
+              <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Data alvo</h2>
+              <input type="date" value={schedule} onChange={(e) => setSchedule(appStr, e.target.value)}
+                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 focus:border-violet-600 focus:outline-none [color-scheme:dark]" />
             </div>
           )}
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Guide Link</h2>
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Guia</h2>
             <div className="flex gap-2">
-              <input
-                type="url"
-                value={guideText}
-                onChange={(e) => setGuideText(e.target.value)}
-                onBlur={saveGuide}
-                placeholder="https://..."
-                className="min-w-0 flex-1 bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-gray-600 transition-colors"
-              />
+              <input type="url" value={guideText} onChange={(e) => setGuideText(e.target.value)} onBlur={saveGuide} placeholder="https://..."
+                className="min-w-0 flex-1 rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:border-violet-600 focus:outline-none" />
               {guideText && (
-                <a
-                  href={guideText}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center w-10 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
-                  title="Open guide"
-                >
-                  <LinkIcon className="w-4 h-4" />
+                <a href={guideText} target="_blank" rel="noopener noreferrer" title="Abrir guia"
+                  className="flex w-10 items-center justify-center rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700">
+                  <LinkIcon className="h-4 w-4" />
                 </a>
               )}
             </div>
           </div>
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Personal Notes</h2>
-            <textarea
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              onBlur={saveNote}
-              placeholder="Tips, strategies, known issues…"
-              rows={4}
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-700 resize-none focus:outline-none focus:border-gray-600 transition-colors"
-            />
-            <button
-              onClick={saveNote}
-              className="mt-2 w-full text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 py-1.5 rounded-lg transition-colors"
-            >
-              Save note
+          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Notas pessoais</h2>
+            <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} onBlur={saveNote} rows={4}
+              placeholder="Dicas, estratégias, problemas conhecidos…"
+              className="w-full resize-none rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 placeholder-gray-700 focus:border-violet-600 focus:outline-none" />
+            <button onClick={saveNote}
+              className="mt-2 w-full rounded-lg bg-gray-800 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-700">
+              Salvar nota
             </button>
           </div>
+
+          <p className="flex items-center gap-1.5 px-1 text-xs text-gray-600">
+            <Clock className="h-3 w-3" /> Última atualização: {game ? 'sincronizado' : '—'}
+          </p>
         </div>
       </div>
     </div>

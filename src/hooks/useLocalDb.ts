@@ -116,5 +116,5 @@ export function useLocalDb() {
     URL.revokeObjectURL(url);
   }, [db]);
 
-  return { db, toggleBacklog, togglePinned, toggleDropped, setNote, setGuide, setEffort, setSchedule, reorderBacklog, exportDb };
+  return { db, refresh, toggleBacklog, togglePinned, toggleDropped, setNote, setGuide, setEffort, setSchedule, reorderBacklog, exportDb };
 }

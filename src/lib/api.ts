@@ -13,8 +13,41 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return json as T;
 }
 
+export interface PublicCredential {
+  platform: Platform;
+  configured: true;
+  updatedAt: string;
+  steamid?: string;
+  username?: string;
+}
+
 export function getConfig() {
-  return apiFetch<{ configured: { platform: Platform; updatedAt: string }[]; credentials: unknown[] }>('/api/config');
+  return apiFetch<{ configured: { platform: Platform; updatedAt: string }[]; credentials: PublicCredential[] }>('/api/config');
+}
+
+export interface SyncRun {
+  id: number;
+  platform: Platform;
+  startedAt: string;
+  finishedAt: string | null;
+  status: string;
+  message: string | null;
+}
+
+export function fetchSyncRuns() {
+  return apiFetch<{ runs: SyncRun[]; latest: Record<string, { startedAt: string; status: string; finishedAt: string | null }> }>('/api/sync/runs');
+}
+
+export function clearMediaCache() {
+  return apiFetch<{ removed: boolean }>('/api/media/clear', { method: 'POST' });
+}
+
+export function resetPlanning(scope: 'all' | 'notes' | 'backlog') {
+  return apiFetch<PatinaDb>('/api/planning/reset', { method: 'POST', body: JSON.stringify({ scope }) });
+}
+
+export function importPlanning(record: Partial<PatinaDb>) {
+  return apiFetch<PatinaDb>('/api/planning/import', { method: 'POST', body: JSON.stringify(record) });
 }
 
 export function saveSteamConfig(input: { key: string; steamid: string }) {
