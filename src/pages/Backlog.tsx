@@ -17,24 +17,24 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X, Calendar } from 'lucide-react';
-import { useSteamGames, getCachedCompletion } from '../hooks/useSteamApi';
+import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
 import { ProgressBar, completionTextColor } from '../components/ProgressBar';
 import { BacklogTimeline } from '../components/BacklogTimeline';
-import { gameCoverUrl } from '../lib/steamApi';
+import { GameCover } from '../components/GameCover';
 import type { Game } from '../types/steam';
 
 interface SortableItemProps {
   game: Game;
   index: number;
+  completion?: { percent: number; unlocked: number; total: number };
   onRemove: () => void;
 }
 
-function SortableItem({ game, index, onRemove }: SortableItemProps) {
+function SortableItem({ game, index, completion, onRemove }: SortableItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: String(game.appid),
   });
-  const completion = getCachedCompletion(game.appid);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -48,26 +48,15 @@ function SortableItem({ game, index, onRemove }: SortableItemProps) {
       style={style}
       className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-xl p-3 hover:border-gray-700 transition-colors"
     >
-      {/* Rank */}
-      <span className="text-xl font-bold font-mono text-gray-800 w-6 text-center shrink-0">{index + 1}</span>
-
-      {/* Drag handle */}
+      <span className="text-xl font-bold font-mono text-gray-400 w-6 text-center shrink-0">{index + 1}</span>
       <button
         {...attributes}
         {...listeners}
-        className="text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing shrink-0 touch-none"
+        className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing shrink-0 touch-none"
       >
         <GripVertical className="w-4 h-4" />
       </button>
-
-      {/* Cover */}
-      <img
-        src={gameCoverUrl(game.appid)}
-        alt=""
-        className="w-14 h-10 rounded object-cover shrink-0"
-      />
-
-      {/* Info */}
+      <GameCover game={game} className="w-14 h-10 rounded shrink-0" imgClassName="object-cover" />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-200 truncate">{game.name}</p>
         {completion ? (
@@ -81,11 +70,9 @@ function SortableItem({ game, index, onRemove }: SortableItemProps) {
           <div className="h-1 bg-gray-800 rounded-full mt-1" />
         )}
       </div>
-
-      {/* Remove */}
       <button
         onClick={onRemove}
-        className="text-gray-700 hover:text-red-400 shrink-0 transition-colors"
+        className="text-gray-500 hover:text-red-400 shrink-0 transition-colors"
         title="Remove from backlog"
       >
         <X className="w-4 h-4" />
@@ -95,7 +82,7 @@ function SortableItem({ game, index, onRemove }: SortableItemProps) {
 }
 
 export default function Backlog() {
-  const { games } = useSteamGames();
+  const { games, completionMap } = useSteam();
   const { db, toggleBacklog, reorderBacklog } = useLocalDb();
 
   const sensors = useSensors(
@@ -103,11 +90,10 @@ export default function Backlog() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const backlogGames = useMemo(() => {
-    return db.backlog
-      .map((id) => games.find((g) => String(g.appid) === id))
-      .filter(Boolean) as Game[];
-  }, [db.backlog, games]);
+  const backlogGames = useMemo(
+    () => db.backlog.map((id) => games.find((g) => String(g.appid) === id)).filter(Boolean) as Game[],
+    [db.backlog, games],
+  );
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -121,7 +107,6 @@ export default function Backlog() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-8">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-100">Backlog & Schedule</h1>
         <p className="text-gray-500 text-sm mt-1">
@@ -129,7 +114,6 @@ export default function Backlog() {
         </p>
       </div>
 
-      {/* Timeline */}
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Calendar className="w-4 h-4 text-blue-400" />
@@ -138,7 +122,6 @@ export default function Backlog() {
         <BacklogTimeline games={backlogGames} schedule={db.schedule} />
       </section>
 
-      {/* Sortable list */}
       <section>
         <h2 className="text-base font-bold text-gray-100 mb-4">Priority Order</h2>
         {backlogGames.length === 0 ? (
@@ -158,6 +141,7 @@ export default function Backlog() {
                     key={game.appid}
                     game={game}
                     index={i}
+                    completion={completionMap.get(game.appid)}
                     onRemove={() => toggleBacklog(String(game.appid))}
                   />
                 ))}

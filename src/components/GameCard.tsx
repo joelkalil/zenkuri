@@ -1,14 +1,15 @@
 import { useNavigate } from 'react-router-dom';
-import { Pin, BookmarkPlus, BookmarkCheck, Clock } from 'lucide-react';
+import { CircleSlash, Pin, BookmarkPlus, BookmarkCheck, Clock } from 'lucide-react';
 import { ProgressBar, completionTextColor } from './ProgressBar';
-import { gameCoverUrl } from '../lib/steamApi';
 import type { Game } from '../types/steam';
+import { GameCover } from './GameCover';
 
 interface GameCardProps {
   game: Game;
   completion?: { percent: number; unlocked: number; total: number } | null;
   isPinned?: boolean;
   inBacklog?: boolean;
+  isDropped?: boolean;
   onToggleBacklog?: (appid: string) => void;
   onTogglePinned?: (appid: string) => void;
   compact?: boolean;
@@ -16,19 +17,16 @@ interface GameCardProps {
 
 function fmt(minutes: number): string {
   if (minutes < 60) return `${minutes}m`;
-  const h = Math.round(minutes / 60);
-  return `${h}h`;
+  return `${Math.round(minutes / 60)}h`;
 }
 
-export function GameCard({
-  game,
-  completion,
-  isPinned,
-  inBacklog,
-  onToggleBacklog,
-  onTogglePinned,
-  compact = false,
-}: GameCardProps) {
+function platformLabel(platform?: string) {
+  if (platform === 'retroachievements') return 'RA';
+  if (platform === 'psn') return 'PSN';
+  return 'Steam';
+}
+
+export function GameCard({ game, completion, isPinned, inBacklog, isDropped, onToggleBacklog, onTogglePinned, compact = false }: GameCardProps) {
   const navigate = useNavigate();
 
   return (
@@ -37,18 +35,25 @@ export function GameCard({
       onClick={() => navigate(`/game/${game.appid}`)}
     >
       {/* Cover image */}
-      <div className="relative overflow-hidden">
-        <img
-          src={gameCoverUrl(game.appid)}
-          alt={game.name}
-          className={`w-full object-cover transition-transform duration-300 group-hover:scale-105 ${compact ? 'h-20' : 'h-28'}`}
-          onError={(e) => {
-            (e.target as HTMLImageElement).src =
-              'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="460" height="215" viewBox="0 0 460 215"%3E%3Crect fill="%231a1a2e" width="460" height="215"/%3E%3Ctext fill="%234a4a6a" font-family="sans-serif" font-size="16" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
-          }}
+      <div className={`relative overflow-hidden bg-gray-800 ${compact ? 'h-20' : 'h-28'}`}>
+        <GameCover
+          game={game}
+          className="w-full h-full"
+          imgClassName="object-cover transition-transform duration-300 group-hover:scale-105"
         />
+
         {/* Badges */}
         <div className="absolute top-1.5 left-1.5 flex gap-1">
+          {game.platform && (
+            <span className="bg-black/75 text-white px-1.5 py-0.5 rounded text-[10px] font-bold uppercase backdrop-blur-sm">
+              {platformLabel(game.platform)}
+            </span>
+          )}
+          {game.relatedPlatforms?.map((platform) => (
+            <span key={platform} className="bg-black/60 text-white/75 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase backdrop-blur-sm">
+              +{platformLabel(platform)}
+            </span>
+          ))}
           {isPinned && (
             <span className="bg-violet-600/90 text-white p-0.5 rounded">
               <Pin className="w-3 h-3" />
@@ -59,12 +64,16 @@ export function GameCard({
               <BookmarkCheck className="w-3 h-3" />
             </span>
           )}
+          {isDropped && (
+            <span className="bg-red-600/90 text-white p-0.5 rounded" title="Dropped">
+              <CircleSlash className="w-3 h-3" />
+            </span>
+          )}
         </div>
+
         {/* Completion badge */}
         {completion && (
-          <span
-            className={`absolute top-1.5 right-1.5 text-xs font-bold font-mono px-1.5 py-0.5 rounded bg-gray-950/80 ${completionTextColor(completion.percent)}`}
-          >
+          <span className={`absolute top-1.5 right-1.5 text-xs font-bold font-mono px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-sm ${completionTextColor(completion.percent)}`}>
             {completion.percent === 100 ? '✓ 100%' : `${completion.percent}%`}
           </span>
         )}
@@ -81,13 +90,12 @@ export function GameCard({
           )}
         </div>
 
-        {/* Progress */}
         <div className="mt-2">
           {completion ? (
             <>
               <ProgressBar percent={completion.percent} height="h-1.5" />
               <p className="text-xs text-gray-600 mt-0.5">
-                {completion.unlocked}/{completion.total} achievements
+                {completion.unlocked}/{completion.total} {game.platform === 'psn' ? 'trophies' : 'achievements'}
               </p>
             </>
           ) : (
@@ -95,7 +103,6 @@ export function GameCard({
           )}
         </div>
 
-        {/* Action buttons */}
         {(onToggleBacklog || onTogglePinned) && (
           <div className="flex gap-1 mt-2" onClick={(e) => e.stopPropagation()}>
             {onToggleBacklog && (

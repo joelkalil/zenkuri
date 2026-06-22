@@ -1,5 +1,80 @@
 @import "tailwindcss";
 
+/*
+  Theming is driven entirely through Tailwind v4's color CSS variables.
+  Components use the semantic gray ramp (gray-950 = app bg → gray-100 = ink)
+  plus saturated accents. We redefine those variables per theme so a single
+  ramp inverts cleanly instead of patching individual utilities with !important.
+
+  Neutral ramp carries a subtle cool-violet tint (hue ~285) to tie the surfaces
+  to the violet accent — quietly game-aware rather than flat default gray.
+*/
+
+/* ── Dark (default) ───────────────────────────────────────────────── */
+:root {
+  --color-gray-50:  oklch(98.0% 0.004 285);
+  --color-gray-100: oklch(95.0% 0.006 285); /* ink / headings */
+  --color-gray-200: oklch(89.0% 0.009 285); /* strong text */
+  --color-gray-300: oklch(80.0% 0.013 285); /* body */
+  --color-gray-400: oklch(70.0% 0.017 285); /* muted body */
+  --color-gray-500: oklch(61.0% 0.020 285); /* secondary text */
+  --color-gray-600: oklch(52.0% 0.022 286); /* faint text (still ≥3:1 on bg) */
+  --color-gray-700: oklch(39.0% 0.022 287); /* hover border / divider-strong */
+  --color-gray-800: oklch(28.5% 0.020 287); /* border */
+  --color-gray-900: oklch(20.8% 0.018 287); /* surface / card */
+  --color-gray-950: oklch(15.5% 0.016 287); /* app background */
+}
+
+/* ── Light ────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  /* Neutral ramp inverts: 950 = page, 900 = card, 800/700 = borders, low = ink */
+  --color-gray-50:  oklch(20.0% 0.022 286);
+  --color-gray-100: oklch(23.0% 0.024 286); /* ink / headings */
+  --color-gray-200: oklch(31.0% 0.022 286); /* strong text */
+  --color-gray-300: oklch(39.0% 0.020 285); /* body */
+  --color-gray-400: oklch(47.0% 0.019 284); /* muted body */
+  --color-gray-500: oklch(52.5% 0.019 283); /* secondary text (~7:1 on card) */
+  --color-gray-600: oklch(56.5% 0.019 282); /* faint text (~4.6:1 on card) */
+  --color-gray-700: oklch(84.0% 0.011 286); /* hover border */
+  --color-gray-800: oklch(90.5% 0.008 287); /* border / subtle fill */
+  --color-gray-900: oklch(99.2% 0.0025 287); /* card */
+  --color-gray-950: oklch(96.3% 0.006 288); /* app background */
+
+  /* Accent text/marks: the bright -200…-400 shades are unreadable on light
+     surfaces, so darken them. They only ever sit on light tints or neutral
+     surfaces in this app, never on a solid mid-accent, so this is safe. */
+  --color-violet-200: oklch(48% 0.20 293);
+  --color-violet-300: oklch(50% 0.21 293);
+  --color-violet-400: oklch(52% 0.22 293);
+  --color-blue-200:   oklch(48% 0.16 256);
+  --color-blue-300:   oklch(50% 0.17 255);
+  --color-blue-400:   oklch(52% 0.18 254);
+  --color-sky-300:    oklch(50% 0.13 237);
+  --color-sky-400:    oklch(52% 0.14 236);
+  --color-emerald-300: oklch(52% 0.13 162);
+  --color-emerald-400: oklch(54% 0.14 162);
+  --color-amber-300:  oklch(54% 0.13 70);
+  --color-amber-400:  oklch(56% 0.14 68);
+  --color-yellow-400: oklch(58% 0.14 86);
+  --color-red-300:    oklch(53% 0.20 22);
+  --color-red-400:    oklch(55% 0.21 22);
+  --color-orange-400: oklch(56% 0.17 47);
+  --color-indigo-400: oklch(50% 0.20 270);
+  /* Platinum-tier marks (the only stray non-gray neutral in the app) */
+  --color-slate-200: oklch(42% 0.02 256);
+  --color-slate-300: oklch(50% 0.02 256);
+
+  /* Solid deep-accent callout panels (danger zone, guide notes) read as dark
+     blocks floating in a light UI. Re-tint their fills to light washes. */
+  --color-violet-950: oklch(95% 0.03 293);
+  --color-blue-950:   oklch(95% 0.03 256);
+  --color-sky-950:    oklch(95% 0.03 237);
+  --color-emerald-900: oklch(94% 0.04 162);
+  --color-amber-950:  oklch(95% 0.035 75);
+  --color-red-950:    oklch(96% 0.025 22);
+  --color-red-900:    oklch(93% 0.045 22);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -7,31 +82,48 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background: #030712;
-  color: #f3f4f6;
+  background: var(--color-gray-950);
+  color: var(--color-gray-200);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scrollbar styling for dark theme */
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  color: var(--color-gray-100);
+}
+
+/* Keyboard focus: visible accent ring everywhere, never removed without one */
+:focus-visible {
+  outline: 2px solid var(--color-violet-500);
+  outline-offset: 2px;
+}
+
+/* Scrollbar — tracks the theme via the neutral ramp */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #374151;
-  border-radius: 3px;
+  background: var(--color-gray-700);
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+  background: var(--color-gray-600);
 }
 
-/* Month input dark theme fix */
+/* Month input picker icon: invert only in dark mode */
 input[type="month"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.7);
   cursor: pointer;
+}
+:root input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+[data-theme="light"] input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: none;
 }
 
 /* Line clamp utility */

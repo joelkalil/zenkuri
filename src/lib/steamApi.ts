@@ -38,3 +38,9 @@ export async function fetchGameSchema(appid: number): Promise<SchemaAchievement[
 export function gameCoverUrl(appid: number): string {
   return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/header.jpg`;
 }
+
+export function platformCoverUrl(game: { platform?: string; platformGameId?: string; coverUrl?: string; appid: number }): string {
+  if (game.coverUrl) return game.coverUrl;
+  if (game.platform === 'steam' && game.platformGameId) return gameCoverUrl(Number(game.platformGameId));
+  return gameCoverUrl(game.appid);
+}

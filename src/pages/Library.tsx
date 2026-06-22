@@ -1,19 +1,25 @@
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal } from 'lucide-react';
-import { useSteamGames, getCachedCompletion } from '../hooks/useSteamApi';
+import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
 import { GameCard } from '../components/GameCard';
 import { SkeletonCard } from '../components/SkeletonCard';
+import type { Platform } from '../types/steam';
+import { hasPsnPlatinum } from '../lib/platforms';
 
-type FilterTab = 'all' | 'inprogress' | 'completed' | 'notstarted' | 'pinned';
+type FilterTab = 'all' | 'inprogress' | 'completed' | 'platinum' | 'notstarted' | 'pinned' | 'dropped';
 type SortMode = 'completion' | 'playtime' | 'name' | 'backlog';
+type PlatformTab = 'all' | Platform;
 
 const TABS: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'inprogress', label: 'In Progress' },
-  { key: 'completed', label: 'Completed' },
+  { key: 'completed', label: '100%' },
+  { key: 'platinum', label: 'Platinum' },
   { key: 'notstarted', label: 'Not Started' },
   { key: 'pinned', label: 'Pinned' },
+  { key: 'dropped', label: 'Dropped' },
 ];
 
 const SORTS: { key: SortMode; label: string }[] = [
@@ -24,23 +30,44 @@ const SORTS: { key: SortMode; label: string }[] = [
 ];
 
 export default function Library() {
-  const { games, loading, error } = useSteamGames();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { gamesWithStats, loading, error, completionMap } = useSteam();
   const { db, toggleBacklog, togglePinned } = useLocalDb();
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterTab>('all');
+  const [filter, setFilter] = useState<FilterTab>(() => (searchParams.get('status') as FilterTab) || 'all');
+  const [platform, setPlatform] = useState<PlatformTab>(() => (searchParams.get('platform') as PlatformTab) || 'all');
   const [sort, setSort] = useState<SortMode>('completion');
 
-  const completionMap = useMemo(() => {
-    const map = new Map<number, { percent: number; unlocked: number; total: number }>();
-    for (const g of games) {
-      const c = getCachedCompletion(g.appid);
-      if (c) map.set(g.appid, c);
+  function setFilterAndUrl(nextFilter: FilterTab) {
+    setFilter(nextFilter);
+    const next = new URLSearchParams(searchParams);
+    if (nextFilter === 'all') next.delete('status');
+    else next.set('status', nextFilter);
+    setSearchParams(next, { replace: true });
+  }
+
+  function setPlatformAndUrl(nextPlatform: PlatformTab) {
+    setPlatform(nextPlatform);
+    const next = new URLSearchParams(searchParams);
+    if (nextPlatform === 'all') next.delete('platform');
+    else next.set('platform', nextPlatform);
+    setSearchParams(next, { replace: true });
+  }
+
+  const platformCounts = useMemo(() => {
+    const counts: Record<PlatformTab, number> = { all: gamesWithStats.length, steam: 0, psn: 0, retroachievements: 0 };
+    for (const game of gamesWithStats) {
+      if (game.platform) counts[game.platform] += 1;
     }
-    return map;
-  }, [games]);
+    return counts;
+  }, [gamesWithStats]);
 
   const filtered = useMemo(() => {
-    let list = games.filter((g) => g.has_community_visible_stats);
+    let list = [...gamesWithStats];
+
+    if (platform !== 'all') {
+      list = list.filter((g) => g.platform === platform);
+    }
 
     if (search) {
       const q = search.toLowerCase();
@@ -49,125 +76,99 @@ export default function Library() {
 
     if (filter === 'pinned') {
       list = list.filter((g) => db.pinned.includes(String(g.appid)));
+    } else if (filter === 'dropped') {
+      list = list.filter((g) => db.dropped.includes(String(g.appid)));
+    } else if (filter === 'platinum') {
+      list = list.filter((g) => hasPsnPlatinum(g) && !db.dropped.includes(String(g.appid)));
     } else if (filter === 'completed') {
-      list = list.filter((g) => completionMap.get(g.appid)?.percent === 100);
+      list = list.filter((g) => completionMap.get(g.appid)?.percent === 100 && !db.dropped.includes(String(g.appid)));
     } else if (filter === 'inprogress') {
-      list = list.filter((g) => {
-        const c = completionMap.get(g.appid);
-        return c && c.percent > 0 && c.percent < 100;
-      });
+      list = list.filter((g) => { const c = completionMap.get(g.appid); return c && c.percent > 0 && c.percent < 100 && !db.dropped.includes(String(g.appid)); });
     } else if (filter === 'notstarted') {
-      list = list.filter((g) => {
-        const c = completionMap.get(g.appid);
-        return !c || c.percent === 0;
-      });
+      list = list.filter((g) => { const c = completionMap.get(g.appid); return (!c || c.percent === 0) && !db.dropped.includes(String(g.appid)); });
     }
 
-    list = [...list].sort((a, b) => {
+    return list.sort((a, b) => {
       if (sort === 'name') return a.name.localeCompare(b.name);
       if (sort === 'playtime') return b.playtime_forever - a.playtime_forever;
       if (sort === 'backlog') {
-        const ai = db.backlog.indexOf(String(a.appid));
-        const bi = db.backlog.indexOf(String(b.appid));
+        const ai = db.backlog.indexOf(String(a.appid)), bi = db.backlog.indexOf(String(b.appid));
         if (ai === -1 && bi === -1) return 0;
         if (ai === -1) return 1;
         if (bi === -1) return -1;
         return ai - bi;
       }
-      // completion
-      const ca = completionMap.get(a.appid)?.percent ?? -1;
-      const cb = completionMap.get(b.appid)?.percent ?? -1;
-      return cb - ca;
+      return (completionMap.get(b.appid)?.percent ?? -1) - (completionMap.get(a.appid)?.percent ?? -1);
     });
-
-    return list;
-  }, [games, completionMap, db.pinned, db.backlog, search, filter, sort]);
+  }, [gamesWithStats, completionMap, db.pinned, db.dropped, db.backlog, search, filter, platform, sort]);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-100">Game Library</h1>
         <p className="text-gray-500 text-sm mt-1">
-          {games.filter((g) => g.has_community_visible_stats).length} games with achievements
+          {gamesWithStats.length} games with achievements
+          {completionMap.size > 0 && <span className="text-gray-600"> · {completionMap.size} scanned</span>}
         </p>
       </div>
 
-      {/* Filters & search */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search games…"
-            className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-700 focus:outline-none focus:border-gray-600 transition-colors"
-          />
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search games…"
+            className="w-full bg-gray-900 border border-gray-800 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-700 focus:outline-none focus:border-gray-600 transition-colors" />
         </div>
-        {/* Sort */}
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="w-4 h-4 text-gray-600 shrink-0" />
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortMode)}
-            className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-gray-600 cursor-pointer"
-          >
-            {SORTS.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
+          <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)}
+            className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-gray-600 cursor-pointer">
+            {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </div>
       </div>
 
-      {/* Filter tabs */}
+      <div className="flex gap-1 mb-6 overflow-x-auto pb-1">
+        {([
+          ['all', 'All'],
+          ['steam', 'Steam'],
+          ['psn', 'PSN'],
+          ['retroachievements', 'RA'],
+        ] as [PlatformTab, string][]).map(([key, label]) => (
+          <button key={key} onClick={() => setPlatformAndUrl(key)}
+            className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              platform === key ? 'bg-blue-600/20 text-blue-300 border border-blue-600/30' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+            }`}>
+            {label} <span className="text-gray-500">{platformCounts[key]}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="flex gap-1 mb-6 overflow-x-auto pb-1">
         {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setFilter(t.key)}
+          <button key={t.key} onClick={() => setFilterAndUrl(t.key)}
             className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              filter === t.key
-                ? 'bg-violet-600/20 text-violet-300 border border-violet-600/30'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
-            }`}
-          >
+              filter === t.key ? 'bg-violet-600/20 text-violet-300 border border-violet-600/30' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+            }`}>
             {t.label}
           </button>
         ))}
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="bg-red-900/20 border border-red-800/30 rounded-xl p-4 mb-6 text-sm text-red-400">
-          {error}
-        </div>
-      )}
+      {error && <div className="bg-red-900/20 border border-red-800/30 rounded-xl p-4 mb-6 text-sm text-red-400">{error}</div>}
 
-      {/* Grid */}
       {loading && filtered.length === 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {Array.from({ length: 15 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-20 text-gray-600">
-          <p className="text-lg">No games match this filter.</p>
-        </div>
+        <div className="text-center py-20 text-gray-600"><p className="text-lg">No games match this filter.</p></div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {filtered.map((g) => (
-            <GameCard
-              key={g.appid}
-              game={g}
-              completion={completionMap.get(g.appid) ?? null}
-              isPinned={db.pinned.includes(String(g.appid))}
-              inBacklog={db.backlog.includes(String(g.appid))}
-              onToggleBacklog={toggleBacklog}
-              onTogglePinned={togglePinned}
-            />
+            <GameCard key={g.appid} game={g} completion={completionMap.get(g.appid) ?? null}
+              isPinned={db.pinned.includes(String(g.appid))} inBacklog={db.backlog.includes(String(g.appid))}
+              isDropped={db.dropped.includes(String(g.appid))}
+              onToggleBacklog={toggleBacklog} onTogglePinned={togglePinned} />
           ))}
         </div>
       )}

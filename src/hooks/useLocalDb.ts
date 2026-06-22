@@ -1,103 +1,120 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { fetchPlanning, patchPlanning, reorderBacklogApi } from '../lib/api';
 import type { PatinaDb, EffortLevel } from '../types/steam';
-
-const DB_KEY = 'platina-db';
 
 const DEFAULT_DB: PatinaDb = {
   backlog: [],
   pinned: [],
+  dropped: [],
   notes: {},
   effort: {},
   schedule: {},
+  guides: {},
 };
 
 export function readDb(): PatinaDb {
-  try {
-    const raw = localStorage.getItem(DB_KEY);
-    if (!raw) return { ...DEFAULT_DB };
-    return { ...DEFAULT_DB, ...JSON.parse(raw) };
-  } catch {
-    return { ...DEFAULT_DB };
-  }
-}
-
-function writeDb(db: PatinaDb): void {
-  localStorage.setItem(DB_KEY, JSON.stringify(db));
+  return { ...DEFAULT_DB };
 }
 
 export function useLocalDb() {
-  const [db, setDb] = useState<PatinaDb>(readDb);
+  const [db, setDb] = useState<PatinaDb>(DEFAULT_DB);
 
-  const update = useCallback((updater: (prev: PatinaDb) => PatinaDb) => {
-    setDb((prev) => {
-      const next = updater(prev);
-      writeDb(next);
-      return next;
-    });
+  const refresh = useCallback(() => {
+    fetchPlanning()
+      .then((next) => setDb({ ...DEFAULT_DB, ...next }))
+      .catch(() => setDb(DEFAULT_DB));
   }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const toggleBacklog = useCallback(
     (appid: string) => {
-      update((prev) => ({
+      const next = !db.backlog.includes(appid);
+      setDb((prev) => ({
         ...prev,
-        backlog: prev.backlog.includes(appid)
-          ? prev.backlog.filter((id) => id !== appid)
-          : [...prev.backlog, appid],
+        backlog: next ? [...prev.backlog, appid] : prev.backlog.filter((id) => id !== appid),
       }));
+      patchPlanning(appid, { inBacklog: next }).then(setDb).catch(refresh);
     },
-    [update],
+    [db.backlog, refresh],
   );
 
   const togglePinned = useCallback(
     (appid: string) => {
-      update((prev) => ({
+      const next = !db.pinned.includes(appid);
+      setDb((prev) => ({
         ...prev,
-        pinned: prev.pinned.includes(appid)
-          ? prev.pinned.filter((id) => id !== appid)
-          : [...prev.pinned, appid],
+        pinned: next ? [...prev.pinned, appid] : prev.pinned.filter((id) => id !== appid),
       }));
+      patchPlanning(appid, { pinned: next }).then(setDb).catch(refresh);
     },
-    [update],
+    [db.pinned, refresh],
+  );
+
+  const toggleDropped = useCallback(
+    (appid: string) => {
+      const next = !db.dropped.includes(appid);
+      setDb((prev) => ({
+        ...prev,
+        dropped: next ? [...prev.dropped, appid] : prev.dropped.filter((id) => id !== appid),
+      }));
+      patchPlanning(appid, { dropped: next }).then(setDb).catch(refresh);
+    },
+    [db.dropped, refresh],
   );
 
   const setNote = useCallback(
     (appid: string, note: string) => {
-      update((prev) => ({ ...prev, notes: { ...prev.notes, [appid]: note } }));
+      setDb((prev) => ({ ...prev, notes: { ...prev.notes, [appid]: note } }));
+      patchPlanning(appid, { note }).then(setDb).catch(refresh);
     },
-    [update],
+    [refresh],
+  );
+
+  const setGuide = useCallback(
+    (appid: string, guideUrl: string) => {
+      setDb((prev) => ({ ...prev, guides: { ...prev.guides, [appid]: guideUrl } }));
+      patchPlanning(appid, { guideUrl }).then(setDb).catch(refresh);
+    },
+    [refresh],
   );
 
   const setEffort = useCallback(
     (appid: string, effort: EffortLevel) => {
-      update((prev) => ({ ...prev, effort: { ...prev.effort, [appid]: effort } }));
+      setDb((prev) => ({ ...prev, effort: { ...prev.effort, [appid]: effort } }));
+      patchPlanning(appid, { effort }).then(setDb).catch(refresh);
     },
-    [update],
+    [refresh],
   );
 
   const setSchedule = useCallback(
     (appid: string, month: string) => {
-      update((prev) => ({ ...prev, schedule: { ...prev.schedule, [appid]: month } }));
+      setDb((prev) => ({ ...prev, schedule: { ...prev.schedule, [appid]: month } }));
+      patchPlanning(appid, { schedule: month }).then(setDb).catch(refresh);
     },
-    [update],
+    [refresh],
   );
 
   const reorderBacklog = useCallback(
     (newOrder: string[]) => {
-      update((prev) => ({ ...prev, backlog: newOrder }));
+      setDb((prev) => ({ ...prev, backlog: newOrder }));
+      reorderBacklogApi(newOrder).then(setDb).catch(refresh);
     },
-    [update],
+    [refresh],
   );
 
   const exportDb = useCallback(() => {
-    const data = JSON.stringify(readDb(), null, 2);
+    const data = JSON.stringify(db, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'platina-db.json';
+    a.download = 'zenkuri-planning.json';
     a.click();
     URL.revokeObjectURL(url);
-  }, []);
+  }, [db]);
 
-  return { db, toggleBacklog, togglePinned, setNote, setEffort, setSchedule, reorderBacklog, exportDb };
+  return { db, toggleBacklog, togglePinned, toggleDropped, setNote, setGuide, setEffort, setSchedule, reorderBacklog, exportDb };
 }

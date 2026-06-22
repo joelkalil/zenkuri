@@ -6,6 +6,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      '/api': {
+        target: 'http://localhost:4343',
+        changeOrigin: true,
+      },
       '/steam-api': {
         target: 'https://api.steampowered.com',
         changeOrigin: true,

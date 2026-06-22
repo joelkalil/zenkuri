@@ -10,6 +10,15 @@ function fmtDate(ts: number): string {
   return new Date(ts * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function typeStyle(type?: string) {
+  if (type === 'platinum') return 'border-slate-300/40 bg-slate-400/10 text-slate-200';
+  if (type === 'gold') return 'border-yellow-500/40 bg-yellow-500/10 text-yellow-300';
+  if (type === 'silver') return 'border-gray-400/40 bg-gray-400/10 text-gray-300';
+  if (type === 'bronze') return 'border-orange-500/40 bg-orange-500/10 text-orange-300';
+  if (type) return 'border-violet-500/40 bg-violet-500/10 text-violet-300';
+  return '';
+}
+
 export function AchievementList({ achievements }: AchievementListProps) {
   if (achievements.length === 0) {
     return (
@@ -55,6 +64,11 @@ export function AchievementList({ achievements }: AchievementListProps) {
                 {a.displayName || a.name}
               </p>
               {a.achieved && <Trophy className="w-3.5 h-3.5 text-yellow-400 shrink-0" />}
+              {a.type && (
+                <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${typeStyle(a.type)}`}>
+                  {a.type}
+                </span>
+              )}
             </div>
             <p className="text-xs text-gray-600 truncate mt-0.5">
               {a.hidden && !a.achieved ? 'Hidden achievement' : a.description || 'No description'}
