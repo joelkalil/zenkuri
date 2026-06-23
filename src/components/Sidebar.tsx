@@ -24,7 +24,7 @@ export function Sidebar() {
     <aside className="hidden md:flex flex-col w-60 shrink-0 bg-gray-950/80 border-r border-gray-800/80 h-screen sticky top-0 backdrop-blur-sm">
       {/* Logo */}
       <div className="px-5 py-5">
-        <Logo size={32} />
+        <Logo size={40} withWordmark={false} />
       </div>
 
       {/* Nav */}

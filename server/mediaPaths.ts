@@ -11,7 +11,7 @@ export const MEDIA_ROOT = process.env.ZENKURI_MEDIA_PATH ?? join(process.cwd(), 
 
 export const PLACEHOLDER_MARKER = 'zenkuri:placeholder';
 
-export type MediaCategory = 'covers' | 'icons' | 'achievements';
+export type MediaCategory = 'covers' | 'portraits' | 'heroes' | 'icons' | 'achievements';
 
 export function slugify(value: string): string {
   return (value || 'untitled')
@@ -25,6 +25,14 @@ export function slugify(value: string): string {
 
 export function coverSlot(platform: Platform, externalId: string, title: string) {
   return { dir: join(MEDIA_ROOT, 'covers', platform), base: `${slugify(title)}-${externalId}` };
+}
+
+export function portraitSlot(platform: Platform, externalId: string, title: string) {
+  return { dir: join(MEDIA_ROOT, 'portraits', platform), base: `${slugify(title)}-${externalId}` };
+}
+
+export function heroSlot(platform: Platform, externalId: string, title: string) {
+  return { dir: join(MEDIA_ROOT, 'heroes', platform), base: `${slugify(title)}-${externalId}` };
 }
 
 export function iconSlot(platform: Platform, externalId: string, title: string) {
@@ -55,6 +63,14 @@ export function achievementSlot(
 
 export function coverMediaUrl(platform: Platform, externalId: string, title: string): string {
   return `/media/covers/${platform}/${encodeURIComponent(coverSlot(platform, externalId, title).base)}`;
+}
+
+export function portraitMediaUrl(platform: Platform, externalId: string, title: string): string {
+  return `/media/portraits/${platform}/${encodeURIComponent(portraitSlot(platform, externalId, title).base)}`;
+}
+
+export function heroMediaUrl(platform: Platform, externalId: string, title: string): string {
+  return `/media/heroes/${platform}/${encodeURIComponent(heroSlot(platform, externalId, title).base)}`;
 }
 
 export function iconMediaUrl(platform: Platform, externalId: string, title: string): string {

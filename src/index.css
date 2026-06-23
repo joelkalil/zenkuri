@@ -146,6 +146,14 @@ input[type="month"]::-webkit-calendar-picker-indicator {
   filter: none;
 }
 
+/* Display face for game titles / headline stats — Saira (technical grotesque),
+   distinct from the system-ui body without reading as sci-fi cheese. Falls back
+   to system-ui when offline. */
+.font-display {
+  font-family: 'Saira', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'ss01';
+}
+
 /* Line clamp utility */
 .line-clamp-2 {
   display: -webkit-box;

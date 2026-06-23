@@ -14,6 +14,7 @@ dist-ssr
 data/*.sqlite
 data/*.sqlite-*
 data/media
+data/copy_steam
 .env
 
 # Editor directories and files

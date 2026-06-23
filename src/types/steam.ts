@@ -11,6 +11,8 @@ export interface Game {
   playtime_2weeks?: number; // minutes
   img_icon_url: string;
   coverUrl?: string;
+  portraitUrl?: string;
+  heroUrl?: string;
   has_community_visible_stats?: boolean;
   metadata?: Record<string, unknown>;
   completion?: {

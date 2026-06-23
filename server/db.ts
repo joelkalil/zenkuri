@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { ApiAchievement, ApiGame, Platform, PlanningRecord, StoredCredential } from './types';
-import { achievementMediaUrl, coverMediaUrl, iconMediaUrl } from './mediaPaths';
+import { achievementMediaUrl, coverMediaUrl, heroMediaUrl, iconMediaUrl, portraitMediaUrl } from './mediaPaths';
 
 const dbPath = process.env.ZENKURI_DB_PATH ?? join(process.cwd(), 'data', 'zenkuri.sqlite');
 mkdirSync(dirname(dbPath), { recursive: true });
@@ -405,6 +405,8 @@ export function listGames(platform?: Platform): ApiGame[] {
       platformGameId: row.external_id,
       name: row.title,
       coverUrl: coverMediaUrl(row.platform, row.external_id, row.title),
+      portraitUrl: portraitMediaUrl(row.platform, row.external_id, row.title),
+      heroUrl: heroMediaUrl(row.platform, row.external_id, row.title),
       playtime_forever: row.playtime_minutes ?? 0,
       playtime_2weeks: row.recent_playtime_minutes ?? undefined,
       img_icon_url: row.icon_url ? iconMediaUrl(row.platform, row.external_id, row.title) : '',

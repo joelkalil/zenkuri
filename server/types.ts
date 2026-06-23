@@ -16,6 +16,8 @@ export interface ApiGame {
   platformGameId: string;
   name: string;
   coverUrl: string;
+  portraitUrl: string;
+  heroUrl: string;
   playtime_forever: number;
   playtime_2weeks?: number;
   img_icon_url: string;

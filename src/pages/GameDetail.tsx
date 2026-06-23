@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import type { ElementType } from 'react';
 import { useMemo, useState } from 'react';
-import { ChevronRight, CircleSlash, Pin, BookmarkPlus, BookmarkCheck, Clock, Link as LinkIcon } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, ChevronRight, CircleSlash, Pin, BookmarkPlus, BookmarkCheck, Clock, Filter, Link as LinkIcon } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useGameDetails } from '../hooks/useSteamApi';
 import { useLocalDb } from '../hooks/useLocalDb';
@@ -9,7 +10,51 @@ import { ProgressBar, completionTextColor } from '../components/ProgressBar';
 import { SkeletonRow } from '../components/SkeletonCard';
 import { GameCover } from '../components/GameCover';
 import { PLATFORM_META, psnTrophyBreakdown } from '../lib/platforms';
-import type { AchievementWithStatus, EffortLevel, Game } from '../types/steam';
+import type { AchievementWithStatus, EffortLevel, Game, Platform } from '../types/steam';
+
+type TrophyFilter = 'all' | 'earned' | 'locked';
+type TrophySort = 'default' | 'rarity' | 'date' | 'name';
+
+/** Trophy tier as a rarity proxy (rarest first); PSN has no per-trophy earn-rate in our data. */
+const TIER_RANK: Record<string, number> = { platinum: 0, gold: 1, silver: 2, bronze: 3 };
+
+function PlatformBadge({ platform }: { platform: Platform }) {
+  const meta = PLATFORM_META[platform];
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 rounded-md bg-white/10 px-2 py-1 text-xs font-bold text-white ring-1 ring-inset ring-white/15 backdrop-blur-sm">
+      <img src={meta.logo} alt="" className="h-4 w-4 object-contain" />
+      {meta.short}
+    </span>
+  );
+}
+
+function SelectControl<T extends string>({
+  icon: Icon,
+  value,
+  onChange,
+  options,
+}: {
+  icon: ElementType;
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: string }[];
+}) {
+  return (
+    <div className="relative">
+      <Icon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="cursor-pointer appearance-none rounded-lg border border-gray-800 bg-gray-900 py-2 pl-8 pr-8 text-xs font-semibold text-gray-300 transition-colors hover:border-gray-700 focus:border-violet-600 focus:outline-none"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+    </div>
+  );
+}
 
 const EFFORT_OPTIONS: { key: EffortLevel; label: string; color: string }[] = [
   { key: 'easy', label: 'Fácil', color: 'text-emerald-300 border-emerald-600/60 bg-emerald-900/30' },
@@ -108,17 +153,39 @@ export default function GameDetail() {
   const [noteText, setNoteText] = useState(db.notes[appStr] ?? '');
   const [guideText, setGuideText] = useState(guide);
   const [tab, setTab] = useState<DetailTab>('trophies');
+  const [trophyFilter, setTrophyFilter] = useState<TrophyFilter>('all');
+  const [trophySort, setTrophySort] = useState<TrophySort>('default');
 
   const breakdown = psnTrophyBreakdown(game);
   const noun = game?.platform === 'psn' ? 'Troféus' : 'Conquistas';
   const metaLine = game
-    ? [platformLabel(game.platform), `${fmt(game.playtime_forever)} jogados`, `${displayTotal} ${noun.toLowerCase()}`].join(' · ')
+    ? [`${fmt(game.playtime_forever)} jogados`, `${displayTotal} ${noun.toLowerCase()}`].join(' · ')
     : '';
 
   const activity = useMemo(
     () => (data?.merged ?? []).filter((a) => a.achieved && a.unlocktime > 0).sort((a, b) => b.unlocktime - a.unlocktime),
     [data],
   );
+
+  const visibleTrophies = useMemo(() => {
+    let list = data?.merged ?? [];
+    if (trophyFilter === 'earned') list = list.filter((a) => a.achieved);
+    else if (trophyFilter === 'locked') list = list.filter((a) => !a.achieved);
+
+    const rarityRank = (a: AchievementWithStatus) => {
+      if (a.type && TIER_RANK[a.type] !== undefined) return TIER_RANK[a.type];
+      if (typeof a.points === 'number' && a.points > 0) return 1000 - a.points; // RA: more points ≈ rarer
+      return 500;
+    };
+
+    const sorted = [...list];
+    if (trophySort === 'rarity') sorted.sort((a, b) => rarityRank(a) - rarityRank(b));
+    else if (trophySort === 'date') sorted.sort((a, b) => (b.unlocktime || 0) - (a.unlocktime || 0));
+    else if (trophySort === 'name') sorted.sort((a, b) => (a.displayName || a.name).localeCompare(b.displayName || b.name));
+    return sorted;
+  }, [data, trophyFilter, trophySort]);
+
+  const earnedCount = useMemo(() => (data?.merged ?? []).filter((a) => a.achieved).length, [data]);
 
   function saveNote() { setNote(appStr, noteText); }
   function saveGuide() { setGuide(appStr, guideText); }
@@ -132,24 +199,32 @@ export default function GameDetail() {
         <span className="truncate text-gray-300">{game?.name ?? `App ${appid}`}</span>
       </div>
 
-      {/* hero */}
+      {/* hero — full-bleed cinematic banner + vertical cover */}
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-gray-800">
-        {game && <GameCover game={game} className="absolute inset-0 h-full w-full" imgClassName="object-cover scale-110 opacity-25 blur-2xl" />}
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/90 to-gray-950/50" />
-        <div className="relative flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
+        {game?.heroUrl && (
+          <img src={game.heroUrl} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
+        )}
+        {/* darken the left for the cover + text, reveal the art on the right */}
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/80 to-gray-950/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-transparent" />
+        <div className="relative flex items-center gap-5 p-5 sm:p-6">
           {game && (
             <GameCover
               game={game}
-              className="h-28 w-48 shrink-0 overflow-hidden rounded-xl border border-gray-700 shadow-lg shadow-black/40"
+              portrait
+              className="hidden h-52 w-36 shrink-0 overflow-hidden rounded-xl border border-gray-700/70 shadow-2xl shadow-black/60 sm:block"
               imgClassName="object-cover"
             />
           )}
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-extrabold uppercase tracking-tight text-white sm:text-3xl">{game?.name ?? `App ${appid}`}</h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="font-display text-3xl font-extrabold uppercase tracking-tight text-white sm:text-4xl">{game?.name ?? `App ${appid}`}</h1>
+              {game?.platform && <PlatformBadge platform={game.platform} />}
+            </div>
             <p className="mt-1 text-sm text-gray-400">{metaLine}</p>
             <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-4">
               <div className="shrink-0">
-                <p className={`text-5xl font-extrabold leading-none tabular-nums ${completionTextColor(displayPercent)}`}>{displayPercent}%</p>
+                <p className={`font-display text-5xl font-extrabold leading-none tabular-nums ${completionTextColor(displayPercent)}`}>{displayPercent}%</p>
                 <p className="mt-1.5 text-xs text-gray-400">{displayUnlocked} / {displayTotal} {noun.toLowerCase()}</p>
               </div>
               <div className="min-w-44 flex-1">
@@ -193,30 +268,61 @@ export default function GameDetail() {
             </div>
           )}
 
-          {/* tabs */}
-          <div className="flex gap-1 border-b border-gray-800">
-            {TABS.map((t) => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
-                  tab === t.key ? 'text-violet-200' : 'text-gray-500 hover:text-gray-300'
-                }`}>
-                {t.label}
-                {tab === t.key && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-violet-400" />}
-              </button>
-            ))}
+          {/* tabs + trophy controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800">
+            <div className="flex gap-1">
+              {TABS.map((t) => (
+                <button key={t.key} onClick={() => setTab(t.key)}
+                  className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
+                    tab === t.key ? 'text-violet-200' : 'text-gray-500 hover:text-gray-300'
+                  }`}>
+                  {t.label}
+                  {tab === t.key && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-violet-400" />}
+                </button>
+              ))}
+            </div>
+            {tab === 'trophies' && (
+              <div className="flex items-center gap-2 pb-2">
+                <SelectControl
+                  icon={Filter}
+                  value={trophyFilter}
+                  onChange={setTrophyFilter}
+                  options={[
+                    { value: 'all', label: 'Todos' },
+                    { value: 'earned', label: 'Obtidos' },
+                    { value: 'locked', label: 'Bloqueados' },
+                  ]}
+                />
+                <SelectControl
+                  icon={ArrowUpDown}
+                  value={trophySort}
+                  onChange={setTrophySort}
+                  options={[
+                    { value: 'default', label: 'Padrão' },
+                    { value: 'rarity', label: 'Raridade' },
+                    { value: 'date', label: 'Data' },
+                    { value: 'name', label: 'Nome' },
+                  ]}
+                />
+              </div>
+            )}
           </div>
 
           {error && <p className="py-4 text-sm text-red-400">{error}</p>}
 
           {tab === 'trophies' && (
             <div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Todos os {displayTotal} {noun.toLowerCase()}</p>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">
+                {trophyFilter === 'all' ? `Todos os ${displayTotal} ${noun.toLowerCase()}`
+                  : trophyFilter === 'earned' ? `${earnedCount} ${noun.toLowerCase()} obtidos`
+                  : `${displayTotal - earnedCount} ${noun.toLowerCase()} bloqueados`}
+              </p>
               {loading ? (
                 <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}</div>
               ) : data ? (
-                <AchievementList achievements={data.merged} />
+                <AchievementList achievements={visibleTrophies} platform={game?.platform} />
               ) : (
-                <p className="py-4 text-sm text-gray-600">Carregando conquistas…</p>
+                <p className="py-4 text-sm text-gray-600">Carregando {noun.toLowerCase()}…</p>
               )}
             </div>
           )}

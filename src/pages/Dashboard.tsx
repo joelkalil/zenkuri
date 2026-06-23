@@ -1,55 +1,44 @@
 import { useMemo, useState } from 'react';
 import type { ElementType, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, CircleSlash, Clock3, Crosshair, Library, Medal, Play, Pin, Target, Trophy, Zap } from 'lucide-react';
+import { Activity, CalendarDays, CheckCircle2, ChevronRight, Clock3, Crosshair, LayoutGrid, MoreVertical, Pin, Target, Trophy, XCircle } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
-import { ProgressBar, completionTextColor } from '../components/ProgressBar';
+import { ProgressBar, completionColor, completionTextColor } from '../components/ProgressBar';
 import { SkeletonCard } from '../components/SkeletonCard';
 import { GameCover } from '../components/GameCover';
 import { PLATFORM_META, type PlatformFilter, type ViewMode, platformLabel, platformStats } from '../lib/platforms';
 import type { Game } from '../types/steam';
 
+/** One connected cell inside the metrics strip: inline icon + label, big value, hint. */
 function StatCell({
   label,
   value,
   icon: Icon,
-  image,
   accentText,
-  accentBar,
   valueClass = 'text-gray-100',
   hint,
-  span = false,
   onClick,
 }: {
   label: string;
   value: number | string;
   icon: ElementType;
-  image?: string;
   accentText: string;
-  accentBar: string;
   valueClass?: string;
   hint: string;
-  span?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`group relative flex flex-col gap-3 overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/70 p-4 text-left transition-colors hover:border-gray-700 hover:bg-gray-900 focus:outline-none focus-visible:border-violet-600 ${span ? 'col-span-2 sm:col-span-1' : ''}`}
+      className="group flex flex-col gap-3 p-4 text-left transition-colors hover:bg-gray-800/40 focus:outline-none focus-visible:bg-gray-800/40 lg:p-5"
     >
-      <span className={`absolute inset-x-0 top-0 h-[3px] ${accentBar}`} />
-      <div className="flex items-center justify-between">
-        <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gray-800/70 ${accentText}`}>
-          {image ? <img src={image} alt="" className="h-[18px] w-[18px] object-contain" /> : <Icon className="h-[18px] w-[18px]" />}
-        </span>
-        <ChevronRight className="h-4 w-4 -translate-x-1 text-gray-600 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" />
-      </div>
-      <div>
-        <p className={`text-[1.9rem] font-bold leading-none tabular-nums ${valueClass}`}>{value}</p>
-        <p className="mt-1.5 text-sm font-medium text-gray-300">{label}</p>
-        <p className="mt-0.5 truncate text-xs text-gray-600">{hint}</p>
-      </div>
+      <span className="flex items-center gap-2">
+        <Icon className={`h-[18px] w-[18px] ${accentText}`} />
+        <span className="text-sm font-medium text-gray-400">{label}</span>
+      </span>
+      <span className={`text-[2.35rem] font-bold leading-none tabular-nums ${valueClass}`}>{value}</span>
+      <span className="truncate text-xs text-gray-500">{hint}</span>
     </button>
   );
 }
@@ -58,47 +47,58 @@ function platformQuery(platform: PlatformFilter) {
   return platform === 'all' ? '' : `&platform=${platform}`;
 }
 
-/** "2h ago" from Steam's rtime_last_played, falling back to recent playtime. */
-function lastPlayedLabel(game: Game): string {
-  const lastPlayed = Number((game.metadata as Record<string, unknown> | undefined)?.rtime_last_played ?? 0);
-  if (lastPlayed > 0) {
-    const diff = Date.now() - lastPlayed * 1000;
-    const hours = Math.floor(diff / 3_600_000);
-    if (hours < 1) return 'agora';
-    if (hours < 24) return `${hours}h atrás`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d atrás`;
-    return `${Math.floor(days / 30)}mês atrás`;
-  }
-  const recent = game.playtime_2weeks ?? 0;
-  return recent >= 60 ? `+${Math.round(recent / 60)}h` : `+${recent}m`;
+/** "27h 49m" from total minutes. */
+function formatPlaytime(minutes: number): string {
+  if (!minutes || minutes < 1) return '—';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h === 0 ? `${m}m` : `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
-function MetricPill({
+/** "Hoje" / "Ontem" / "3 dias atrás" from Steam's rtime_last_played. */
+function lastPlayedDate(game: Game): string {
+  const ts = Number((game.metadata as Record<string, unknown> | undefined)?.rtime_last_played ?? 0);
+  if (ts <= 0) return '—';
+  const days = Math.floor((Date.now() - ts * 1000) / 86_400_000);
+  if (days <= 0) return 'Hoje';
+  if (days === 1) return 'Ontem';
+  if (days === 2) return 'Anteontem';
+  if (days < 30) return `${days} dias atrás`;
+  const months = Math.floor(days / 30);
+  return months <= 1 ? '1 mês atrás' : `${months} meses atrás`;
+}
+
+/** One cell inside a platform panel, matching the metrics-strip language. */
+function PanelCell({
+  leading,
   label,
   value,
-  color,
-  icon,
-  iconClassName = '',
-  iconNode,
+  valueClass = 'text-gray-100',
+  hint,
 }: {
+  leading: ReactNode;
   label: string;
-  value: string | number;
-  color: string;
-  icon?: string;
-  iconClassName?: string;
-  iconNode?: ReactNode;
+  value: ReactNode;
+  valueClass?: string;
+  hint?: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 p-3">
-      {icon && <img src={icon} alt="" className={`h-8 w-8 object-contain ${iconClassName}`} />}
-      {iconNode && <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-800 text-gray-300">{iconNode}</div>}
-      <div className="min-w-0">
-        <p className={`text-xl font-bold ${color}`}>{value}</p>
-        <p className="mt-0.5 text-xs text-gray-500">{label}</p>
-      </div>
+    <div className="flex flex-col gap-3 p-4 lg:p-5">
+      <span className="flex items-center gap-2">
+        {leading}
+        <span className="text-sm font-medium text-gray-400">{label}</span>
+      </span>
+      <span className={`text-[2rem] font-bold leading-none tabular-nums ${valueClass}`}>{value}</span>
+      {hint && <span className="truncate text-xs text-gray-500">{hint}</span>}
     </div>
   );
+}
+
+const panelGrid =
+  'grid grid-cols-2 divide-x divide-y divide-gray-800 overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/50 lg:grid-cols-4 lg:divide-y-0';
+
+function pct(part: number, whole: number) {
+  return whole > 0 ? Math.round((part / whole) * 100) : 0;
 }
 
 function PlatformSpecificPanel({ platform, games }: { platform: PlatformFilter; games: Game[] }) {
@@ -107,37 +107,40 @@ function PlatformSpecificPanel({ platform, games }: { platform: PlatformFilter; 
 
   if (platform === 'psn') {
     const trophyRows = [
-      ['Platinum', stats.psn.earned.platinum, stats.psn.total.platinum, 'text-slate-200', '/trophies/platinum.png'],
-      ['Gold', stats.psn.earned.gold, stats.psn.total.gold, 'text-yellow-400', '/trophies/gold.png'],
-      ['Silver', stats.psn.earned.silver, stats.psn.total.silver, 'text-gray-300', '/trophies/silver.png'],
-      ['Bronze', stats.psn.earned.bronze, stats.psn.total.bronze, 'text-orange-400', '/trophies/bronze.png'],
+      ['Platina', stats.psn.earned.platinum, stats.psn.total.platinum, 'text-slate-100', '/trophies/platinum.png'],
+      ['Ouro', stats.psn.earned.gold, stats.psn.total.gold, 'text-amber-300', '/trophies/gold.png'],
+      ['Prata', stats.psn.earned.silver, stats.psn.total.silver, 'text-gray-200', '/trophies/silver.png'],
+      ['Bronze', stats.psn.earned.bronze, stats.psn.total.bronze, 'text-orange-300', '/trophies/bronze.png'],
     ] as const;
     return (
-      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-bold text-gray-100">PSN Trophy Case</h2>
-          <div className="flex rounded-lg border border-gray-800 bg-gray-950 p-1">
-            <button
-              onClick={() => setShowTotals(false)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                !showTotals ? 'bg-gray-800 text-gray-100' : 'text-gray-500 hover:text-gray-200'
-              }`}
-            >
-              Earned
-            </button>
-            <button
-              onClick={() => setShowTotals(true)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                showTotals ? 'bg-gray-800 text-gray-100' : 'text-gray-500 hover:text-gray-200'
-              }`}
-            >
-              Total
-            </button>
+      <section>
+        <div className="mb-4 flex items-center gap-2">
+          <Trophy className="h-5 w-5 text-blue-400" />
+          <h2 className="text-lg font-bold text-gray-100">Troféus da PSN</h2>
+          <div className="ml-auto flex items-center gap-1 rounded-xl border border-gray-800 bg-gray-900 p-1">
+            {([['Obtidos', false], ['Total', true]] as const).map(([label, total]) => (
+              <button
+                key={label}
+                onClick={() => setShowTotals(total)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  showTotals === total ? 'bg-violet-600 text-white shadow-sm shadow-violet-900/40' : 'text-gray-400 hover:text-gray-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className={panelGrid}>
           {trophyRows.map(([label, earned, total, color, icon]) => (
-            <MetricPill key={label} label={label} value={showTotals ? `${earned}/${total}` : earned} color={color} icon={icon} />
+            <PanelCell
+              key={label}
+              leading={<img src={icon} alt="" className="h-[18px] w-[18px] object-contain" />}
+              label={label}
+              value={showTotals ? `${earned}/${total}` : earned}
+              valueClass={color}
+              hint={`${pct(earned, total)}% obtidos`}
+            />
           ))}
         </div>
       </section>
@@ -146,27 +149,80 @@ function PlatformSpecificPanel({ platform, games }: { platform: PlatformFilter; 
 
   if (platform === 'steam') {
     return (
-      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <h2 className="mb-3 text-base font-bold text-gray-100">Steam Achievement View</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricPill label="Perfect games" value={stats.steam.perfectGames} color="text-emerald-400" icon="/trophies/achievement-100.png" />
-          <MetricPill label="Achievements" value={`${stats.steam.unlocked}/${stats.steam.total}`} color="text-sky-400" icon="/trophies/achievement-100.png" iconClassName="grayscale opacity-70" />
-          <MetricPill label="Recent playtime" value={`${Math.round(stats.steam.recentMinutes / 60)}h`} color="text-violet-400" iconNode={<Clock3 className="h-4 w-4" />} />
-          <MetricPill label="Steam targets" value={games.length} color="text-gray-200" iconNode={<Target className="h-4 w-4" />} />
+      <section>
+        <div className="mb-4 flex items-center gap-2">
+          <img src={PLATFORM_META.steam.logo} alt="" className="h-5 w-5 object-contain" />
+          <h2 className="text-lg font-bold text-gray-100">Conquistas da Steam</h2>
+        </div>
+        <div className={panelGrid}>
+          <PanelCell
+            leading={<img src="/trophies/achievement-100.png" alt="" className="h-[18px] w-[18px] object-contain" />}
+            label="Jogos perfeitos"
+            value={stats.steam.perfectGames}
+            valueClass="text-emerald-400"
+            hint="100% das conquistas"
+          />
+          <PanelCell
+            leading={<CheckCircle2 className="h-[18px] w-[18px] text-sky-400" />}
+            label="Conquistas"
+            value={`${stats.steam.unlocked}/${stats.steam.total}`}
+            valueClass="text-sky-400"
+            hint={`${pct(stats.steam.unlocked, stats.steam.total)}% desbloqueadas`}
+          />
+          <PanelCell
+            leading={<Clock3 className="h-[18px] w-[18px] text-violet-400" />}
+            label="Tempo recente"
+            value={`${Math.round(stats.steam.recentMinutes / 60)}h`}
+            valueClass="text-violet-300"
+            hint="Últimas 2 semanas"
+          />
+          <PanelCell
+            leading={<Target className="h-[18px] w-[18px] text-gray-400" />}
+            label="Targets"
+            value={games.length}
+            hint="Jogos rastreados"
+          />
         </div>
       </section>
     );
   }
 
   if (platform === 'retroachievements') {
+    const raCompletion = pct(stats.retroachievements.hardcoreUnlocked, stats.retroachievements.hardcoreTotal);
     return (
-      <section className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-        <h2 className="mb-3 text-base font-bold text-gray-100">RetroAchievements View</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricPill label="Mastered games" value={stats.retroachievements.masteredGames} color="text-emerald-400" />
-          <MetricPill label="Hardcore unlocks" value={`${stats.retroachievements.hardcoreUnlocked}/${stats.retroachievements.hardcoreTotal}`} color="text-amber-400" />
-          <MetricPill label="Tracked sets" value={games.length} color="text-gray-200" />
-          <MetricPill label="Completion" value={`${stats.retroachievements.hardcoreTotal > 0 ? Math.round((stats.retroachievements.hardcoreUnlocked / stats.retroachievements.hardcoreTotal) * 100) : 0}%`} color="text-violet-400" />
+      <section>
+        <div className="mb-4 flex items-center gap-2">
+          <img src={PLATFORM_META.retroachievements.logo} alt="" className="h-5 w-5 object-contain" />
+          <h2 className="text-lg font-bold text-gray-100">RetroAchievements</h2>
+        </div>
+        <div className={panelGrid}>
+          <PanelCell
+            leading={<Trophy className="h-[18px] w-[18px] text-emerald-400" />}
+            label="Jogos zerados"
+            value={stats.retroachievements.masteredGames}
+            valueClass="text-emerald-400"
+            hint="Mastered"
+          />
+          <PanelCell
+            leading={<Activity className="h-[18px] w-[18px] text-amber-400" />}
+            label="Hardcore"
+            value={`${stats.retroachievements.hardcoreUnlocked}/${stats.retroachievements.hardcoreTotal}`}
+            valueClass="text-amber-400"
+            hint="Conquistas hardcore"
+          />
+          <PanelCell
+            leading={<Target className="h-[18px] w-[18px] text-gray-400" />}
+            label="Conjuntos"
+            value={games.length}
+            hint="Sets rastreados"
+          />
+          <PanelCell
+            leading={<CheckCircle2 className="h-[18px] w-[18px] text-violet-400" />}
+            label="Conclusão"
+            value={`${raCompletion}%`}
+            valueClass="text-violet-300"
+            hint="Progresso hardcore"
+          />
         </div>
       </section>
     );
@@ -175,10 +231,51 @@ function PlatformSpecificPanel({ platform, games }: { platform: PlatformFilter; 
   return null;
 }
 
+/** "Quase Lá" card: portrait cover with a pin toggle, title + progress in a footer below the art. */
+function AlmostThereCard({
+  game,
+  completion,
+  isPinned,
+  onTogglePin,
+}: {
+  game: Game;
+  completion: { percent: number; unlocked: number; total: number };
+  isPinned: boolean;
+  onTogglePin: () => void;
+}) {
+  const navigate = useNavigate();
+  return (
+    <div className="group relative overflow-hidden rounded-xl border border-gray-800 bg-gray-900 transition-all duration-200 hover:border-violet-600/50 hover:shadow-lg hover:shadow-black/40">
+      <button onClick={() => navigate(`/game/${game.appid}`)} className="block w-full text-left">
+        <div className="relative aspect-[3/4] overflow-hidden bg-gray-800">
+          <GameCover game={game} portrait className="h-full w-full" imgClassName="object-cover transition-transform duration-300 group-hover:scale-105" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+        </div>
+        <div className="space-y-2 p-3">
+          <p className="truncate text-sm font-semibold text-gray-100">{game.name}</p>
+          <div className="flex items-center gap-2">
+            <ProgressBar percent={completion.percent} className="flex-1" height="h-1.5" />
+            <span className={`shrink-0 text-xs font-bold tabular-nums ${completionTextColor(completion.percent)}`}>{completion.percent}%</span>
+          </div>
+        </div>
+      </button>
+      <button
+        onClick={onTogglePin}
+        title={isPinned ? 'Desafixar' : 'Fixar como prioridade'}
+        className={`absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full backdrop-blur-sm transition-colors ${
+          isPinned ? 'bg-violet-600 text-white shadow-lg shadow-violet-900/40' : 'bg-black/55 text-gray-200 hover:bg-violet-600/80 hover:text-white'
+        }`}
+      >
+        <Pin className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { games, gamesWithStats, loading, completionMap } = useSteam();
-  const { db } = useLocalDb();
+  const { db, togglePinned } = useLocalDb();
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('common');
 
@@ -213,6 +310,9 @@ export default function Dashboard() {
     };
   }, [scopedGamesWithStats, completionMap, db.dropped]);
 
+  const pctHint = (value: number) =>
+    stats.total > 0 ? `${((value / stats.total) * 100).toFixed(1)}% do total` : '0% do total';
+
   const almostDone = useMemo(() => {
     return scopedGamesWithStats
       .map((g) => ({ game: g, c: completionMap.get(g.appid) }))
@@ -241,33 +341,39 @@ export default function Dashboard() {
       <div>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">Mission Control</h1>
-            <p className="text-gray-500 text-sm mt-1">Visão geral do que você está completando e conquistando</p>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-100">Mission Control</h1>
+            <p className="mt-1 text-sm text-gray-500">Visão geral dos seus troféus e conquistas.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {(['all', 'steam', 'psn', 'retroachievements'] as PlatformFilter[]).map((item) => (
-              <button
-                key={item}
-                onClick={() => {
-                  setPlatform(item);
-                  if (item === 'all') setViewMode('common');
-                }}
-                className={`flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${
-                  platform === item ? 'border-violet-500 bg-violet-600/15 text-violet-300' : 'border-gray-800 bg-gray-900 text-gray-500 hover:text-gray-200'
-                }`}
-              >
-                {item !== 'all' && <img src={PLATFORM_META[item].logo} alt="" className="h-4 w-4 object-contain" />}
-                {platformLabel(item)}
-              </button>
-            ))}
-            <div className="flex rounded-lg border border-gray-800 bg-gray-900 p-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-xl border border-gray-800 bg-gray-900 p-1">
+              {(['all', 'steam', 'psn', 'retroachievements'] as PlatformFilter[]).map((item) => (
+                <button
+                  key={item}
+                  onClick={() => {
+                    setPlatform(item);
+                    if (item === 'all') setViewMode('common');
+                  }}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    platform === item ? 'bg-violet-600 text-white shadow-sm shadow-violet-900/40' : 'text-gray-400 hover:text-gray-100'
+                  }`}
+                >
+                  {item === 'all' ? (
+                    <LayoutGrid className="h-4 w-4" />
+                  ) : (
+                    <img src={PLATFORM_META[item].logo} alt="" className="h-4 w-4 object-contain" />
+                  )}
+                  {item === 'all' ? 'Todos' : platformLabel(item)}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 rounded-xl border border-gray-800 bg-gray-900 p-1">
               {(['common', 'platform'] as ViewMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
                   disabled={mode === 'platform' && platform === 'all'}
-                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    viewMode === mode ? 'bg-gray-800 text-gray-100' : 'text-gray-500 hover:text-gray-200 disabled:opacity-40'
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors disabled:opacity-40 ${
+                    viewMode === mode ? 'bg-violet-600 text-white shadow-sm shadow-violet-900/40' : 'text-gray-400 hover:text-gray-100'
                   }`}
                 >
                   {mode === 'common' ? 'Comum' : 'Por Plataforma'}
@@ -278,12 +384,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <StatCell label="Targets" value={stats.total} icon={Library} accentText="text-gray-300" accentBar="bg-gray-600" hint="Sincronizados com conquistas" onClick={() => navigate(`/library?status=all${platformQuery(platform)}`)} />
-        <StatCell label="100%" value={stats.completed} icon={Trophy} image="/trophies/achievement-100.png" accentText="text-emerald-400" accentBar="bg-emerald-500" valueClass="text-emerald-400" hint="Totalmente completos" onClick={() => navigate(`/library?status=completed${platformQuery(platform)}`)} />
-        <StatCell label="Platinums" value={stats.platinums} icon={Medal} image="/trophies/platinum.png" accentText="text-amber-400" accentBar="bg-amber-500" valueClass="text-amber-400" hint="Troféus de platina PSN" onClick={() => navigate('/library?status=platinum&platform=psn')} />
-        <StatCell label="Em Progresso" value={stats.inProgress} icon={Zap} accentText="text-violet-400" accentBar="bg-violet-500" valueClass="text-violet-300" hint="Iniciados, não concluídos" onClick={() => navigate(`/library?status=inprogress${platformQuery(platform)}`)} />
-        <StatCell label="Dropados" value={stats.dropped} icon={CircleSlash} accentText="text-red-400" accentBar="bg-red-500/70" valueClass={stats.dropped > 0 ? 'text-red-300' : 'text-gray-500'} hint="Marcação manual" span onClick={() => navigate(`/library?status=dropped${platformQuery(platform)}`)} />
+      <div className="grid grid-cols-2 divide-x divide-y divide-gray-800 overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/50 sm:grid-cols-3 lg:grid-cols-5 lg:divide-y-0">
+        <StatCell label="Targets" value={stats.total} icon={Target} accentText="text-violet-400" hint="Definidos" onClick={() => navigate(`/library?status=all${platformQuery(platform)}`)} />
+        <StatCell label="100%" value={stats.completed} icon={CheckCircle2} accentText="text-emerald-400" valueClass="text-emerald-400" hint={pctHint(stats.completed)} onClick={() => navigate(`/library?status=completed${platformQuery(platform)}`)} />
+        <StatCell label="Platinuns" value={stats.platinums} icon={Trophy} accentText="text-amber-400" valueClass="text-amber-400" hint={pctHint(stats.platinums)} onClick={() => navigate('/library?status=platinum&platform=psn')} />
+        <StatCell label="Em Progresso" value={stats.inProgress} icon={Activity} accentText="text-sky-400" valueClass="text-sky-400" hint={pctHint(stats.inProgress)} onClick={() => navigate(`/library?status=inprogress${platformQuery(platform)}`)} />
+        <StatCell label="Abandonados" value={stats.dropped} icon={XCircle} accentText="text-red-400" valueClass={stats.dropped > 0 ? 'text-red-400' : 'text-gray-500'} hint={pctHint(stats.dropped)} onClick={() => navigate(`/library?status=dropped${platformQuery(platform)}`)} />
       </div>
 
       {viewMode === 'platform' && <PlatformSpecificPanel platform={platform} games={scopedGamesWithStats} />}
@@ -292,8 +398,7 @@ export default function Dashboard() {
       <section>
         <div className="flex items-center gap-2 mb-4">
           <Crosshair className="w-5 h-5 text-emerald-400" />
-          <h2 className="text-base font-bold text-gray-100">Quase Lá</h2>
-          <span className="text-xs text-gray-600 ml-1">— mais perto dos 100%</span>
+          <h2 className="text-lg font-bold text-gray-100">Quase Lá</h2>
           <button
             onClick={() => navigate(`/library?status=inprogress${platformQuery(platform)}`)}
             className="ml-auto text-xs font-semibold text-violet-400 hover:text-violet-300 transition-colors"
@@ -313,26 +418,13 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {almostDone.map(({ game, c }) => (
-              <div
+              <AlmostThereCard
                 key={game.appid}
-                onClick={() => navigate(`/game/${game.appid}`)}
-                className="group relative bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden cursor-pointer hover:border-emerald-700/50 transition-all hover:shadow-xl hover:shadow-emerald-900/10"
-              >
-                <GameCover
-                  game={game}
-                  className="w-full h-24"
-                  imgClassName="object-cover transition-transform duration-300 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-3">
-                  <p className="text-xs font-semibold text-white truncate leading-tight">{game.name}</p>
-                  <div className="flex items-center justify-between mt-1 mb-1.5">
-                    <span className="text-xs text-white/70">{c!.unlocked}/{c!.total}</span>
-                    <span className={`text-xs font-bold font-mono ${completionTextColor(c!.percent)}`}>{c!.percent}%</span>
-                  </div>
-                  <ProgressBar percent={c!.percent} height="h-1.5" />
-                </div>
-              </div>
+                game={game}
+                completion={c!}
+                isPinned={db.pinned.includes(String(game.appid))}
+                onTogglePin={() => togglePinned(String(game.appid))}
+              />
             ))}
           </div>
         )}
@@ -342,69 +434,135 @@ export default function Dashboard() {
         {recentlyPlayed.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Play className="w-4 h-4 text-blue-400" />
-              <h2 className="text-base font-bold text-gray-100">Jogados Recentemente</h2>
+              <Clock3 className="w-5 h-5 text-blue-400" />
+              <h2 className="text-lg font-bold text-gray-100">Jogadas Recentemente</h2>
+              <button
+                onClick={() => navigate('/library?sort=recent')}
+                className="ml-auto text-xs font-semibold text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                Ver todas
+              </button>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900 divide-y divide-gray-800">
-              {recentlyPlayed.map((g) => (
-                <button
-                  key={g.appid}
-                  onClick={() => navigate(`/game/${g.appid}`)}
-                  className="group flex w-full items-center gap-3 p-2.5 text-left transition-colors hover:bg-gray-800/50"
-                >
-                  <GameCover game={g} className="h-10 w-16 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-100">{g.name}</p>
-                    <p className="text-xs text-gray-500">{platformLabel(g.platform as PlatformFilter)}</p>
-                  </div>
-                  <span className="shrink-0 text-xs font-medium text-blue-400/80">{lastPlayedLabel(g)}</span>
-                </button>
-              ))}
+            <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
+              <div className="divide-y divide-gray-800">
+                {recentlyPlayed.map((g) => {
+                  const c = completionMap.get(g.appid);
+                  return (
+                    <button
+                      key={g.appid}
+                      onClick={() => navigate(`/game/${g.appid}`)}
+                      className="group flex w-full items-center gap-3 p-2.5 text-left transition-colors hover:bg-gray-800/50"
+                    >
+                      <GameCover game={g} className="h-11 w-11 shrink-0 rounded-lg bg-gray-800" imgClassName="object-cover" />
+                      <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-100">{g.name}</p>
+                      <span className="hidden shrink-0 items-center gap-1.5 text-xs text-gray-500 sm:flex">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {formatPlaytime(g.playtime_forever)}
+                      </span>
+                      <span className="hidden w-24 shrink-0 items-center gap-1.5 text-xs text-gray-500 md:flex">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        {lastPlayedDate(g)}
+                      </span>
+                      <div className="flex w-24 shrink-0 items-center justify-end gap-2">
+                        {c ? (
+                          <>
+                            <div className="hidden h-1.5 w-10 overflow-hidden rounded-full bg-gray-800 sm:block">
+                              <div className={`h-full rounded-full ${completionColor(c.percent)}`} style={{ width: `${c.percent}%` }} />
+                            </div>
+                            <span className={`text-xs font-bold tabular-nums ${completionTextColor(c.percent)}`}>{c.percent}%</span>
+                            {c.percent === 100 && <img src="/trophies/gold.png" alt="" className="h-4 w-4 object-contain" />}
+                          </>
+                        ) : (
+                          <span className="text-xs text-gray-600">—</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => navigate('/library?sort=recent')}
+                className="flex w-full items-center justify-center gap-1.5 border-t border-gray-800 p-3 text-xs font-semibold text-gray-400 transition-colors hover:bg-gray-800/50 hover:text-gray-200"
+              >
+                Ver histórico completo <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </div>
           </section>
         )}
 
         <section>
             <div className="flex items-center gap-2 mb-4">
-              <Pin className="w-4 h-4 text-violet-400" />
-              <h2 className="text-base font-bold text-gray-100">Jogos Prioritários</h2>
+              <Pin className="w-5 h-5 text-violet-400" />
+              <div className="leading-tight">
+                <h2 className="text-lg font-bold text-gray-100">Jogos Prioritários</h2>
+                <p className="text-xs text-gray-600">Foco atual • Itens fixados</p>
+              </div>
               <button
                 onClick={() => navigate('/backlog')}
-                className="ml-auto text-xs font-semibold text-violet-400 hover:text-violet-300 transition-colors"
+                className="ml-auto rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:border-gray-700 hover:text-gray-100"
               >
-                Reordenar
+                Gerenciar
               </button>
             </div>
             {pinnedGames.length === 0 ? (
-              <div className="flex h-[calc(100%-2.5rem)] min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-800 bg-gray-900/40 p-8 text-center">
+              <div className="flex h-[calc(100%-3rem)] min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-800 bg-gray-900/40 p-8 text-center">
                 <Pin className="h-6 w-6 text-gray-700" />
                 <p className="text-sm text-gray-600">Fixe jogos como prioridade para vê-los aqui.</p>
               </div>
             ) : (
-            <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900 divide-y divide-gray-800">
-              {pinnedGames.map((g, index) => {
-                const c = completionMap.get(g.appid);
-                return (
-                  <button
-                    key={g.appid}
-                    onClick={() => navigate(`/game/${g.appid}`)}
-                    className="group flex w-full items-center gap-3 p-2.5 text-left transition-colors hover:bg-gray-800/50"
-                  >
-                    <span className="w-5 shrink-0 text-center text-sm font-bold tabular-nums text-gray-600">{index + 1}</span>
-                    <GameCover game={g} className="h-10 w-16 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-gray-100">{g.name}</p>
-                      <p className="text-xs text-gray-500">{platformLabel(g.platform as PlatformFilter)}</p>
+            <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900">
+              <div className="divide-y divide-gray-800">
+                {pinnedGames.map((g) => {
+                  const c = completionMap.get(g.appid);
+                  const meta = g.platform ? PLATFORM_META[g.platform] : null;
+                  const isPsn = g.platform === 'psn';
+                  return (
+                    <div key={g.appid} className="group flex items-center gap-3 p-2.5">
+                      <Pin className="h-4 w-4 shrink-0 text-violet-400" />
+                      <button onClick={() => navigate(`/game/${g.appid}`)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                        <GameCover game={g} className="h-11 w-11 shrink-0 rounded-lg bg-gray-800" imgClassName="object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-gray-100">{g.name}</p>
+                            {meta && (
+                              <span className="flex shrink-0 items-center gap-1 rounded-md bg-gray-800 px-1.5 py-0.5 text-[10px] font-bold text-gray-300">
+                                <img src={meta.logo} alt="" className="h-3 w-3 object-contain" />
+                                {meta.short}
+                              </span>
+                            )}
+                          </div>
+                          {c && (
+                            <p className="mt-0.5 text-xs text-gray-500">
+                              {c.unlocked} / {c.total} {isPsn ? 'troféus' : 'conquistas'}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                      {c && (
+                        <div className="hidden w-28 shrink-0 items-center gap-2 sm:flex">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
+                            <div className="h-full rounded-full bg-violet-500" style={{ width: `${c.percent}%` }} />
+                          </div>
+                          <span className="w-9 text-right text-xs font-bold tabular-nums text-gray-300">{c.percent}%</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => togglePinned(String(g.appid))}
+                        title="Desafixar"
+                        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-gray-600 transition-colors hover:bg-gray-800 hover:text-gray-300"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </button>
                     </div>
-                    {c && (
-                      <div className="flex w-28 shrink-0 items-center gap-2">
-                        <ProgressBar percent={c.percent} height="h-1.5" />
-                        <span className={`w-9 text-right text-xs font-bold font-mono ${completionTextColor(c.percent)}`}>{c.percent}%</span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => navigate('/backlog')}
+                className="flex w-full items-center justify-center gap-1.5 border-t border-gray-800 p-3 text-xs font-semibold text-gray-400 transition-colors hover:bg-gray-800/50 hover:text-gray-200"
+              >
+                Ver todos os prioritários <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </div>
             )}
           </section>

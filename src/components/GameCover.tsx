@@ -21,6 +21,8 @@ interface GameCoverProps {
   game: Game;
   className?: string;
   imgClassName?: string;
+  /** prefer the vertical box art (Steam library_600x900) when available */
+  portrait?: boolean;
 }
 
 function platformLabel(game: Game) {
@@ -29,10 +31,13 @@ function platformLabel(game: Game) {
   return 'Steam';
 }
 
-export function GameCover({ game, className = '', imgClassName = '' }: GameCoverProps) {
+export function GameCover({ game, className = '', imgClassName = '', portrait = false }: GameCoverProps) {
   const srcs = useMemo(
-    () => [platformCoverUrl(game), ...STEAM_CDN_URLS(Number(game.platformGameId ?? game.appid))].filter(Boolean),
-    [game],
+    () => (portrait
+      ? [game.portraitUrl, platformCoverUrl(game), ...STEAM_CDN_URLS(Number(game.platformGameId ?? game.appid))]
+      : [platformCoverUrl(game), ...STEAM_CDN_URLS(Number(game.platformGameId ?? game.appid))]
+    ).filter(Boolean) as string[],
+    [game, portrait],
   );
   const [srcIdx, setSrcIdx] = useState(0);
   const style = PLATFORM_STYLE[game.platform ?? 'default'] ?? PLATFORM_STYLE.default;

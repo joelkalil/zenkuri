@@ -1,26 +1,27 @@
 import { useEffect, useState, useMemo } from 'react';
+import type { ElementType } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, LayoutGrid, List, Search } from 'lucide-react';
+import { Activity, CheckCircle2, ChevronLeft, ChevronRight, Circle, LayoutGrid, List, Pin, Search, Trophy, XCircle } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
 import { LibraryCard } from '../components/LibraryCard';
 import { LibraryRow } from '../components/LibraryRow';
 import { SkeletonCard } from '../components/SkeletonCard';
 import type { Platform } from '../types/steam';
-import { hasPsnPlatinum } from '../lib/platforms';
+import { hasPsnPlatinum, PLATFORM_META } from '../lib/platforms';
 
 type FilterTab = 'all' | 'inprogress' | 'completed' | 'platinum' | 'notstarted' | 'pinned' | 'dropped';
 type SortMode = 'completion' | 'playtime' | 'name' | 'backlog';
 type PlatformTab = 'all' | Platform;
 
-const TABS: { key: FilterTab; label: string }[] = [
+const TABS: { key: FilterTab; label: string; icon?: ElementType; color?: string }[] = [
   { key: 'all', label: 'Todos' },
-  { key: 'inprogress', label: 'Em Progresso' },
-  { key: 'completed', label: '100%' },
-  { key: 'platinum', label: 'Platinada' },
-  { key: 'notstarted', label: 'Não Iniciado' },
-  { key: 'pinned', label: 'Fixados' },
-  { key: 'dropped', label: 'Dropados' },
+  { key: 'inprogress', label: 'Em Progresso', icon: Activity, color: 'text-sky-400' },
+  { key: 'completed', label: '100%', icon: CheckCircle2, color: 'text-emerald-400' },
+  { key: 'platinum', label: 'Platinum', icon: Trophy, color: 'text-amber-400' },
+  { key: 'notstarted', label: 'Não Iniciado', icon: Circle, color: 'text-gray-400' },
+  { key: 'pinned', label: 'Fixado', icon: Pin, color: 'text-violet-400' },
+  { key: 'dropped', label: 'Dropado', icon: XCircle, color: 'text-red-400' },
 ];
 
 const SORTS: { key: SortMode; label: string }[] = [
@@ -155,21 +156,27 @@ export default function Library() {
       <div className="mb-4 flex flex-wrap gap-1.5">
         {PLATFORM_TABS.map(({ key, label }) => (
           <button key={key} onClick={() => setPlatformAndUrl(key)}
-            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-              platform === key ? 'bg-gray-800 text-gray-100 shadow-[inset_0_0_0_1px_var(--color-gray-700)]' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
+            className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              platform === key ? 'bg-violet-600/20 text-violet-200 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.35)]' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
             }`}>
-            {label} <span className="ml-0.5 text-gray-600">({platformCounts[key]})</span>
+            {key === 'all' ? (
+              <LayoutGrid className="h-4 w-4" />
+            ) : (
+              <img src={PLATFORM_META[key].logo} alt="" className="h-4 w-4 object-contain" />
+            )}
+            {label} <span className={platform === key ? 'text-violet-300/70' : 'text-gray-600'}>({platformCounts[key]})</span>
           </button>
         ))}
       </div>
 
       <div className="mb-6 flex flex-wrap gap-1.5 border-t border-gray-800/70 pt-4">
-        {TABS.map((t) => (
-          <button key={t.key} onClick={() => setFilterAndUrl(t.key)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-              filter === t.key ? 'bg-violet-600/20 text-violet-200 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.3)]' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
+        {TABS.map(({ key, label, icon: Icon, color }) => (
+          <button key={key} onClick={() => setFilterAndUrl(key)}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+              filter === key ? 'bg-violet-600/20 text-violet-200 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.3)]' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
             }`}>
-            {t.label}
+            {Icon && <Icon className={`h-3.5 w-3.5 ${filter === key ? 'text-violet-300' : color}`} />}
+            {label}
           </button>
         ))}
       </div>

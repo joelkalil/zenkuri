@@ -16,11 +16,11 @@ export function Logo({ size = 32, withWordmark = true, tagline, className = '' }
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
       <span
-        className="relative grid shrink-0 place-items-center rounded-[28%] bg-gradient-to-br from-violet-400 via-violet-600 to-indigo-700 font-black text-white shadow-[0_6px_20px_-4px_rgba(124,58,237,0.6)]"
-        style={{ width: size, height: size, fontSize: size * 0.56 }}
+        className="relative grid shrink-0 place-items-center overflow-hidden rounded-[26%] shadow-[0_6px_22px_-6px_rgba(124,58,237,0.65)]"
+        style={{ width: size, height: size }}
       >
-        <span className="-mt-px italic tracking-tighter">Z</span>
-        <span className="pointer-events-none absolute inset-0 rounded-[28%] ring-1 ring-inset ring-white/20" />
+        <img src="/zenkuri-logo.png" alt="Zenkuri" className="h-full w-full object-cover" />
+        <span className="pointer-events-none absolute inset-0 rounded-[26%] ring-1 ring-inset ring-white/10" />
       </span>
       {withWordmark && (
         <div className="leading-none">
