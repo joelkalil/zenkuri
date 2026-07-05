@@ -12,7 +12,8 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 function initialTheme(): ThemeMode {
   const saved = localStorage.getItem('zenkuri-theme');
   if (saved === 'light' || saved === 'dark') return saved;
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  // Papel marfim é a identidade principal; escuro só quando o sistema pede.
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

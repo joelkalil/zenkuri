@@ -82,7 +82,7 @@ export default function Settings({ onReset, onConfigured }: SettingsProps) {
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-100">Settings</h1>
+        <h1 className="heading-editorial text-2xl font-semibold text-gray-100">Ajustes</h1>
         <p className="mt-1 text-sm text-gray-500">Gerencie conexões, sincronização e seus dados locais de planejamento</p>
       </div>
 

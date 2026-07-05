@@ -124,7 +124,7 @@ export default function Library() {
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Game Library</h1>
+          <h1 className="heading-editorial text-2xl font-semibold text-gray-100">Biblioteca</h1>
           <p className="text-gray-500 text-sm mt-1">
             Todos os seus jogos e conquistas em um só lugar
             <span className="text-gray-600"> · {gamesWithStats.length} jogos</span>
@@ -157,7 +157,7 @@ export default function Library() {
         {PLATFORM_TABS.map(({ key, label }) => (
           <button key={key} onClick={() => setPlatformAndUrl(key)}
             className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-              platform === key ? 'bg-violet-600/20 text-violet-200 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.35)]' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
+              platform === key ? 'bg-violet-600/15 text-violet-300 ring-1 ring-inset ring-violet-500/35' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
             }`}>
             {key === 'all' ? (
               <LayoutGrid className="h-4 w-4" />
@@ -173,7 +173,7 @@ export default function Library() {
         {TABS.map(({ key, label, icon: Icon, color }) => (
           <button key={key} onClick={() => setFilterAndUrl(key)}
             className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-              filter === key ? 'bg-violet-600/20 text-violet-200 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.3)]' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
+              filter === key ? 'bg-violet-600/15 text-violet-300 ring-1 ring-inset ring-violet-500/35' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
             }`}>
             {Icon && <Icon className={`h-3.5 w-3.5 ${filter === key ? 'text-violet-300' : color}`} />}
             {label}
@@ -221,7 +221,7 @@ export default function Library() {
             ) : (
               <button key={p} onClick={() => setPage(p as number)}
                 className={`h-8 min-w-8 rounded-lg px-2 text-sm font-semibold transition-colors ${
-                  p === page ? 'bg-violet-600/25 text-violet-200 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.3)]' : 'border border-gray-800 text-gray-400 hover:border-gray-700 hover:text-gray-200'
+                  p === page ? 'bg-violet-600/15 text-violet-300 ring-1 ring-inset ring-violet-500/35' : 'border border-gray-800 text-gray-400 hover:border-gray-700 hover:text-gray-200'
                 }`}>
                 {p}
               </button>

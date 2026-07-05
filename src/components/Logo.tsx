@@ -16,7 +16,7 @@ export function Logo({ size = 32, withWordmark = true, tagline, className = '' }
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
       <span
-        className="relative grid shrink-0 place-items-center overflow-hidden rounded-[26%] shadow-[0_6px_22px_-6px_rgba(124,58,237,0.65)]"
+        className="relative grid shrink-0 place-items-center overflow-hidden rounded-[26%] shadow-[0_6px_22px_-6px_color-mix(in_oklab,var(--color-violet-600)_65%,transparent)]"
         style={{ width: size, height: size }}
       >
         <img src="/zenkuri-logo.png" alt="Zenkuri" className="h-full w-full object-cover" />
@@ -24,7 +24,7 @@ export function Logo({ size = 32, withWordmark = true, tagline, className = '' }
       </span>
       {withWordmark && (
         <div className="leading-none">
-          <p className="text-[16px] font-extrabold tracking-tight" style={{ fontSize: size * 0.5 }}>
+          <p className="font-display text-[16px] font-bold tracking-tight" style={{ fontSize: size * 0.5 }}>
             <span className="text-gray-100">Zen</span>
             <span className="text-violet-400">kuri</span>
           </p>

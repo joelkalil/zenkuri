@@ -155,7 +155,7 @@ export default function Setup({ onComplete }: SetupProps) {
 
           <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-100">Bem-vindo ao Zenkuri</h1>
+              <h1 className="heading-editorial text-3xl font-semibold text-gray-100">Bem-vindo ao Zenkuri</h1>
               <p className="mt-2 text-gray-500">Vamos configurar sua jornada de conquistas em poucos passos.</p>
             </div>
             {/* Stepper */}
