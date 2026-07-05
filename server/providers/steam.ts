@@ -82,7 +82,7 @@ export async function syncSteamAchievementsForGame(gameId: number) {
   const { key, steamid } = steamConfig();
   const appid = Number(game.external_id);
 
-  const [schemaJson, playerJson] = await Promise.all([
+  const [schemaJson, playerJson, globalJson] = await Promise.all([
     steamFetch<{ game?: { availableGameStats?: { achievements?: SteamSchemaAchievement[] } } }>('ISteamUserStats/GetSchemaForGame/v2/', {
       key,
       appid,
@@ -92,14 +92,21 @@ export async function syncSteamAchievementsForGame(gameId: number) {
       steamid,
       appid,
     }).catch(() => ({ playerstats: { achievements: [] } })),
+    steamFetch<{ achievementpercentages?: { achievements?: { name: string; percent: number | string }[] } }>('ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/', {
+      gameid: appid,
+    }).catch(() => ({ achievementpercentages: { achievements: [] } })),
   ]);
 
   const schema = schemaJson.game?.availableGameStats?.achievements ?? [];
   const player = playerJson.playerstats?.achievements ?? [];
   const playerMap = new Map(player.map((achievement) => [achievement.apiname, achievement]));
+  const globalMap = new Map(
+    (globalJson.achievementpercentages?.achievements ?? []).map((item) => [item.name, Number(item.percent)]),
+  );
 
   for (const achievement of schema) {
     const status = playerMap.get(achievement.name);
+    const globalPercent = globalMap.get(achievement.name);
     upsertAchievement({
       gameId,
       externalId: achievement.name,
@@ -111,7 +118,10 @@ export async function syncSteamAchievementsForGame(gameId: number) {
       displayOrder: schema.indexOf(achievement),
       achieved: status?.achieved === 1,
       unlockTime: status?.unlocktime ?? 0,
-      metadata: achievement as unknown as Record<string, unknown>,
+      metadata: {
+        ...(achievement as unknown as Record<string, unknown>),
+        globalPercent: Number.isFinite(globalPercent) ? globalPercent : undefined,
+      },
       statusMetadata: status as unknown as Record<string, unknown>,
     });
   }

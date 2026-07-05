@@ -43,6 +43,19 @@ export interface AchievementWithStatus extends SchemaAchievement {
   unlocktime: number;
   points?: number;
   type?: string;
+  /** % global de jogadores com a conquista (0–100), null quando a plataforma não informa */
+  rarity?: number | null;
+}
+
+export interface UnlockItem {
+  unlockTime: number;
+  platform: Platform;
+  gameId: number;
+  gameName: string;
+  achievementTitle: string;
+  type: string | null;
+  rarity: number | null;
+  icon: string;
 }
 
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'grind';

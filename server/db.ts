@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { ApiAchievement, ApiGame, Platform, PlanningRecord, StoredCredential } from './types';
+import type { ApiAchievement, ApiGame, CompletionHistoryItem, Platform, PlanningRecord, StoredCredential } from './types';
 import { achievementMediaUrl, coverMediaUrl, heroMediaUrl, iconMediaUrl, portraitMediaUrl } from './mediaPaths';
 
 const dbPath = process.env.ZENKURI_DB_PATH ?? join(process.cwd(), 'data', 'zenkuri.sqlite');
@@ -161,7 +161,6 @@ function normalizeTitle(title: string) {
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\b(director'?s cut|complete edition|definitive edition|game of the year|goty|enhanced edition|remastered|remake)\b/gi, '')
-    .replace(/\b(trophies|trophy set)\b/gi, '')
     .replace(/\s*[:|-]\s*$/g, '')
     .replace(/[^a-z0-9]+/gi, ' ')
     .trim()
@@ -381,11 +380,15 @@ export function listGames(platform?: Platform): ApiGame[] {
     let unlocked = Number(progress.unlocked ?? 0);
     let percent = total > 0 ? Math.round((unlocked / total) * 100) : 0;
 
-    if (total === 0 && row.platform === 'psn') {
+    if (row.platform === 'psn') {
       const defined = metadata.definedTrophies ?? {};
       const earned = metadata.earnedTrophies ?? {};
-      total = Number(defined.bronze ?? 0) + Number(defined.silver ?? 0) + Number(defined.gold ?? 0) + Number(defined.platinum ?? 0);
-      unlocked = Number(earned.bronze ?? 0) + Number(earned.silver ?? 0) + Number(earned.gold ?? 0) + Number(earned.platinum ?? 0);
+      const metadataTotal = Number(defined.bronze ?? 0) + Number(defined.silver ?? 0) + Number(defined.gold ?? 0) + Number(defined.platinum ?? 0);
+      const metadataUnlocked = Number(earned.bronze ?? 0) + Number(earned.silver ?? 0) + Number(earned.gold ?? 0) + Number(earned.platinum ?? 0);
+      if (total === 0) {
+        total = metadataTotal;
+        unlocked = metadataUnlocked;
+      }
       percent = Number(metadata.progress ?? (total > 0 ? Math.round((unlocked / total) * 100) : 0));
     }
 
@@ -426,11 +429,37 @@ export function getGameById(id: number) {
   return db.prepare('select * from games where id = ?').get(id) as any | undefined;
 }
 
+/**
+ * Percentual global de jogadores que possuem a conquista (0–100), quando a
+ * plataforma fornece: PSN traz trophyEarnedRate no status, Steam grava
+ * globalPercent no metadata (sync), RA deriva de numAwarded / players do set.
+ */
+function extractRarity(
+  platform: Platform,
+  achievementMeta: Record<string, any>,
+  statusMeta: Record<string, any>,
+): number | null {
+  if (platform === 'psn') {
+    const rate = Number(statusMeta?.trophyEarnedRate ?? achievementMeta?.trophyEarnedRate);
+    return Number.isFinite(rate) && rate > 0 ? rate : null;
+  }
+  if (platform === 'steam') {
+    const percent = Number(achievementMeta?.globalPercent);
+    return Number.isFinite(percent) && percent > 0 ? percent : null;
+  }
+  const awarded = Number(achievementMeta?.numAwardedHardcore ?? achievementMeta?.numAwarded);
+  const players = Number(achievementMeta?.numDistinctPlayers);
+  if (Number.isFinite(awarded) && Number.isFinite(players) && players > 0 && awarded > 0) {
+    return Math.round((awarded / players) * 1000) / 10;
+  }
+  return null;
+}
+
 export function listAchievements(gameId: number): ApiAchievement[] {
   const game = db.prepare('select platform, external_id, title from games where id = ?')
     .get(gameId) as { platform: Platform; external_id: string; title: string } | undefined;
   const rows = db.prepare(`
-    select a.*, s.achieved, s.unlock_time
+    select a.*, s.achieved, s.unlock_time, s.metadata_json as status_metadata_json
     from achievements a
     left join achievement_status s on s.achievement_id = a.id
     where a.game_id = ?
@@ -445,6 +474,9 @@ export function listAchievements(gameId: number): ApiAchievement[] {
     const icongray = game && lockedSource
       ? achievementMediaUrl(game.platform, game.external_id, game.title, row.external_id, row.title, row.locked_icon_url ? true : false)
       : icon;
+    const rarity = game
+      ? extractRarity(game.platform, parseJson(row.metadata_json, {}), parseJson(row.status_metadata_json, {}))
+      : null;
     return {
       name: row.external_id,
       displayName: row.title,
@@ -456,8 +488,145 @@ export function listAchievements(gameId: number): ApiAchievement[] {
       unlocktime: row.unlock_time ?? 0,
       points: row.points ?? undefined,
       type: row.type ?? undefined,
+      rarity,
     };
   });
+}
+
+export interface UnlockItem {
+  unlockTime: number;
+  platform: Platform;
+  gameId: number;
+  gameName: string;
+  achievementTitle: string;
+  type: string | null;
+  rarity: number | null;
+  icon: string;
+}
+
+/** Anos (UTC) com pelo menos um desbloqueio registrado, mais recente primeiro. */
+export function listUnlockYears(): number[] {
+  return (db.prepare(`
+    select distinct strftime('%Y', unlock_time, 'unixepoch') as year
+    from achievement_status
+    where achieved = 1 and unlock_time > 0
+    order by year desc
+  `).all() as { year: string }[]).map((row) => Number(row.year));
+}
+
+/** Todos os desbloqueios de um ano, ordem cronológica, com raridade quando disponível. */
+export function listUnlocks(year: number): UnlockItem[] {
+  const rows = db.prepare(`
+    select
+      s.unlock_time, s.metadata_json as status_metadata_json,
+      a.metadata_json as achievement_metadata_json, a.title as achievement_title,
+      a.external_id as achievement_external_id, a.type, a.icon_url,
+      g.id as game_id, g.title as game_title, g.platform, g.external_id as game_external_id
+    from achievement_status s
+    join achievements a on a.id = s.achievement_id
+    join games g on g.id = a.game_id
+    where s.achieved = 1 and s.unlock_time > 0
+      and strftime('%Y', s.unlock_time, 'unixepoch') = ?
+    order by s.unlock_time asc
+  `).all(String(year)) as any[];
+
+  return rows.map((row) => ({
+    unlockTime: row.unlock_time,
+    platform: row.platform as Platform,
+    gameId: row.game_id,
+    gameName: row.game_title,
+    achievementTitle: row.achievement_title,
+    type: row.type || null,
+    rarity: extractRarity(
+      row.platform,
+      parseJson(row.achievement_metadata_json, {}),
+      parseJson(row.status_metadata_json, {}),
+    ),
+    icon: row.icon_url
+      ? achievementMediaUrl(row.platform, row.game_external_id, row.game_title, row.achievement_external_id, row.achievement_title, false)
+      : '',
+  }));
+}
+
+/** Conquistas desbloqueadas mais raras da coleção inteira (raridade crescente). */
+export function listRarestUnlocked(limit = 3): UnlockItem[] {
+  const rows = db.prepare(`
+    select
+      s.unlock_time, s.metadata_json as status_metadata_json,
+      a.metadata_json as achievement_metadata_json, a.title as achievement_title,
+      a.external_id as achievement_external_id, a.type, a.icon_url,
+      g.id as game_id, g.title as game_title, g.platform, g.external_id as game_external_id
+    from achievement_status s
+    join achievements a on a.id = s.achievement_id
+    join games g on g.id = a.game_id
+    where s.achieved = 1
+  `).all() as any[];
+
+  const withRarity = rows.flatMap((row) => {
+    const rarity = extractRarity(
+      row.platform,
+      parseJson(row.achievement_metadata_json, {}),
+      parseJson(row.status_metadata_json, {}),
+    );
+    if (rarity === null) return [];
+    return [{
+      unlockTime: row.unlock_time,
+      platform: row.platform as Platform,
+      gameId: row.game_id,
+      gameName: row.game_title,
+      achievementTitle: row.achievement_title,
+      type: row.type || null,
+      rarity,
+      icon: row.icon_url
+        ? achievementMediaUrl(row.platform, row.game_external_id, row.game_title, row.achievement_external_id, row.achievement_title, false)
+        : '',
+    }];
+  });
+
+  return withRarity.sort((a, b) => a.rarity! - b.rarity!).slice(0, limit);
+}
+
+export function listCompletionHistory(limit = 8): { platinums: CompletionHistoryItem[]; perfects: CompletionHistoryItem[] } {
+  const games = new Map(listGames().map((game) => [game.id, game]));
+
+  const platinumRows = db.prepare(`
+    select g.id as game_id, max(s.unlock_time) as completed_at
+    from games g
+    join achievements a on a.game_id = g.id
+    join achievement_status s on s.achievement_id = a.id
+    where g.platform = 'psn'
+      and lower(coalesce(a.type, '')) = 'platinum'
+      and s.achieved = 1
+      and s.unlock_time > 0
+    group by g.id
+    order by completed_at desc
+    limit ?
+  `).all(limit) as { game_id: number; completed_at: number }[];
+
+  const perfectRows = db.prepare(`
+    select g.id as game_id, max(s.unlock_time) as completed_at
+    from games g
+    join achievements a on a.game_id = g.id
+    left join achievement_status s on s.achievement_id = a.id
+    where g.platform != 'psn'
+    group by g.id
+    having count(a.id) > 0
+      and sum(case when s.achieved = 1 then 1 else 0 end) = count(a.id)
+      and completed_at > 0
+    order by completed_at desc
+    limit ?
+  `).all(limit) as { game_id: number; completed_at: number }[];
+
+  const mapRows = (rows: { game_id: number; completed_at: number }[], kind: CompletionHistoryItem['kind']) =>
+    rows.flatMap((row) => {
+      const game = games.get(row.game_id);
+      return game ? [{ game, completedAt: row.completed_at, kind }] : [];
+    });
+
+  return {
+    platinums: mapRows(platinumRows, 'platinum'),
+    perfects: mapRows(perfectRows, 'perfect'),
+  };
 }
 
 export function readPlanning(): PlanningRecord {

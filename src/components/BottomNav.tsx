@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Library, ListOrdered, Settings } from 'lucide-react';
+import { LayoutDashboard, Library, ListOrdered, Medal, Settings, Trophy } from 'lucide-react';
 
 const links = [
-  { to: '/', icon: LayoutDashboard, label: 'Home' },
-  { to: '/library', icon: Library, label: 'Library' },
+  { to: '/', icon: LayoutDashboard, label: 'Início' },
+  { to: '/library', icon: Library, label: 'Biblioteca' },
+  { to: '/rankings', icon: Medal, label: 'Rankings' },
   { to: '/backlog', icon: ListOrdered, label: 'Backlog' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/hall', icon: Trophy, label: 'Hall' },
+  { to: '/settings', icon: Settings, label: 'Ajustes' },
 ];
 
 export function BottomNav() {

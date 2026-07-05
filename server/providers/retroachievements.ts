@@ -60,6 +60,13 @@ export async function syncRetroAchievementsForGame(gameId: number) {
   });
 
   const achievements = Object.values(response.achievements ?? {});
+  // Total de jogadores do set: usado para derivar a raridade (numAwarded / players).
+  const distinctPlayers = Number(
+    (response as any).numDistinctPlayers
+      ?? (response as any).numDistinctPlayersHardcore
+      ?? (response as any).numDistinctPlayersCasual
+      ?? 0,
+  );
   for (const achievement of achievements as any[]) {
     const earnedAt = achievement.dateEarnedHardcore ?? achievement.dateEarned;
     upsertAchievement({
@@ -75,7 +82,7 @@ export async function syncRetroAchievementsForGame(gameId: number) {
       type: achievement.type ?? '',
       achieved: Boolean(earnedAt),
       unlockTime: earnedAt ? Math.floor(new Date(earnedAt).getTime() / 1000) : 0,
-      metadata: achievement,
+      metadata: { ...achievement, numDistinctPlayers: distinctPlayers > 0 ? distinctPlayers : undefined },
       statusMetadata: { dateEarned: achievement.dateEarned, dateEarnedHardcore: achievement.dateEarnedHardcore },
     });
   }

@@ -42,6 +42,8 @@ export interface ApiAchievement {
   unlocktime: number;
   points?: number;
   type?: string;
+  /** % global de jogadores com a conquista (0–100), null quando a plataforma não informa */
+  rarity?: number | null;
 }
 
 export interface PlanningRecord {
@@ -52,4 +54,10 @@ export interface PlanningRecord {
   effort: Record<string, string>;
   schedule: Record<string, string>;
   guides: Record<string, string>;
+}
+
+export interface CompletionHistoryItem {
+  game: ApiGame;
+  completedAt: number;
+  kind: 'platinum' | 'perfect';
 }

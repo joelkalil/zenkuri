@@ -11,15 +11,19 @@ import {
   latestSyncByPlatform,
   listAchievements,
   listConfiguredPlatforms,
+  listCompletionHistory,
   listGames,
+  listRarestUnlocked,
   listSyncRuns,
+  listUnlockYears,
+  listUnlocks,
   patchPlanning,
   readPlanning,
   reorderBacklog,
   resetPlanning,
   setCredential,
 } from './db';
-import type { Platform } from './types';
+import type { ApiGame, Platform } from './types';
 import { syncPsnAchievementsForGame, syncPsnLibrary } from './providers/psn';
 import { syncRetroAchievementsForGame, syncRetroAchievementsLibrary } from './providers/retroachievements';
 import { syncSteamAchievementsForGame, syncSteamLibrary } from './providers/steam';
@@ -59,6 +63,31 @@ async function syncAchievements(platform: Platform, gameId: number) {
   return await syncPsnAchievementsForGame(gameId);
 }
 
+function psnTrophyCount(metadata: Record<string, unknown>, key: 'definedTrophies' | 'earnedTrophies') {
+  const counts = (metadata[key] ?? {}) as Record<string, unknown>;
+  return Number(counts.bronze ?? 0)
+    + Number(counts.silver ?? 0)
+    + Number(counts.gold ?? 0)
+    + Number(counts.platinum ?? 0);
+}
+
+function shouldHydrateAchievements(platform: Platform, game: ApiGame) {
+  if (!game.has_community_visible_stats) return false;
+  if (platform === 'steam') return true;
+  if (game.completion.total === 0) return true;
+
+  const metadata = game.metadata ?? {};
+  if (platform === 'psn') {
+    return game.completion.total !== psnTrophyCount(metadata, 'definedTrophies')
+      || game.completion.unlocked !== psnTrophyCount(metadata, 'earnedTrophies');
+  }
+
+  const total = Number(metadata.maxPossible ?? 0);
+  const unlocked = Number(metadata.numAwardedHardcore ?? metadata.numAwarded ?? 0);
+  return (total > 0 && game.completion.total !== total)
+    || game.completion.unlocked !== unlocked;
+}
+
 async function syncPlatform(platform: Platform) {
   const count = await syncLibrary(platform);
   // Mirror every cover + game icon locally (best effort, never blocks the sync).
@@ -67,13 +96,7 @@ async function syncPlatform(platform: Platform) {
   let achievementSets = 0;
   let detailErrors = 0;
 
-  const shouldHydrate = (game: (typeof games)[number]) => {
-    if (!game.has_community_visible_stats) return false;
-    if (platform === 'steam') return true;
-    return game.completion.total === 0;
-  };
-
-  for (const game of games.filter(shouldHydrate)) {
+  for (const game of games.filter((item) => shouldHydrateAchievements(platform, item))) {
     try {
       const synced = await syncAchievements(platform, game.id);
       if (synced > 0) {
@@ -206,6 +229,26 @@ app.post('/api/sync', async (_req, res, next) => {
 
 app.get('/api/sync/runs', (_req, res) => {
   res.json({ runs: listSyncRuns(12), latest: latestSyncByPlatform() });
+});
+
+app.get('/api/completions/recent', (req, res) => {
+  const requested = Number(req.query.limit ?? 8);
+  const limit = Number.isFinite(requested) ? Math.min(500, Math.max(1, Math.round(requested))) : 8;
+  res.json(listCompletionHistory(limit));
+});
+
+// Desbloqueios de um ano (heatmap + almanaque). Sem `year`, usa o ano corrente.
+app.get('/api/unlocks', (req, res) => {
+  const requested = Number(req.query.year);
+  const year = Number.isInteger(requested) && requested > 1970 ? requested : new Date().getUTCFullYear();
+  res.json({ year, years: listUnlockYears(), unlocks: listUnlocks(year) });
+});
+
+// Conquistas desbloqueadas mais raras da coleção (vitrine do painel).
+app.get('/api/showcase/rarest', (req, res) => {
+  const requested = Number(req.query.limit ?? 3);
+  const limit = Number.isFinite(requested) ? Math.min(12, Math.max(1, Math.round(requested))) : 3;
+  res.json({ items: listRarestUnlocked(limit) });
 });
 
 app.post('/api/media/clear', (_req, res) => {

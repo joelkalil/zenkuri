@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Library, ListOrdered, Moon, Settings, Sun } from 'lucide-react';
+import { LayoutDashboard, Library, ListOrdered, Medal, Moon, Settings, Sun, Trophy } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useTheme } from '../context/ThemeContext';
 import type { Platform } from '../types/steam';
@@ -8,10 +8,12 @@ import { Logo } from './Logo';
 import { SyncRing } from './SyncRing';
 
 const links = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/library', icon: Library, label: 'Library' },
+  { to: '/', icon: LayoutDashboard, label: 'Painel' },
+  { to: '/library', icon: Library, label: 'Biblioteca' },
+  { to: '/rankings', icon: Medal, label: 'Rankings' },
   { to: '/backlog', icon: ListOrdered, label: 'Backlog' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+  { to: '/hall', icon: Trophy, label: 'Hall da Platina' },
+  { to: '/settings', icon: Settings, label: 'Ajustes' },
 ];
 
 const platformOrder: Platform[] = ['steam', 'psn', 'retroachievements'];
@@ -21,7 +23,7 @@ export function Sidebar() {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <aside className="hidden md:flex flex-col w-60 shrink-0 bg-gray-950/80 border-r border-gray-800/80 h-screen sticky top-0 backdrop-blur-sm">
+    <aside className="hidden md:flex flex-col w-60 shrink-0 bg-gray-950 border-r border-gray-800/80 h-screen sticky top-0">
       {/* Logo */}
       <div className="px-5 py-5">
         <Logo size={40} withWordmark={false} />
@@ -34,7 +36,7 @@ export function Sidebar() {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-violet-600/20 text-violet-200 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.25)]'
+                  ? 'bg-violet-600/15 text-violet-300 ring-1 ring-inset ring-violet-500/30'
                   : 'text-gray-400 hover:text-gray-100 hover:bg-gray-800/60'
               }`
             }

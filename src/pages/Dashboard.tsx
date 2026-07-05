@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ElementType, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, CalendarDays, CheckCircle2, ChevronRight, Clock3, Crosshair, LayoutGrid, MoreVertical, Pin, Target, Trophy, XCircle } from 'lucide-react';
+import { Activity, CalendarDays, CheckCircle2, ChevronRight, Clock3, Crosshair, Gem, LayoutGrid, MoreVertical, Pin, Target, Trophy, XCircle } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
+import { fetchRarestUnlocked } from '../lib/api';
+import type { UnlockItem } from '../types/steam';
 import { ProgressBar, completionColor, completionTextColor } from '../components/ProgressBar';
 import { SkeletonCard } from '../components/SkeletonCard';
 import { GameCover } from '../components/GameCover';
@@ -272,12 +274,50 @@ function AlmostThereCard({
   );
 }
 
+/** Relíquia: uma conquista rara desbloqueada, exibida como peça de coleção. */
+function RelicCard({ relic }: { relic: UnlockItem }) {
+  const navigate = useNavigate();
+  const meta = PLATFORM_META[relic.platform];
+  return (
+    <button
+      onClick={() => navigate(`/game/${relic.gameId}`)}
+      className="group flex items-center gap-4 rounded-2xl border border-gray-800 bg-gray-900 p-4 text-left transition-colors hover:border-violet-500/50"
+    >
+      {relic.icon ? (
+        <img src={relic.icon} alt="" className="h-14 w-14 shrink-0 rounded-lg border border-gray-800 object-cover" />
+      ) : (
+        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-lg border border-gray-800 bg-gray-800">
+          <Gem className="h-6 w-6 text-violet-400" />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-gray-100">{relic.achievementTitle}</p>
+        <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-gray-500">
+          <img src={meta.logo} alt="" className="h-3 w-3 object-contain" />
+          {relic.gameName}
+        </p>
+      </div>
+      <div className="shrink-0 text-right">
+        <p className="font-display text-xl font-bold tabular-nums text-violet-400">
+          {relic.rarity?.toFixed(1).replace(/\.0$/, '')}%
+        </p>
+        <p className="text-[10px] uppercase tracking-wide text-gray-600">dos jogadores</p>
+      </div>
+    </button>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { games, gamesWithStats, loading, completionMap } = useSteam();
   const { db, togglePinned } = useLocalDb();
   const [platform, setPlatform] = useState<PlatformFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('common');
+  const [relics, setRelics] = useState<UnlockItem[]>([]);
+
+  useEffect(() => {
+    fetchRarestUnlocked(3).then(setRelics).catch(() => setRelics([]));
+  }, []);
 
   const scopedGames = useMemo(
     () => games.filter((game) => platform === 'all' || game.platform === platform),
@@ -341,7 +381,7 @@ export default function Dashboard() {
       <div>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-100">Mission Control</h1>
+            <h1 className="heading-editorial text-3xl font-semibold text-gray-100">Painel de Controle</h1>
             <p className="mt-1 text-sm text-gray-500">Visão geral dos seus troféus e conquistas.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -567,6 +607,24 @@ export default function Dashboard() {
             )}
           </section>
       </div>
+
+      {/* Relíquias: as conquistas mais raras da coleção */}
+      {relics.length > 0 && (
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <Gem className="w-5 h-5 text-violet-400" />
+            <div className="leading-tight">
+              <h2 className="text-lg font-bold text-gray-100">Relíquias da Coleção</h2>
+              <p className="text-xs text-gray-600">Suas conquistas mais raras entre todos os jogadores</p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {relics.map((relic) => (
+              <RelicCard key={`${relic.gameId}-${relic.achievementTitle}`} relic={relic} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

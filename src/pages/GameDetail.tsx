@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import type { ElementType } from 'react';
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, ChevronDown, ChevronRight, CircleSlash, Pin, BookmarkPlus, BookmarkCheck, Clock, Filter, Link as LinkIcon } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, ChevronRight, CircleSlash, Crosshair, Pin, BookmarkPlus, BookmarkCheck, Clock, Filter, Link as LinkIcon } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useGameDetails } from '../hooks/useSteamApi';
 import { useLocalDb } from '../hooks/useLocalDb';
@@ -146,7 +146,10 @@ export default function GameDetail() {
   const guide = db.guides[appStr] ?? '';
 
   const contextCompletion = completionMap.get(numId ?? 0);
-  const displayPercent = data?.completionPercent ?? contextCompletion?.percent ?? game?.completion?.percent ?? 0;
+  const psnProgress = game?.platform === 'psn' && typeof game.metadata?.progress === 'number'
+    ? game.metadata.progress
+    : undefined;
+  const displayPercent = psnProgress ?? data?.completionPercent ?? contextCompletion?.percent ?? game?.completion?.percent ?? 0;
   const displayUnlocked = data?.unlocked ?? contextCompletion?.unlocked ?? game?.completion?.unlocked ?? 0;
   const displayTotal = data?.total ?? contextCompletion?.total ?? game?.completion?.total ?? 0;
 
@@ -187,6 +190,21 @@ export default function GameDetail() {
 
   const earnedCount = useMemo(() => (data?.merged ?? []).filter((a) => a.achieved).length, [data]);
 
+  /**
+   * Próximos 3: as conquistas restantes mais fáceis. Raridade global manda
+   * (mais jogadores têm = mais fácil); RA sem raridade cai para pontos.
+   */
+  const nextThree = useMemo(() => {
+    const locked = (data?.merged ?? []).filter((a) => !a.achieved);
+    const ease = (a: AchievementWithStatus) => {
+      if (typeof a.rarity === 'number' && a.rarity > 0) return a.rarity;
+      if (typeof a.points === 'number' && a.points > 0) return 100 - Math.min(a.points, 99);
+      return -1;
+    };
+    if (!locked.some((a) => ease(a) >= 0)) return [];
+    return [...locked].sort((a, b) => ease(b) - ease(a)).slice(0, 3);
+  }, [data]);
+
   function saveNote() { setNote(appStr, noteText); }
   function saveGuide() { setGuide(appStr, guideText); }
 
@@ -218,13 +236,13 @@ export default function GameDetail() {
           )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="font-display text-3xl font-extrabold uppercase tracking-tight text-white sm:text-4xl">{game?.name ?? `App ${appid}`}</h1>
+              <h1 className="font-display text-3xl font-bold uppercase tracking-[0.03em] text-white sm:text-4xl">{game?.name ?? `App ${appid}`}</h1>
               {game?.platform && <PlatformBadge platform={game.platform} />}
             </div>
             <p className="mt-1 text-sm text-gray-400">{metaLine}</p>
             <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-4">
               <div className="shrink-0">
-                <p className={`font-display text-5xl font-extrabold leading-none tabular-nums ${completionTextColor(displayPercent)}`}>{displayPercent}%</p>
+                <p className={`font-display text-5xl font-bold leading-none tabular-nums ${completionTextColor(displayPercent)}`}>{displayPercent}%</p>
                 <p className="mt-1.5 text-xs text-gray-400">{displayUnlocked} / {displayTotal} {noun.toLowerCase()}</p>
               </div>
               <div className="min-w-44 flex-1">
@@ -312,6 +330,40 @@ export default function GameDetail() {
 
           {tab === 'trophies' && (
             <div>
+              {nextThree.length > 0 && displayPercent < 100 && (
+                <section className="mb-5 overflow-hidden rounded-2xl border border-violet-700/40 bg-violet-900/10">
+                  <div className="flex items-center gap-2 border-b border-violet-700/30 px-4 py-3">
+                    <Crosshair className="h-4 w-4 text-violet-400" />
+                    <h3 className="text-sm font-bold text-gray-100">Próximos 3</h3>
+                    <span className="ml-auto text-xs text-gray-500">As mais fáceis entre as restantes</span>
+                  </div>
+                  <div className="divide-y divide-violet-700/20">
+                    {nextThree.map((a) => (
+                      <div key={a.name} className="flex items-center gap-3 px-4 py-3">
+                        <img
+                          src={a.icongray || a.icon}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded-lg border border-gray-800 object-cover"
+                          onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-100">{a.displayName || a.name}</p>
+                          {a.description && <p className="truncate text-xs text-gray-500">{a.description}</p>}
+                        </div>
+                        {typeof a.rarity === 'number' && a.rarity > 0 ? (
+                          <span className="shrink-0 rounded-md bg-violet-600/15 px-2 py-1 text-xs font-bold tabular-nums text-violet-300 ring-1 ring-inset ring-violet-500/30">
+                            {a.rarity.toFixed(1).replace(/\.0$/, '')}% têm
+                          </span>
+                        ) : typeof a.points === 'number' && a.points > 0 ? (
+                          <span className="shrink-0 rounded-md bg-gray-800/80 px-2 py-1 text-xs font-bold tabular-nums text-gray-300">
+                            {a.points} pts
+                          </span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
               <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">
                 {trophyFilter === 'all' ? `Todos os ${displayTotal} ${noun.toLowerCase()}`
                   : trophyFilter === 'earned' ? `${earnedCount} ${noun.toLowerCase()} obtidos`

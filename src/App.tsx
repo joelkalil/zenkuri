@@ -9,6 +9,9 @@ import GameDetail from './pages/GameDetail';
 import Backlog from './pages/Backlog';
 import Settings from './pages/Settings';
 import Setup from './pages/Setup';
+import Rankings from './pages/Rankings';
+import Hall from './pages/Hall';
+import Almanac from './pages/Almanac';
 import { getConfig } from './lib/api';
 import { ThemeProvider } from './context/ThemeContext';
 
@@ -47,6 +50,9 @@ export default function App() {
                 <Route path="/library" element={<Library />} />
                 <Route path="/game/:appid" element={<GameDetail />} />
                 <Route path="/backlog" element={<Backlog />} />
+                <Route path="/rankings" element={<Rankings />} />
+                <Route path="/hall" element={<Hall />} />
+                <Route path="/almanaque" element={<Almanac />} />
                 <Route
                   path="/settings"
                   element={<Settings onReset={() => setConfigured(false)} onConfigured={() => setConfigured(true)} />}

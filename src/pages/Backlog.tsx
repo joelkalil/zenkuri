@@ -22,6 +22,7 @@ import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
 import { ProgressBar, completionTextColor } from '../components/ProgressBar';
 import { BacklogCalendar } from '../components/BacklogCalendar';
+import { SunGoal } from '../components/SunGoal';
 import { GameCover } from '../components/GameCover';
 import { PLATFORM_META } from '../lib/platforms';
 import type { Game, Platform } from '../types/steam';
@@ -118,7 +119,7 @@ export default function Backlog() {
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Backlog &amp; Schedule</h1>
+          <h1 className="heading-editorial text-2xl font-semibold text-gray-100">Backlog &amp; Agenda</h1>
           <p className="mt-1 text-sm text-gray-500">
             Planeje sua jornada de conquistas · {backlogGames.length} na fila · {scheduledCount} agendados
           </p>
@@ -134,10 +135,14 @@ export default function Backlog() {
               <ListOrdered className="h-3.5 w-3.5" /> Lista
             </button>
           </div>
-          <div className="flex items-center gap-3 rounded-xl border border-violet-700/40 bg-violet-900/15 px-4 py-2">
+          <div
+            title="Progresso médio dos jogos no backlog: o sol nasce conforme o mês avança"
+            className="flex items-center gap-3 rounded-xl border border-violet-700/40 bg-violet-900/15 px-4 py-2"
+          >
+            <SunGoal percent={monthGoal} className="h-10 w-10 shrink-0" />
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-300/70">Metas do Mês</p>
-              <p className="text-lg font-bold text-violet-200">{monthGoal}%</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-violet-300/70">Sol do Mês</p>
+              <p className="font-display text-lg font-bold text-violet-200">{monthGoal}%</p>
             </div>
           </div>
         </div>

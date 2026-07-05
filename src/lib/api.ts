@@ -1,4 +1,4 @@
-import type { AchievementWithStatus, Game, PatinaDb, Platform } from '../types/steam';
+import type { AchievementWithStatus, Game, PatinaDb, Platform, UnlockItem } from '../types/steam';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -36,6 +36,27 @@ export interface SyncRun {
 
 export function fetchSyncRuns() {
   return apiFetch<{ runs: SyncRun[]; latest: Record<string, { startedAt: string; status: string; finishedAt: string | null }> }>('/api/sync/runs');
+}
+
+export interface CompletionHistoryItem {
+  game: Game;
+  completedAt: number;
+  kind: 'platinum' | 'perfect';
+}
+
+export function fetchRecentCompletions(limit = 8) {
+  return apiFetch<{ platinums: CompletionHistoryItem[]; perfects: CompletionHistoryItem[] }>(
+    `/api/completions/recent?limit=${limit}`,
+  );
+}
+
+export function fetchUnlocks(year?: number) {
+  const suffix = year ? `?year=${year}` : '';
+  return apiFetch<{ year: number; years: number[]; unlocks: UnlockItem[] }>(`/api/unlocks${suffix}`);
+}
+
+export function fetchRarestUnlocked(limit = 3) {
+  return apiFetch<{ items: UnlockItem[] }>(`/api/showcase/rarest?limit=${limit}`).then((res) => res.items);
 }
 
 export function clearMediaCache() {
