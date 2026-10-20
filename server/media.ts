@@ -30,6 +30,40 @@ function steamHeroUrl(appid: string) {
   return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_hero.jpg`;
 }
 
+/**
+ * Newer Steam apps only publish the hero under a hashed path, which the store
+ * API hands out. Only called when the legacy URL above already failed.
+ */
+async function steamStoreHeroUrl(appid: string): Promise<string | null> {
+  const input = {
+    ids: [{ appid: Number(appid) }],
+    context: { language: 'english', country_code: 'US' },
+    data_request: { include_assets: true },
+  };
+  try {
+    const res = await fetch(
+      `https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=${encodeURIComponent(JSON.stringify(input))}`,
+      { signal: AbortSignal.timeout(15_000) },
+    );
+    if (!res.ok) return null;
+    const body = await res.json() as {
+      response?: { store_items?: { assets?: { asset_url_format?: string; library_hero?: string } }[] };
+    };
+    const assets = body.response?.store_items?.[0]?.assets;
+    if (!assets?.asset_url_format || !assets.library_hero) return null;
+    return `https://shared.akamai.steamstatic.com/store_item_assets/${assets.asset_url_format.replace('${FILENAME}', assets.library_hero)}`;
+  } catch {
+    return null;
+  }
+}
+
+/** A download candidate: a URL, or a lookup resolved only if earlier ones fail. */
+type MediaSource = string | null | undefined | (() => Promise<string | null>);
+
+function steamHeroSources(appid: string, coverUrl: string | null | undefined): MediaSource[] {
+  return [steamHeroUrl(appid), () => steamStoreHeroUrl(appid), coverUrl];
+}
+
 /*
   Local media cache (file side)
   ─────────────────────────────
@@ -170,7 +204,7 @@ async function ensureSlot(
   base: string,
   category: MediaCategory,
   label: string,
-  sources: (string | null | undefined)[],
+  sources: MediaSource[],
 ): Promise<string> {
   ensureDir(dir);
   const files = slotFiles(dir, base);
@@ -183,7 +217,8 @@ async function ensureSlot(
   }
 
   // Try each candidate source in order (e.g. portrait → landscape fallback).
-  for (const sourceUrl of sources) {
+  for (const source of sources) {
+    const sourceUrl = typeof source === 'function' ? await source() : source;
     if (!sourceUrl) continue;
     const downloaded = await download(sourceUrl);
     if (downloaded) {
@@ -243,7 +278,7 @@ export async function warmGameMedia(platform: Platform): Promise<number> {
     // PSN has no wide banner art, so we leave a replaceable placeholder instead
     // of stretching the square trophy-title icon across the hero.
     const heroSources = row.platform === 'steam'
-      ? [steamHeroUrl(row.external_id), row.cover_url]
+      ? steamHeroSources(row.external_id, row.cover_url)
       : row.platform === 'psn'
         ? []
         : [row.cover_url];
@@ -315,7 +350,7 @@ export async function serveMedia(parts: string[]): Promise<ResolvedMedia | null>
   let base: string;
   let label: string;
   let resolvedCategory: MediaCategory;
-  let sources: (string | null | undefined)[];
+  let sources: MediaSource[];
 
   if (category === 'covers' || category === 'icons' || category === 'portraits' || category === 'heroes') {
     resolvedCategory = category;
@@ -330,7 +365,7 @@ export async function serveMedia(parts: string[]): Promise<ResolvedMedia | null>
     else if (category === 'icons') sources = [row?.icon_url];
     else if (category === 'portraits') sources = platform === 'steam' ? [steamPortraitUrl(externalId), row?.cover_url] : [row?.cover_url];
     // PSN: replaceable placeholder banner (no stretched square icon).
-    else sources = platform === 'steam' ? [steamHeroUrl(externalId), row?.cover_url] : platform === 'psn' ? [] : [row?.cover_url];
+    else sources = platform === 'steam' ? steamHeroSources(externalId, row?.cover_url) : platform === 'psn' ? [] : [row?.cover_url];
   } else if (category === 'achievements') {
     resolvedCategory = 'achievements';
     if (rest.length < 2) return null;

@@ -1,262 +1,210 @@
 @import "tailwindcss";
+@import "./gallery.css";
 
-/*
-  ── Zenkuri · tema "Neo Mirai" ─────────────────────────────────────────
-  Retro-futurismo japonês quente e editorial: papel marfim, tinta carvão,
-  acentos em âmbar dourado, laranja queimado e vermelho solar.
-
-  Theming continua dirigido pelas variáveis de cor do Tailwind v4.
-  Componentes usam o ramp semântico de cinzas (gray-950 = fundo do app →
-  gray-100 = tinta) mais acentos saturados. O antigo acento violeta foi
-  remapeado para o âmbar/laranja solar, então `violet-*` nos componentes
-  significa "acento primário" — a paleta inteira troca aqui, num só lugar.
-
-  Tema claro (papel) é a identidade principal; o escuro é o mesmo pôster
-  visto à noite: carvão quente, nunca cinza frio.
-*/
-
+/* Continuous gallery: gray-950 is the canvas, gray-900 a surface,
+   gray-800 a divider, and gray-100 foreground in every theme. */
 @theme {
-  /* Cantos editoriais: menos arredondado que o default, nunca pill em cards */
-  --radius-lg: 0.375rem;
-  --radius-xl: 0.5rem;
-  --radius-2xl: 0.625rem;
-  --radius-3xl: 0.875rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 0.75rem;
+  --radius-3xl: 1rem;
 }
 
-/* ── Escuro (pôster à noite) ──────────────────────────────────────── */
 :root {
-  --color-gray-50:  oklch(95.5% 0.040 90);
-  --color-gray-100: oklch(92.5% 0.048 88); /* tinta marfim / headings */
-  --color-gray-200: oklch(86.0% 0.050 86); /* texto forte */
-  --color-gray-300: oklch(78.0% 0.050 83); /* corpo */
-  --color-gray-400: oklch(69.0% 0.045 80); /* corpo esmaecido */
-  --color-gray-500: oklch(60.0% 0.038 78); /* texto secundário */
-  --color-gray-600: oklch(51.0% 0.030 76); /* texto fraco (≥3:1 no fundo) */
-  --color-gray-700: oklch(36.0% 0.020 74); /* borda hover / divisor forte */
-  --color-gray-800: oklch(27.0% 0.017 72); /* borda */
-  --color-gray-900: oklch(19.0% 0.013 70); /* superfície / card */
-  --color-gray-950: oklch(14.5% 0.010 65); /* fundo do app */
-
-  /* Acento primário (antigo violeta) → laranja queimado / âmbar */
-  --color-violet-200: oklch(86% 0.100 84);
-  --color-violet-300: oklch(80% 0.120 78);
-  --color-violet-400: oklch(74% 0.135 70);
-  --color-violet-500: oklch(62% 0.155 55);
-  --color-violet-600: oklch(52% 0.155 42);
-  --color-violet-700: oklch(45% 0.140 40);
-  --color-violet-900: oklch(30% 0.075 45);
-  --color-violet-950: oklch(23% 0.055 48);
-
-  /* Par do gradiente (antigo índigo) → vermelho sol nascente */
-  --color-indigo-400: oklch(66% 0.150 38);
-  --color-indigo-600: oklch(47% 0.150 32);
-  --color-indigo-700: oklch(41% 0.130 32);
-
-  /* Ouro / platina / estado — versão mineral, sem neon */
-  --color-amber-300:  oklch(83% 0.130 82);
-  --color-amber-400:  oklch(78% 0.145 78);
-  --color-yellow-400: oklch(80% 0.150 85);
-  --color-orange-300: oklch(78% 0.130 60);
-  --color-orange-400: oklch(72% 0.150 55);
-  --color-red-300:    oklch(72% 0.140 32);
-  --color-red-400:    oklch(66% 0.170 32);
-  --color-red-500:    oklch(56% 0.190 30);
-  --color-red-600:    oklch(50% 0.180 30);
-  --color-emerald-300: oklch(77% 0.100 154);
-  --color-emerald-400: oklch(70% 0.115 152);
-  --color-emerald-500: oklch(60% 0.115 150);
-  --color-sky-300:    oklch(78% 0.080 230);
-  --color-sky-400:    oklch(72% 0.090 230);
-  --color-blue-300:   oklch(76% 0.090 250);
-  --color-blue-400:   oklch(70% 0.100 250);
-  --color-blue-600:   oklch(50% 0.130 255);
-
-  /* Halo solar do fundo */
-  --sun-halo-1: color-mix(in oklab, oklch(62% 0.155 55) 14%, transparent);
-  --sun-halo-2: color-mix(in oklab, oklch(47% 0.150 32) 9%, transparent);
+  color-scheme: dark;
+  --color-gray-50: #f7f8fa;
+  --color-gray-100: #eceef5;
+  --color-gray-200: #dce0eb;
+  --color-gray-300: #c0c6d5;
+  --color-gray-400: #acb3c4;
+  --color-gray-500: #989fb1;
+  --color-gray-600: #8b94a8;
+  --color-gray-700: #484e60;
+  --color-gray-800: #2e3343;
+  --color-gray-900: #1c202b;
+  --color-gray-950: #131620;
+  --color-violet-200: #d4c9ff;
+  --color-violet-300: #c4b5f5;
+  --color-violet-400: #b09cf0;
+  --color-violet-500: #8973de;
+  --color-violet-600: #6652c7;
+  --color-violet-700: #5440b0;
+  --color-violet-900: #30264e;
+  --color-violet-950: #221d35;
+  --color-indigo-400: #a0a9ef;
+  --color-indigo-600: #535ac5;
+  --color-indigo-700: #444da5;
+  --color-emerald-300: #83d4b3;
+  --color-emerald-400: #60c39b;
+  --color-emerald-500: #339a74;
 }
 
-/* ── Claro (papel marfim — identidade principal) ──────────────────── */
 [data-theme="light"] {
-  /* Ramp invertido: 950 = página, 900 = card, 800/700 = bordas, baixo = tinta */
-  --color-gray-50:  oklch(18.0% 0.015 50);
-  --color-gray-100: oklch(21.0% 0.018 50); /* tinta carvão / headings */
-  --color-gray-200: oklch(28.0% 0.030 55); /* texto forte */
-  --color-gray-300: oklch(35.0% 0.042 58); /* corpo */
-  --color-gray-400: oklch(41.0% 0.048 60); /* corpo esmaecido */
-  --color-gray-500: oklch(45.0% 0.050 62); /* texto secundário */
-  --color-gray-600: oklch(50.0% 0.050 65); /* texto fraco (~4.9:1 no card) */
-  --color-gray-700: oklch(77.0% 0.055 80); /* borda hover */
-  --color-gray-800: oklch(85.0% 0.050 85); /* borda / preenchimento sutil */
-  --color-gray-900: oklch(94.5% 0.035 90); /* card */
-  --color-gray-950: oklch(91.5% 0.045 88); /* fundo do app (marfim) */
-
-  /* Acentos claros -200…-400 são ilegíveis no papel: escurecer para tinta */
-  --color-violet-200: oklch(46% 0.140 45);
-  --color-violet-300: oklch(48% 0.145 45);
-  --color-violet-400: oklch(50% 0.150 45);
-  --color-violet-500: oklch(56% 0.160 48);
-  --color-violet-600: oklch(50% 0.155 42);
-  --color-blue-200:   oklch(44% 0.110 255);
-  --color-blue-300:   oklch(46% 0.110 254);
-  --color-blue-400:   oklch(48% 0.120 253);
-  --color-sky-300:    oklch(46% 0.090 235);
-  --color-sky-400:    oklch(48% 0.100 234);
-  --color-emerald-300: oklch(48% 0.100 155);
-  --color-emerald-400: oklch(50% 0.105 155);
-  --color-amber-300:  oklch(52% 0.120 72);
-  --color-amber-400:  oklch(54% 0.130 70);
-  --color-yellow-400: oklch(56% 0.130 82);
-  --color-red-300:    oklch(50% 0.180 30);
-  --color-red-400:    oklch(52% 0.190 30);
-  --color-red-500:    oklch(54% 0.190 30);
-  --color-red-600:    oklch(48% 0.180 28);
-  --color-orange-300: oklch(56% 0.140 52);
-  --color-orange-400: oklch(54% 0.160 48);
-  --color-indigo-400: oklch(48% 0.150 33);
-  /* Marcações de tier platina (único neutro fora do ramp) */
-  --color-slate-100: oklch(35% 0.010 80);
-  --color-slate-200: oklch(42% 0.015 80);
-  --color-slate-300: oklch(50% 0.015 80);
-
-  /* Painéis de acento profundo (danger zone, notas de guia) viram lavagens
-     claras e quentes no papel, em vez de blocos escuros flutuando. */
-  --color-violet-950: oklch(93.0% 0.030 70);
-  --color-violet-900: oklch(89.0% 0.045 65);
-  --color-blue-950:   oklch(94.5% 0.020 250);
-  --color-sky-950:    oklch(94.5% 0.020 235);
-  --color-emerald-900: oklch(92.0% 0.035 155);
-  --color-amber-950:  oklch(93.5% 0.035 78);
-  --color-red-950:    oklch(94.5% 0.025 30);
-  --color-red-900:    oklch(91.5% 0.040 30);
-
-  --sun-halo-1: color-mix(in oklab, oklch(72% 0.140 75) 26%, transparent);
-  --sun-halo-2: color-mix(in oklab, oklch(54% 0.180 32) 10%, transparent);
+  color-scheme: light;
+  --color-gray-50: #161924;
+  --color-gray-100: #202330;
+  --color-gray-200: #303646;
+  --color-gray-300: #444b5c;
+  --color-gray-400: #565e70;
+  --color-gray-500: #626879;
+  --color-gray-600: #687082;
+  --color-gray-700: #b6bdcd;
+  --color-gray-800: #e1e5ed;
+  --color-gray-900: #ffffff;
+  --color-gray-950: #f7f8fa;
+  --color-violet-200: #5440a8;
+  --color-violet-300: #5c47b8;
+  --color-violet-400: #6652c7;
+  --color-violet-500: #7058d3;
+  --color-violet-600: #6652c7;
+  --color-violet-700: #5440a8;
+  --color-violet-900: #e8e2fa;
+  --color-violet-950: #f1edf9;
+  --color-indigo-400: #5456b5;
+  --color-indigo-600: #5055ba;
+  --color-indigo-700: #454a9e;
+  --color-blue-200: #315ea0;
+  --color-blue-300: #3564aa;
+  --color-blue-400: #3667ae;
+  --color-sky-300: #226d98;
+  --color-sky-400: #26719d;
+  --color-emerald-300: #1c7656;
+  --color-emerald-400: #197653;
+  --color-emerald-500: #23966c;
+  --color-amber-300: #946114;
+  --color-amber-400: #936017;
+  --color-yellow-400: #8d6611;
+  --color-red-300: #b8464c;
+  --color-red-400: #bb4149;
+  --color-red-500: #c44950;
+  --color-red-600: #ab323d;
+  --color-orange-300: #995b2c;
+  --color-orange-400: #a45d2e;
+  --color-slate-100: #485875;
+  --color-slate-200: #566782;
+  --color-slate-300: #63718a;
+  --color-blue-950: #eef3fb;
+  --color-sky-950: #edf5f9;
+  --color-emerald-900: #e1f2e9;
+  --color-amber-950: #f8f1e4;
+  --color-red-950: #fbf0f0;
+  --color-red-900: #f7e4e6;
 }
 
-* {
-  box-sizing: border-box;
+/* Steam: biblioteca desktop em azul-petróleo, superfícies densas e ciano. */
+[data-theme="steam"] {
+  color-scheme: dark;
+  --color-gray-50:  oklch(96% 0.010 230);
+  --color-gray-100: oklch(91% 0.015 230);
+  --color-gray-200: oklch(84% 0.018 230);
+  --color-gray-300: oklch(75% 0.020 230);
+  --color-gray-400: oklch(66% 0.025 230);
+  --color-gray-500: oklch(57% 0.030 230);
+  --color-gray-600: oklch(48% 0.032 230);
+  --color-gray-700: oklch(36% 0.040 235);
+  --color-gray-800: oklch(28% 0.038 240);
+  --color-gray-900: oklch(22% 0.032 245);
+  --color-gray-950: oklch(17% 0.027 245);
+  --color-violet-200: oklch(88% 0.090 225);
+  --color-violet-300: oklch(82% 0.115 225);
+  --color-violet-400: oklch(76% 0.135 225);
+  --color-violet-500: oklch(68% 0.145 230);
+  --color-violet-600: oklch(58% 0.145 235);
+  --color-violet-700: oklch(48% 0.120 238);
+  --color-violet-900: oklch(29% 0.060 240);
+  --color-violet-950: oklch(23% 0.045 242);
+  --color-indigo-400: oklch(68% 0.135 235);
+  --color-indigo-600: oklch(50% 0.135 245);
+  --color-indigo-700: oklch(43% 0.110 245);
+  --sun-halo-1: color-mix(in oklab, oklch(68% 0.145 230) 15%, transparent);
+  --sun-halo-2: color-mix(in oklab, oklch(50% 0.100 250) 12%, transparent);
 }
 
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background: var(--color-gray-950);
-  color: var(--color-gray-200);
-  -webkit-font-smoothing: antialiased;
+/* PSNProfiles: página clara, painéis brancos, cinza frio e azul PlayStation. */
+[data-theme="psnprofiles"] {
+  color-scheme: light;
+  --color-gray-50:  oklch(18% 0.015 250);
+  --color-gray-100: oklch(24% 0.018 250);
+  --color-gray-200: oklch(31% 0.020 250);
+  --color-gray-300: oklch(39% 0.020 250);
+  --color-gray-400: oklch(47% 0.018 250);
+  --color-gray-500: oklch(54% 0.016 250);
+  --color-gray-600: oklch(61% 0.014 250);
+  --color-gray-700: oklch(76% 0.012 250);
+  --color-gray-800: oklch(87% 0.009 250);
+  --color-gray-900: oklch(98.5% 0.003 250);
+  --color-gray-950: oklch(94% 0.008 250);
+  --color-violet-200: oklch(42% 0.170 255);
+  --color-violet-300: oklch(46% 0.175 255);
+  --color-violet-400: oklch(50% 0.180 255);
+  --color-violet-500: oklch(55% 0.180 255);
+  --color-violet-600: oklch(48% 0.175 255);
+  --color-violet-700: oklch(41% 0.155 255);
+  --color-violet-900: oklch(91% 0.035 250);
+  --color-violet-950: oklch(96% 0.018 250);
+  --color-indigo-400: oklch(50% 0.180 255);
+  --color-indigo-600: oklch(43% 0.170 260);
+  --color-indigo-700: oklch(38% 0.150 260);
+  --color-emerald-300: oklch(44% 0.115 150);
+  --color-emerald-400: oklch(48% 0.120 150);
+  --color-red-400: oklch(50% 0.190 28);
+  --color-red-500: oklch(54% 0.195 28);
+  --sun-halo-1: transparent;
+  --sun-halo-2: transparent;
 }
 
-/* Sol/halo quente ancorado no alto, como um pôster com sol poente. */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(720px circle at 84% -14%, var(--sun-halo-1), transparent 62%),
-    radial-gradient(940px circle at -10% 6%, var(--sun-halo-2), transparent 55%);
+/* Epic: launcher contemporâneo — neutros quase-pretos sem matiz, superfícies
+   planas e um único azul de destaque (#26bbff). Os tokens violet-* carregam o
+   acento; violet-600 é a variante escura que aceita texto branco (AA). */
+[data-theme="epic"] {
+  color-scheme: dark;
+  --color-gray-50: #ffffff;
+  --color-gray-100: #f4f4f5;
+  --color-gray-200: #e2e2e5;
+  --color-gray-300: #c4c4c9;
+  --color-gray-400: #a0a0a7;
+  --color-gray-500: #8b8b92;
+  --color-gray-600: #6e6e76;
+  --color-gray-700: #3a3a41;
+  --color-gray-800: #2a2a30;
+  --color-gray-900: #1a1a1f;
+  --color-gray-950: #101014;
+  --color-violet-200: #c4ecff;
+  --color-violet-300: #8fdcff;
+  --color-violet-400: #26bbff;
+  --color-violet-500: #1aa6ea;
+  --color-violet-600: #0a78c2;
+  --color-violet-700: #0a64a3;
+  --color-violet-900: #0c2a3d;
+  --color-violet-950: #0b1b27;
+  --color-indigo-400: #5ccbff;
+  --color-indigo-600: #0a78c2;
+  --color-indigo-700: #0a64a3;
+  --accent: #26bbff;
+  --accent-hover: #5ccbff;
+  --accent-ink: #06121b;
+  --shell-bg: #18181c;
 }
 
-/* Grão de papel impresso: ruído fixo, muito sutil, sobre toda a interface. */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  pointer-events: none;
-  opacity: 0.04;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-[data-theme="light"] body::after {
-  opacity: 0.05;
-  mix-blend-mode: multiply;
-}
 
-#root {
-  position: relative;
-  z-index: 1;
-}
-
-[data-theme="light"] input,
-[data-theme="light"] textarea,
-[data-theme="light"] select {
-  color: var(--color-gray-100);
-}
-
-/* Foco de teclado: anel de acento visível em tudo, nunca removido sem outro */
-:focus-visible {
-  outline: 2px solid var(--color-violet-500);
-  outline-offset: 2px;
-}
-
-/* Scrollbar — acompanha o tema pelo ramp neutro */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-gray-700);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-gray-600);
-}
-
-/* Ícone do date picker de mês: inverter apenas no escuro */
-input[type="month"]::-webkit-calendar-picker-indicator {
-  cursor: pointer;
-}
-:root input[type="month"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.7);
-}
-[data-theme="light"] input[type="month"]::-webkit-calendar-picker-indicator {
-  filter: none;
-}
-
-/* Face display editorial — Space Grotesk (grotesca técnica, retro-futura)
-   para títulos de página, nomes de jogo e números de destaque. */
-.font-display {
-  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
-}
-
-/* Título de página: caixa alta, tracking levemente aberto, peso médio. */
-.heading-editorial {
-  font-family: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-wrap: balance;
-}
-
-/* Line clamp utility */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Impressão (Almanaque): só o conteúdo, sem navegação nem texturas */
+* { box-sizing: border-box; }
+body { margin: 0; font-family: 'Inter Variable', Inter, 'Segoe UI Variable Text', system-ui, -apple-system, 'Segoe UI', sans-serif; font-feature-settings: 'cv11', 'ss01'; background: var(--color-gray-950); color: var(--color-gray-200); -webkit-font-smoothing: antialiased; }
+button:not(:disabled), summary { cursor: pointer; }
+input::placeholder, textarea::placeholder { color: var(--color-gray-600); }
+:focus-visible { outline: 2px solid var(--color-violet-400); outline-offset: 3px; }
+::selection { background: var(--color-violet-600); color: white; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-gray-700); border-radius: 4px; }
+.font-display, .heading-editorial { font-family: inherit; }
+.heading-editorial { text-transform: none; letter-spacing: -0.025em; text-wrap: balance; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+input[type="month"]::-webkit-calendar-picker-indicator { cursor: pointer; }
 @media print {
-  aside, nav, .no-print,
-  body::before, body::after {
-    display: none !important;
-  }
-  main {
-    overflow: visible !important;
-  }
-  body {
-    background: white;
-  }
+  aside, nav, .no-print { display: none !important; }
+  .app-shell, .app-content { display: block; height: auto; overflow: visible !important; }
+  body { background: white; }
 }
-
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }

@@ -2,10 +2,10 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Library, ListOrdered, Medal, Settings, Trophy } from 'lucide-react';
 
 const links = [
-  { to: '/', icon: LayoutDashboard, label: 'Início' },
+  { to: '/', icon: LayoutDashboard, label: 'Painel' },
   { to: '/library', icon: Library, label: 'Biblioteca' },
   { to: '/rankings', icon: Medal, label: 'Rankings' },
-  { to: '/backlog', icon: ListOrdered, label: 'Backlog' },
+  { to: '/plano', icon: ListOrdered, label: 'Plano' },
   { to: '/hall', icon: Trophy, label: 'Hall' },
   { to: '/settings', icon: Settings, label: 'Ajustes' },
 ];

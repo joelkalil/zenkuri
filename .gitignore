@@ -13,9 +13,11 @@ dist-ssr
 *.local
 data/*.sqlite
 data/*.sqlite-*
+data/*.sqlite.*
 data/media
 data/copy_steam
 .env
+!.env.example
 
 # Editor directories and files
 .vscode/*
@@ -27,3 +29,6 @@ data/copy_steam
 *.njsproj
 *.sln
 *.sw?
+
+# Artefatos locais (planos, designs, pesquisa)
+.artefacts

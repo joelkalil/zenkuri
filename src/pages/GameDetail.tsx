@@ -1,12 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import type { ElementType } from 'react';
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, ChevronDown, ChevronRight, CircleSlash, Crosshair, Pin, BookmarkPlus, BookmarkCheck, Clock, Filter, Link as LinkIcon } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, CircleSlash, Crosshair, Pin, BookmarkPlus, BookmarkCheck, Clock, Filter, Link as LinkIcon } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useGameDetails } from '../hooks/useSteamApi';
 import { useLocalDb } from '../hooks/useLocalDb';
 import { AchievementList } from '../components/AchievementList';
-import { ProgressBar, completionTextColor } from '../components/ProgressBar';
 import { SkeletonRow } from '../components/SkeletonCard';
 import { GameCover } from '../components/GameCover';
 import { PLATFORM_META, psnTrophyBreakdown } from '../lib/platforms';
@@ -21,7 +20,7 @@ const TIER_RANK: Record<string, number> = { platinum: 0, gold: 1, silver: 2, bro
 function PlatformBadge({ platform }: { platform: Platform }) {
   const meta = PLATFORM_META[platform];
   return (
-    <span className="flex shrink-0 items-center gap-1.5 rounded-md bg-white/10 px-2 py-1 text-xs font-bold text-white ring-1 ring-inset ring-white/15 backdrop-blur-sm">
+    <span className="flex shrink-0 items-center gap-1.5 rounded-md bg-black/45 px-2 py-1 text-xs font-semibold text-white backdrop-blur-sm">
       <img src={meta.logo} alt="" className="h-4 w-4 object-contain" />
       {meta.short}
     </span>
@@ -88,7 +87,7 @@ function fmtDate(ts: number): string {
 
 const TROPHY_ROWS = [
   { key: 'platinum', icon: '/trophies/platinum.png', color: 'text-slate-200' },
-  { key: 'gold', icon: '/trophies/gold.png', color: 'text-yellow-300' },
+  { key: 'gold', icon: '/trophies/gold.png', color: 'text-yellow-400' },
   { key: 'silver', icon: '/trophies/silver.png', color: 'text-gray-300' },
   { key: 'bronze', icon: '/trophies/bronze.png', color: 'text-orange-300' },
 ] as const;
@@ -113,9 +112,9 @@ function StatsPanel({ game, achievements }: { game: Game; achievements: Achievem
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
       {cells.map((cell) => (
-        <div key={cell.label} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-          <p className={`text-2xl font-bold ${cell.color}`}>{cell.value}</p>
-          <p className="mt-0.5 text-xs text-gray-500">{cell.label}</p>
+        <div key={cell.label} className="stat-tile">
+          <span className="stat-tile-label">{cell.label}</span>
+          <span className={`stat-tile-value ${cell.color}`}>{cell.value}</span>
         </div>
       ))}
     </div>
@@ -135,15 +134,16 @@ export default function GameDetail() {
   );
 
   const { data, loading, error } = useGameDetails(numId);
-  const { db, toggleBacklog, togglePinned, toggleDropped, setNote, setGuide, setEffort, setSchedule } = useLocalDb();
+  const { db, toggleBacklog, togglePinned, toggleDropped, setNote, setGuide, setEffort, setSchedule, setCollection, createCollection } = useLocalDb();
 
   const appStr = String(numId);
   const inBacklog = db.backlog.includes(appStr);
   const isPinned = db.pinned.includes(appStr);
   const isDropped = db.dropped.includes(appStr);
   const effort = db.effort[appStr];
-  const schedule = db.schedule[appStr] ?? '';
+  const schedule = (db.schedule[appStr] ?? '').slice(0, 7); // sempre mês (YYYY-MM); valores diários antigos são truncados
   const guide = db.guides[appStr] ?? '';
+  const collectionId = db.collectionOf[appStr] ?? null;
 
   const contextCompletion = completionMap.get(numId ?? 0);
   const psnProgress = game?.platform === 'psn' && typeof game.metadata?.progress === 'number'
@@ -156,13 +156,14 @@ export default function GameDetail() {
   const [noteText, setNoteText] = useState(db.notes[appStr] ?? '');
   const [guideText, setGuideText] = useState(guide);
   const [tab, setTab] = useState<DetailTab>('trophies');
+  const [lowResHero, setLowResHero] = useState<string | null>(null);
   const [trophyFilter, setTrophyFilter] = useState<TrophyFilter>('all');
   const [trophySort, setTrophySort] = useState<TrophySort>('default');
 
   const breakdown = psnTrophyBreakdown(game);
   const noun = game?.platform === 'psn' ? 'Troféus' : 'Conquistas';
   const metaLine = game
-    ? [`${fmt(game.playtime_forever)} jogados`, `${displayTotal} ${noun.toLowerCase()}`].join(' · ')
+    ? [game.playtime_forever > 0 && `${fmt(game.playtime_forever)} jogados`, `${displayTotal} ${noun.toLowerCase()}`].filter(Boolean).join(' · ')
     : '';
 
   const activity = useMemo(
@@ -208,95 +209,104 @@ export default function GameDetail() {
   function saveNote() { setNote(appStr, noteText); }
   function saveGuide() { setGuide(appStr, guideText); }
 
-  return (
-    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto">
-      {/* breadcrumb */}
-      <div className="mb-5 flex items-center gap-2 text-sm">
-        <button onClick={() => navigate('/library')} className="text-gray-500 transition-colors hover:text-gray-300">Library</button>
-        <ChevronRight className="h-3.5 w-3.5 text-gray-700" />
-        <span className="truncate text-gray-300">{game?.name ?? `App ${appid}`}</span>
-      </div>
+  const heroArt = game?.heroUrl && game.heroUrl !== lowResHero ? game.heroUrl : null;
 
-      {/* hero — full-bleed cinematic banner + vertical cover */}
-      <div className="relative mb-6 overflow-hidden rounded-2xl border border-gray-800">
-        {game?.heroUrl && (
-          <img src={game.heroUrl} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
-        )}
-        {/* darken the left for the cover + text, reveal the art on the right */}
-        <div className="absolute inset-0 bg-gradient-to-r from-gray-950 via-gray-950/80 to-gray-950/10" />
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent to-transparent" />
-        <div className="relative flex items-center gap-5 p-5 sm:p-6">
+  return (
+    <div className="game-page">
+      <section className="game-hero" aria-label="Capa do jogo">
+        {/* arte pequena demais fica borrada esticada no banner; melhor o fundo liso */}
+        {heroArt ? (
+          <img src={heroArt} alt="" onLoad={(e) => { if (e.currentTarget.naturalWidth < 640) setLowResHero(heroArt); }} onError={() => setLowResHero(heroArt)} />
+        ) : <div className="game-hero-fallback" />}
+        <div className="game-hero-body">
           {game && (
-            <GameCover
-              game={game}
-              portrait
-              className="hidden h-52 w-36 shrink-0 overflow-hidden rounded-xl border border-gray-700/70 shadow-2xl shadow-black/60 sm:block"
-              imgClassName="object-cover"
-            />
+            <div className="game-hero-cover">
+              <GameCover game={game} portrait className="h-full w-full" imgClassName="object-cover" />
+            </div>
           )}
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="font-display text-3xl font-bold uppercase tracking-[0.03em] text-white sm:text-4xl">{game?.name ?? `App ${appid}`}</h1>
+            <h1 className="game-hero-title">{game?.name ?? `App ${appid}`}</h1>
+            <div className="game-hero-sub">
               {game?.platform && <PlatformBadge platform={game.platform} />}
+              <span>{metaLine}</span>
             </div>
-            <p className="mt-1 text-sm text-gray-400">{metaLine}</p>
-            <div className="mt-4 flex flex-wrap items-end gap-x-8 gap-y-4">
-              <div className="shrink-0">
-                <p className={`font-display text-5xl font-bold leading-none tabular-nums ${completionTextColor(displayPercent)}`}>{displayPercent}%</p>
-                <p className="mt-1.5 text-xs text-gray-400">{displayUnlocked} / {displayTotal} {noun.toLowerCase()}</p>
-              </div>
-              <div className="min-w-44 flex-1">
-                <ProgressBar percent={displayPercent} height="h-2" />
-              </div>
-              {breakdown && (
-                <div className="flex items-center gap-3">
-                  {TROPHY_ROWS.map((row) => {
-                    const b = breakdown[row.key];
-                    return (
-                      <span key={row.key} className="flex items-center gap-1.5" title={`${b.earned}/${b.total} ${row.key}`}>
-                        <img src={row.icon} alt="" className="h-5 w-5 object-contain" />
-                        <span className={`text-sm font-bold tabular-nums ${row.color}`}>{b.earned}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
+            <div className="mt-4 flex max-w-md items-center gap-3">
+              <span className="game-card-meter-track h-1.5" role="progressbar" aria-label="Conclusão do jogo" aria-valuenow={displayPercent} aria-valuemin={0} aria-valuemax={100}>
+                <span className="game-card-meter-fill" data-complete={displayPercent === 100} style={{ width: `${Math.min(displayPercent, 100)}%` }} />
+              </span>
+              <span className="text-sm font-semibold tabular-nums">{displayPercent}%</span>
             </div>
           </div>
         </div>
+      </section>
+
+      <div className="game-actionbar">
+        <div className="game-actions">
+          <button onClick={() => togglePinned(appStr)} className="btn btn-primary btn-lg" aria-pressed={isPinned}>
+            <Pin className="h-4 w-4" fill={isPinned ? 'currentColor' : 'none'} />
+            {isPinned ? 'Fixado como prioridade' : 'Fixar como prioridade'}
+          </button>
+          <button onClick={() => toggleBacklog(appStr)} className="btn btn-secondary btn-lg" aria-pressed={inBacklog}>
+            {inBacklog ? <BookmarkCheck className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
+            {inBacklog ? 'No backlog' : 'Adicionar ao backlog'}
+          </button>
+          <button onClick={() => toggleDropped(appStr)} className={`btn btn-secondary btn-lg btn-icon ${isDropped ? 'text-red-400' : ''}`} aria-pressed={isDropped}
+            aria-label={isDropped ? 'Desmarcar como abandonado' : 'Marcar como abandonado'} title={isDropped ? 'Marcado como abandonado' : 'Marcar como abandonado'}>
+            <CircleSlash className="h-4 w-4" />
+          </button>
+          {guideText && (
+            <a href={guideText} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-lg">
+              <LinkIcon className="h-4 w-4" /> Abrir guia
+            </a>
+          )}
+        </div>
+        <div className="game-facts">
+          <div className="game-fact"><span>Conclusão</span><strong className={displayPercent === 100 ? 'text-emerald-400' : ''}>{displayPercent}%</strong></div>
+          <div className="game-fact"><span>{noun}</span><strong>{displayUnlocked} / {displayTotal}</strong></div>
+          {breakdown && (
+            <div className="game-fact">
+              <span>Por tipo</span>
+              <strong className="flex items-center gap-3">
+                {TROPHY_ROWS.map((row) => {
+                  const b = breakdown[row.key];
+                  return (
+                    <span key={row.key} className="flex items-center gap-1" title={`${b.earned}/${b.total} ${row.key}`}>
+                      <img src={row.icon} alt={row.key} className="h-4 w-4 object-contain" />
+                      <span className={`text-base ${row.color}`}>{b.earned}</span>
+                    </span>
+                  );
+                })}
+              </strong>
+            </div>
+          )}
+          {game && game.playtime_forever > 0 && <div className="game-fact"><span>Tempo de jogo</span><strong>{fmt(game.playtime_forever)}</strong></div>}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* main column */}
-        <div className="space-y-4 lg:col-span-2">
-          {/* platform switch (siblings) */}
+      <div className="game-layout">
+        <div className="min-w-0 space-y-5">
           {siblingGames.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <span className="flex items-center gap-2 rounded-lg border border-violet-600/60 bg-violet-600/15 px-3 py-1.5 text-xs font-semibold text-violet-200">
-                {game?.platform && <img src={PLATFORM_META[game.platform].logo} alt="" className="h-4 w-4 object-contain" />}
-                {platformLabel(game?.platform)}
-              </span>
-              {siblingGames.map((sibling) => (
-                <button key={sibling.appid} onClick={() => navigate(`/game/${sibling.appid}`)}
-                  className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-400 hover:border-gray-700 hover:text-gray-200">
-                  {sibling.platform && <img src={PLATFORM_META[sibling.platform].logo} alt="" className="h-4 w-4 object-contain grayscale opacity-70" />}
-                  {platformLabel(sibling.platform)}
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs text-gray-500">Plataforma</span>
+              <div className="segmented" role="group" aria-label="Trocar de plataforma">
+                <button aria-pressed="true">
+                  {game?.platform && <img src={PLATFORM_META[game.platform].logo} alt="" className="h-4 w-4 object-contain" />}
+                  {platformLabel(game?.platform)}
                 </button>
-              ))}
+                {siblingGames.map((sibling) => (
+                  <button key={sibling.appid} aria-pressed="false" onClick={() => navigate(`/game/${sibling.appid}`)}>
+                    {sibling.platform && <img src={PLATFORM_META[sibling.platform].logo} alt="" className="h-4 w-4 object-contain" />}
+                    {platformLabel(sibling.platform)}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* tabs + trophy controls */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800">
-            <div className="flex gap-1">
+            <div className="subtabs" role="tablist" aria-label="Seções do jogo">
               {TABS.map((t) => (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
-                    tab === t.key ? 'text-violet-200' : 'text-gray-500 hover:text-gray-300'
-                  }`}>
-                  {t.label}
-                  {tab === t.key && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-violet-400" />}
-                </button>
+                <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)} className="subtab">{t.label}</button>
               ))}
             </div>
             {tab === 'trophies' && (
@@ -331,13 +341,13 @@ export default function GameDetail() {
           {tab === 'trophies' && (
             <div>
               {nextThree.length > 0 && displayPercent < 100 && (
-                <section className="mb-5 overflow-hidden rounded-2xl border border-violet-700/40 bg-violet-900/10">
-                  <div className="flex items-center gap-2 border-b border-violet-700/30 px-4 py-3">
+                <section className="mb-5 overflow-hidden rounded-xl border border-gray-800 bg-gray-900">
+                  <div className="flex items-center gap-2 border-b border-gray-800 px-4 py-3">
                     <Crosshair className="h-4 w-4 text-violet-400" />
-                    <h3 className="text-sm font-bold text-gray-100">Próximos 3</h3>
+                    <h3 className="text-sm font-semibold text-gray-100">Próximos 3</h3>
                     <span className="ml-auto text-xs text-gray-500">As mais fáceis entre as restantes</span>
                   </div>
-                  <div className="divide-y divide-violet-700/20">
+                  <div className="divide-y divide-gray-800">
                     {nextThree.map((a) => (
                       <div key={a.name} className="flex items-center gap-3 px-4 py-3">
                         <img
@@ -351,11 +361,11 @@ export default function GameDetail() {
                           {a.description && <p className="truncate text-xs text-gray-500">{a.description}</p>}
                         </div>
                         {typeof a.rarity === 'number' && a.rarity > 0 ? (
-                          <span className="shrink-0 rounded-md bg-violet-600/15 px-2 py-1 text-xs font-bold tabular-nums text-violet-300 ring-1 ring-inset ring-violet-500/30">
+                          <span className="shrink-0 rounded-md bg-violet-600/15 px-2 py-1 text-xs font-semibold tabular-nums text-violet-300">
                             {a.rarity.toFixed(1).replace(/\.0$/, '')}% têm
                           </span>
                         ) : typeof a.points === 'number' && a.points > 0 ? (
-                          <span className="shrink-0 rounded-md bg-gray-800/80 px-2 py-1 text-xs font-bold tabular-nums text-gray-300">
+                          <span className="shrink-0 rounded-md bg-gray-800 px-2 py-1 text-xs font-semibold tabular-nums text-gray-300">
                             {a.points} pts
                           </span>
                         ) : null}
@@ -364,7 +374,7 @@ export default function GameDetail() {
                   </div>
                 </section>
               )}
-              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">
+              <p className="mb-3 text-xs font-medium text-gray-500">
                 {trophyFilter === 'all' ? `Todos os ${displayTotal} ${noun.toLowerCase()}`
                   : trophyFilter === 'earned' ? `${earnedCount} ${noun.toLowerCase()} obtidos`
                   : `${displayTotal - earnedCount} ${noun.toLowerCase()} bloqueados`}
@@ -374,7 +384,7 @@ export default function GameDetail() {
               ) : data ? (
                 <AchievementList achievements={visibleTrophies} platform={game?.platform} />
               ) : (
-                <p className="py-4 text-sm text-gray-600">Carregando {noun.toLowerCase()}…</p>
+                <p className="py-4 text-sm text-gray-500">Carregando {noun.toLowerCase()}…</p>
               )}
             </div>
           )}
@@ -384,15 +394,18 @@ export default function GameDetail() {
           {tab === 'activity' && (
             <div>
               {activity.length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-600">Nenhuma conquista desbloqueada ainda.</p>
+                <div className="rounded-xl border border-gray-800 bg-gray-900 py-12 text-center">
+                  <p className="text-sm font-semibold text-gray-300">Nenhuma atividade ainda</p>
+                  <p className="mt-1 text-xs text-gray-500">As conquistas desbloqueadas aparecem aqui, da mais recente para a mais antiga.</p>
+                </div>
               ) : (
-                <ul className="space-y-2">
+                <ul className="list-surface">
                   {activity.slice(0, 30).map((a) => (
-                    <li key={a.name} className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900 p-3">
+                    <li key={a.name} className="list-surface-row">
                       <img src={a.icon} alt="" className="h-10 w-10 rounded-lg" onError={(e) => ((e.target as HTMLImageElement).style.visibility = 'hidden')} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-gray-100">{a.displayName || a.name}</p>
-                        <p className="text-xs text-blue-400/80">Desbloqueado em {fmtDate(a.unlocktime)}</p>
+                        <p className="text-xs text-gray-500">Desbloqueado em {fmtDate(a.unlocktime)}</p>
                       </div>
                     </li>
                   ))}
@@ -402,89 +415,82 @@ export default function GameDetail() {
           )}
         </div>
 
-        {/* right column — Ações */}
-        <div className="space-y-4">
-          <div className="space-y-2 rounded-2xl border border-gray-800 bg-gray-900 p-4">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Ações</h2>
-            {game?.relatedPlatforms && game.relatedPlatforms.length > 0 && (
-              <div className="rounded-lg border border-blue-800/30 bg-blue-950/20 px-3 py-2 text-xs text-blue-200">
-                Também rastreado em {game.relatedPlatforms.map(platformLabel).join(', ')}. Cada plataforma mantém sua própria meta.
+        <aside className="space-y-6">
+          <section>
+            <h2 className="side-title">Detalhes</h2>
+            <dl className="details-table">
+              <div className="details-row">
+                <dt>Plataforma</dt>
+                <dd className="flex items-center gap-2">
+                  {game?.platform && <img src={PLATFORM_META[game.platform].logo} alt="" className="h-4 w-4 object-contain" />}
+                  {platformLabel(game?.platform)}
+                </dd>
               </div>
-            )}
-            <button onClick={() => toggleBacklog(appStr)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                inBacklog ? 'border border-blue-700/30 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}>
-              {inBacklog ? <BookmarkCheck className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
-              {inBacklog ? 'No backlog' : 'Adicionar ao backlog'}
-            </button>
-            <button onClick={() => togglePinned(appStr)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isPinned ? 'border border-violet-700/30 bg-violet-600/20 text-violet-300 hover:bg-violet-600/30' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}>
-              <Pin className="h-4 w-4" />
-              {isPinned ? 'Fixado como prioridade' : 'Fixar jogo'}
-            </button>
-            <button onClick={() => toggleDropped(appStr)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                isDropped ? 'border border-red-700/30 bg-red-600/20 text-red-300 hover:bg-red-600/30' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}>
-              <CircleSlash className="h-4 w-4" />
-              {isDropped ? 'Marcado como dropado' : 'Marcar como dropado'}
-            </button>
-          </div>
-
-          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Esforço previsto</h2>
-            <div className="grid grid-cols-2 gap-1.5">
-              {EFFORT_OPTIONS.map((opt) => (
-                <button key={opt.key} onClick={() => setEffort(appStr, opt.key)}
-                  className={`rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors ${
-                    effort === opt.key ? opt.color : 'border-gray-800 bg-gray-950 text-gray-600 hover:border-gray-700 hover:text-gray-400'
-                  }`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {inBacklog && (
-            <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
-              <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Data alvo</h2>
-              <input type="date" value={schedule} onChange={(e) => setSchedule(appStr, e.target.value)}
-                className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 focus:border-violet-600 focus:outline-none [color-scheme:dark]" />
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Guia</h2>
-            <div className="flex gap-2">
-              <input type="url" value={guideText} onChange={(e) => setGuideText(e.target.value)} onBlur={saveGuide} placeholder="https://..."
-                className="min-w-0 flex-1 rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 placeholder-gray-600 focus:border-violet-600 focus:outline-none" />
-              {guideText && (
-                <a href={guideText} target="_blank" rel="noopener noreferrer" title="Abrir guia"
-                  className="flex w-10 items-center justify-center rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700">
-                  <LinkIcon className="h-4 w-4" />
-                </a>
+              {game?.relatedPlatforms && game.relatedPlatforms.length > 0 && (
+                <div className="details-row">
+                  <dt>Também em</dt>
+                  <dd>{game.relatedPlatforms.map(platformLabel).join(', ')} <span className="block text-xs text-gray-500">Cada plataforma mantém sua própria meta.</span></dd>
+                </div>
               )}
-            </div>
-          </div>
+              <div className="details-row">
+                <dt>Esforço</dt>
+                <dd className="grid grid-cols-4 gap-1">
+                  {EFFORT_OPTIONS.map((opt) => (
+                    <button key={opt.key} onClick={() => setEffort(appStr, opt.key)} aria-pressed={effort === opt.key}
+                      className={`rounded-md border px-1 py-1.5 text-[11px] font-semibold transition-colors ${
+                        effort === opt.key ? opt.color : 'border-gray-800 bg-gray-950 text-gray-500 hover:border-gray-700 hover:text-gray-300'
+                      }`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </dd>
+              </div>
+              {inBacklog && (
+                <div className="details-row">
+                  <dt><label htmlFor="detail-schedule">Platina do mês</label></dt>
+                  <dd><input id="detail-schedule" type="month" value={schedule} onChange={(e) => setSchedule(appStr, e.target.value)} className="field" /></dd>
+                </div>
+              )}
+              <div className="details-row">
+                <dt><label htmlFor="detail-collection">Coleção</label></dt>
+                <dd>
+                  <select
+                    id="detail-collection"
+                    value={collectionId ?? ''}
+                    onChange={(e) => {
+                      if (e.target.value === '__new__') {
+                        const name = window.prompt('Nome da nova coleção:')?.trim();
+                        if (name) createCollection(name, [appStr]);
+                      } else {
+                        setCollection(appStr, e.target.value ? Number(e.target.value) : null);
+                      }
+                    }}
+                    className="field cursor-pointer"
+                  >
+                    <option value="">Nenhuma</option>
+                    {db.collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    <option value="__new__">+ Nova coleção…</option>
+                  </select>
+                </dd>
+              </div>
+              <div className="details-row">
+                <dt><label htmlFor="detail-guide">Guia</label></dt>
+                <dd><input id="detail-guide" type="url" value={guideText} onChange={(e) => setGuideText(e.target.value)} onBlur={saveGuide} placeholder="https://..." className="field" /></dd>
+              </div>
+            </dl>
+          </section>
 
-          <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-500">Notas pessoais</h2>
-            <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} onBlur={saveNote} rows={4}
-              placeholder="Dicas, estratégias, problemas conhecidos…"
-              className="w-full resize-none rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 placeholder-gray-700 focus:border-violet-600 focus:outline-none" />
-            <button onClick={saveNote}
-              className="mt-2 w-full rounded-lg bg-gray-800 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-700">
-              Salvar nota
-            </button>
-          </div>
+          <section>
+            <h2 className="side-title"><label htmlFor="detail-notes">Notas pessoais</label></h2>
+            <textarea id="detail-notes" value={noteText} onChange={(e) => setNoteText(e.target.value)} onBlur={saveNote} rows={5}
+              placeholder="Dicas, estratégias, problemas conhecidos…" className="field" />
+            <button onClick={saveNote} className="btn btn-secondary mt-2 w-full">Salvar nota</button>
+          </section>
 
-          <p className="flex items-center gap-1.5 px-1 text-xs text-gray-600">
+          <p className="flex items-center gap-1.5 px-1 text-xs text-gray-500">
             <Clock className="h-3 w-3" /> Última atualização: {game ? 'sincronizado' : '—'}
           </p>
-        </div>
+        </aside>
       </div>
     </div>
   );

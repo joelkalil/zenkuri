@@ -18,7 +18,7 @@ export interface RankingCategory {
 }
 
 /*
-  Curadoria manual contra o estado real da biblioteca (atualizada em 2026-07-04).
+  Curadoria manual contra o estado real da biblioteca (atualizada em 2026-10-01).
   Jogos já concluídos (100%/platina) ficam fora das listas acionáveis; um mesmo
   jogo pode aparecer em mais de uma lista quando a leitura muda (ex.: Hollow
   Knight é projeto longo E essencial). As linhas só renderizam se o par
@@ -31,9 +31,11 @@ export const RANKING_CATEGORIES: RankingCategory[] = [
     shortLabel: 'Agora',
     description: 'Jogos que estão na boca do gol ou entregam uma conclusão rápida, sem grind desproporcional.',
     entries: [
+      { platform: 'steam', externalId: '4001890', estimate: '2–4h', note: 'Três conquistas restantes depois de 9h: a reta final mais curta da biblioteca.' },
       { platform: 'steam', externalId: '1790600', estimate: '3–6h', note: 'Três conquistas restantes e a mais próxima das platinas do momento.' },
-      { platform: 'steam', externalId: '2483190', estimate: '8–15h', note: 'Duas pendências; uma delas depende do calendário de temporadas.' },
-      { platform: 'steam', externalId: '2567870', estimate: '6–10h', note: 'Metade feita; o resto é execução com uma dupla paciente.' },
+      { platform: 'steam', externalId: '2835570', estimate: '3–5h', note: 'As duas que faltam saem na mesma run do Double or Nothing: saque 1M e depois perca 1M.' },
+      { platform: 'steam', externalId: '2567870', estimate: '6–10h', note: 'Faltam duas: cume em menos de 1h50 e o modo lava. Skill pura, dá solo.' },
+      { platform: 'steam', externalId: '645290', estimate: '4–6h', note: 'Só 18 conquistas num indie de ~4h; o resto é coleta com guia aberto.' },
       { platform: 'steam', externalId: '2784470', estimate: '12–20h', note: 'Builds variadas resolvem a maior parte do que falta.' },
       { platform: 'steam', externalId: '3527290', estimate: '10–18h', note: 'Boa parte sai naturalmente jogando com o grupo de sempre.' },
       { platform: 'steam', externalId: '3164500', estimate: '10–15h', note: 'Só 13 conquistas no total; o império fecha rápido.' },
@@ -42,14 +44,12 @@ export const RANKING_CATEGORIES: RankingCategory[] = [
       { platform: 'steam', externalId: '792100', estimate: '4–6h', note: 'Puzzles diretos, 19 conquistas e nenhuma pegadinha.' },
       { platform: 'steam', externalId: '1569580', estimate: '20–30h', note: 'Apenas 16 conquistas; o quebra-cabeça é o próprio caminho.' },
       { platform: 'psn', externalId: 'NPWR20684_00', estimate: '15–20h', note: 'Platina curta de super-herói, quase toda na história.' },
-      { platform: 'psn', externalId: 'NPWR51746_00', estimate: '25–35h', note: 'Recém-começado; platina generosa no ritmo da campanha.' },
       { platform: 'steam', externalId: '1546970', estimate: '18–25h', note: 'Liberty City clássica: 100% direto, sem online.' },
       { platform: 'steam', externalId: '387290', estimate: '12–18h', note: 'Curto e lindo; as runs extras são o único dente.' },
       { platform: 'steam', externalId: '268910', estimate: '18–25h', note: 'Skill pura, mas compacto; cada chefe vencido é progresso real.' },
       { platform: 'retroachievements', externalId: '515', estimate: '20–30h', note: 'Set principal do RA no ritmo de uma run completa de Kanto.' },
       { platform: 'steam', externalId: '638230', estimate: '4–8h', note: 'Curto e contemplativo, com uma conquista de companheiro.' },
       { platform: 'steam', externalId: '414340', estimate: '6–8h', note: 'Uma campanha focada e poucos colecionáveis.' },
-      { platform: 'steam', externalId: '1426210', estimate: '12–15h', note: 'Vinte conquistas em coop; rende com parceiro fixo.' },
       { platform: 'steam', externalId: '252410', estimate: '8–10h', note: 'Compacto; uma run eficiente resolve tudo.' },
     ],
   },
@@ -59,15 +59,13 @@ export const RANKING_CATEGORIES: RankingCategory[] = [
     shortLabel: 'Grind',
     description: 'O percentual está bonito, mas as últimas conquistas cobram repetição, online ou conteúdo extra.',
     entries: [
-      { platform: 'steam', externalId: '675690', estimate: '20–60h', note: 'Uma conquista restante, totalmente baseada em volume.' },
-      { platform: 'steam', externalId: '2904000', estimate: '12–25h', note: 'Pendências pedem personagens específicos e sessões em coop.' },
-      { platform: 'steam', externalId: '3678970', estimate: '40h+', note: 'Idle sem atalho elegante: deixar rodando e voltar depois.' },
+      { platform: 'steam', externalId: '2904000', estimate: '15–30h', note: 'Caiu de 96% para 90% porque a atualização somou conquistas: 13 pendências de personagem e coop.' },
       { platform: 'steam', externalId: '21690', estimate: '15–30h', note: 'As vitórias do modo Versus são a verdadeira barreira.' },
       { platform: 'steam', externalId: '2215430', estimate: '20–35h', note: 'Legends, Raid e New Game+ depois da campanha.' },
       { platform: 'steam', externalId: '1097150', estimate: '20–50h', note: 'Vitórias, qualificações e progressão sazonal.' },
       { platform: 'psn', externalId: 'NPWR22859_00', estimate: '20–35h', note: 'A platina saiu; faltam os extras de Legends para o 100%.' },
       { platform: 'steam', externalId: '3405340', estimate: '30–60h', note: 'Muitas condições específicas e uma dose de RNG.' },
-      { platform: 'steam', externalId: '2138720', estimate: '20–40h', note: 'Metas cumulativas de gols, defesas, distância e nível.' },
+      { platform: 'steam', externalId: '527230', estimate: '25–40h', note: 'Quase metade feita; o resto pede vitórias em modos e dificuldades específicos. Rende em coop.' },
       { platform: 'steam', externalId: '1811260', estimate: '30–60h', note: 'Objetivos online e de temporada; melhor em doses semanais.' },
       { platform: 'steam', externalId: '960090', estimate: '250h+', note: 'Conquistas diárias, eventos e grind de longuíssimo prazo.' },
       { platform: 'steam', externalId: '1938090', estimate: '50h+', note: '157 conquistas atravessando modos, mapas e temporadas.' },
@@ -77,8 +75,10 @@ export const RANKING_CATEGORIES: RankingCategory[] = [
       { platform: 'steam', externalId: '1085660', estimate: '60h+', note: 'Raids e atividades em grupo mandam no ritmo.' },
       { platform: 'steam', externalId: '945360', estimate: '20–40h', note: 'Depende de lobby cheio e dos papéis certos caírem.' },
       { platform: 'steam', externalId: '714010', estimate: '40h+', note: 'Cem conquistas de treino cumulativo, sem pressa.' },
-      { platform: 'steam', externalId: '844870', estimate: '40h+', note: 'Online de nicho com progressão lenta; jogue por gostar.' },
       { platform: 'steam', externalId: '1278540', estimate: '30–50h', note: '107 conquistas espalhadas por temporadas repetidas.' },
+      { platform: 'steam', externalId: '1274570', estimate: '40–60h', note: '131 conquistas por mapa e na dificuldade Nightmare; precisa do grupo fechado.' },
+      { platform: 'steam', externalId: '291550', estimate: '40h+', note: 'Vitórias e níveis por lenda: volume puro, em doses curtas.' },
+      { platform: 'steam', externalId: '632360', estimate: '80h+', note: '171 conquistas entre sobreviventes, skins e níveis de Eclipse.' },
     ],
   },
   {
@@ -115,7 +115,6 @@ export const RANKING_CATEGORIES: RankingCategory[] = [
     shortLabel: 'Longos',
     description: 'Você já começou, mas terminar pede férias mentais, planilha ou uma relação séria com o jogo.',
     entries: [
-      { platform: 'steam', externalId: '367520', estimate: '20–40h', note: 'Falta uma conquista, só que ela é o Panteão de Hallownest.' },
       { platform: 'steam', externalId: '1030300', estimate: '25–50h', note: 'A 90%, mas a reta final guarda os desafios mais cruéis.' },
       { platform: 'steam', externalId: '292030', estimate: '70–120h', note: 'Muito conteúdo restante e conquistas perdíveis.' },
       { platform: 'steam', externalId: '1086940', estimate: '80–140h', note: 'Múltiplas rotas, escolhas e o modo Honra no horizonte.' },
@@ -125,7 +124,8 @@ export const RANKING_CATEGORIES: RankingCategory[] = [
       { platform: 'steam', externalId: '262060', estimate: '100h+', note: 'Runs exigentes, RNG e modos de dificuldade.' },
       { platform: 'steam', externalId: '678960', estimate: '50–70h', note: 'Múltiplos finais pedem New Game+ e planejamento.' },
       { platform: 'steam', externalId: '1004640', estimate: '60–90h', note: 'Tática densa com colecionáveis de longo prazo.' },
-      { platform: 'steam', externalId: '1627720', estimate: '60–90h', note: 'Três finais e upgrades completos: caminho de NG++.' },
+      { platform: 'steam', externalId: '329050', estimate: '30–50h', note: 'Dante Must Die e Legendary Dark Knight: a dificuldade é a própria conquista.' },
+      { platform: 'steam', externalId: '617290', estimate: '50–80h', note: 'Hardcore, todas as armas e o DLC; o mundo aleatório estica a conta.' },
       { platform: 'steam', externalId: '1145360', estimate: '70–100h', note: 'O epílogo verdadeiro cobra dezenas de escapadas.' },
       { platform: 'steam', externalId: '1091500', estimate: '70–100h', note: 'Excelente projeto grande, mas pede limpeza de mapa.' },
       { platform: 'steam', externalId: '814380', estimate: '60–90h', note: 'Todos os finais e todos os chefes; skill pura.' },
@@ -143,13 +143,13 @@ export const RANKING_CATEGORIES: RankingCategory[] = [
     shortLabel: 'Essenciais',
     description: 'Não são necessariamente os mais fáceis. São os que mais merecem virar uma lembrança completa na conta.',
     entries: [
-      { platform: 'steam', externalId: '367520', estimate: '20–40h', note: 'A última conquista é lendária; fechá-la é história para contar.' },
       { platform: 'steam', externalId: '1030300', estimate: '25–50h', note: 'O 100% mais digno de encerrar o ano no Hall.' },
       { platform: 'steam', externalId: '1086940', estimate: '80–140h', note: 'Uma platina que conta uma história só sua.' },
       { platform: 'steam', externalId: '292030', estimate: '70–120h', note: 'Clássico absoluto para finalmente fechar a conta.' },
       { platform: 'steam', externalId: '1145360', estimate: '70–100h', note: 'O loop faz o grind parecer parte da diversão.' },
       { platform: 'steam', externalId: '814380', estimate: '60–90h', note: 'Difícil, justo e muito satisfatório de dominar.' },
-      { platform: 'steam', externalId: '1627720', estimate: '60–90h', note: 'Uma ótima ponte entre Souls e narrativa fechada.' },
+      { platform: 'steam', externalId: '1809540', estimate: '30–40h', note: 'Parry no centro de tudo: a melhor ponte entre Hollow Knight e Sekiro.' },
+      { platform: 'steam', externalId: '1693980', estimate: '30–40h', note: 'Remake impecável; o Impossible e a run só com a Plasma Cutter são o desafio.' },
       { platform: 'steam', externalId: '1091500', estimate: '70–100h', note: 'Night City merece a limpeza completa.' },
       { platform: 'steam', externalId: '2050650', estimate: '70–100h', note: 'Campanhas repetidas, mas com execução deliciosa.' },
       { platform: 'steam', externalId: '1313140', estimate: '50–80h', note: 'Carisma suficiente para sustentar a limpeza completa.' },

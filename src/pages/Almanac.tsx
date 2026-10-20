@@ -29,17 +29,13 @@ function StatBlock({ label, value, hint, icon: Icon, accent }: {
   accent: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 p-4 lg:p-5">
-      <span className="flex items-center gap-2">
-        <Icon className={`h-[18px] w-[18px] ${accent}`} />
-        <span className="text-sm font-medium text-gray-400">{label}</span>
-      </span>
-      <span className="font-display text-[2rem] font-bold leading-none tabular-nums text-gray-100">{value}</span>
-      {hint && <span className="truncate text-xs text-gray-500">{hint}</span>}
+    <div className="stat-tile">
+      <span className="stat-tile-label"><Icon className={`h-4 w-4 ${accent}`} aria-hidden="true" />{label}</span>
+      <span className="stat-tile-value text-gray-100">{value}</span>
+      {hint && <span className="stat-tile-hint truncate">{hint}</span>}
     </div>
   );
 }
-
 export default function Almanac() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -122,91 +118,68 @@ export default function Almanac() {
     : '—';
 
   return (
-    <div className="mx-auto max-w-[1100px] space-y-8 p-6 lg:p-8">
-      <div className="no-print flex items-center justify-between gap-3">
-        <button
-          onClick={() => navigate('/hall')}
-          className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 transition-colors hover:text-gray-200"
-        >
-          <ArrowLeft className="h-4 w-4" /> Hall da Platina
-        </button>
-        <div className="flex items-center gap-2">
-          <select
-            value={year}
-            onChange={(event) => setSearchParams({ ano: event.target.value })}
-            className="cursor-pointer rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-sm font-semibold text-gray-300 focus:outline-none focus:border-violet-600"
-          >
+    <div className="page page-narrow">
+      <header className="page-head">
+        <div>
+          <span className="page-eyebrow"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> Retrospectiva anual</span>
+          <h1 className="page-title">Almanaque <span className="text-violet-400">{year}</span></h1>
+          <p className="page-desc">Um ano de caçada em números: cada quadrado é um dia, cada conquista uma marca no papel.</p>
+        </div>
+        <div className="page-actions no-print">
+          <button onClick={() => navigate('/hall')} className="btn btn-secondary">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Hall da Platina
+          </button>
+          <label className="sr-only" htmlFor="almanac-year">Ano</label>
+          <select id="almanac-year" value={year} onChange={(event) => setSearchParams({ ano: event.target.value })} className="field h-10 w-auto cursor-pointer pr-8 font-semibold">
             {(years.includes(year) ? years : [year, ...years]).map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 rounded-lg border border-gray-800 bg-gray-900 px-3.5 py-2 text-sm font-semibold text-gray-300 transition-colors hover:border-gray-700 hover:text-gray-100"
-          >
-            <Printer className="h-4 w-4" /> Imprimir
+          <button onClick={() => window.print()} className="btn btn-secondary">
+            <Printer className="h-4 w-4" aria-hidden="true" /> Imprimir
           </button>
         </div>
-      </div>
-
-      {/* Capa editorial */}
-      <header className="border-b border-gray-800 pb-6">
-        <p className="text-sm font-semibold text-violet-400">Zenkuri · retrospectiva anual</p>
-        <h1 className="heading-editorial mt-2 text-5xl font-bold text-gray-100 sm:text-6xl">
-          Almanaque <span className="text-violet-400">{year}</span>
-        </h1>
-        <p className="mt-3 max-w-xl text-sm leading-relaxed text-gray-500">
-          Um ano de caçada em números: cada quadrado é um dia, cada conquista uma marca no papel.
-        </p>
       </header>
 
       {error && <div className="rounded-xl border border-red-800/30 bg-red-900/20 p-4 text-sm text-red-400">{error}</div>}
 
-      <div className="grid grid-cols-2 divide-x divide-y divide-gray-800 overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/50 lg:grid-cols-4 lg:divide-y-0">
+      <div className="stat-strip stat-strip-4">
         <StatBlock icon={CheckCircle2} accent="text-sky-400" label="Conquistas" value={stats.total} hint={`Desbloqueadas em ${year}`} />
         <StatBlock icon={Trophy} accent="text-amber-400" label="Platinas" value={stats.platinums} hint="Troféus de platina" />
         <StatBlock icon={CheckCircle2} accent="text-emerald-400" label="100%" value={stats.perfects} hint="Jogos perfeitos" />
-        <StatBlock
-          icon={Flame}
-          accent="text-red-400"
-          label="Dia mais ativo"
-          value={stats.busiest?.count ?? '—'}
-          hint={busiestLabel}
-        />
+        <StatBlock icon={Flame} accent="text-red-400" label="Dia mais ativo" value={stats.busiest?.count ?? '—'} hint={busiestLabel} />
       </div>
 
-      <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
-        <h2 className="mb-4 text-lg font-bold text-gray-100">Um ano de desbloqueios</h2>
+      <section className="surface surface-pad">
+        <div className="section-head">
+          <h2>Um ano de desbloqueios</h2>
+          <span className="spacer" />
+          {stats.topMonth !== null && (
+            <span className="section-sub">Mês mais intenso: <span className="font-semibold text-gray-300">{MONTHS_LONG_PT[stats.topMonth]}</span></span>
+          )}
+        </div>
         {unlocks === null ? (
           <div className="h-28 animate-pulse rounded-lg bg-gray-800/50" />
         ) : (
-          <UnlockHeatmap year={year} counts={dayCounts} />
-        )}
-        {stats.topMonth !== null && (
-          <p className="mt-3 text-xs text-gray-500">
-            Mês mais intenso: <span className="font-semibold text-gray-300">{MONTHS_LONG_PT[stats.topMonth]}</span>
-          </p>
+          <div className="overflow-x-auto"><UnlockHeatmap year={year} counts={dayCounts} /></div>
         )}
       </section>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <section className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900/50">
-          <h2 className="border-b border-gray-800 px-5 py-4 text-lg font-bold text-gray-100">
-            Conclusões de {year}
-          </h2>
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <section>
+          <div className="section-head">
+            <h2>Conclusões de {year}</h2>
+            <span className="section-sub">{yearCompletions.length} no ano</span>
+          </div>
           {yearCompletions.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-gray-600">Nenhuma platina ou 100% registrada neste ano.</p>
+            <div className="empty-state py-10">Nenhuma platina ou 100% registrada neste ano.</div>
           ) : (
-            <div className="divide-y divide-gray-800">
+            <div className="list-surface">
               {yearCompletions.map((item) => {
                 const meta = item.game.platform ? PLATFORM_META[item.game.platform] : null;
                 return (
-                  <button
-                    key={`${item.game.appid}-${item.kind}`}
-                    onClick={() => navigate(`/game/${item.game.appid}`)}
-                    className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-800/40"
-                  >
-                    <GameCover game={item.game} className="h-11 w-11 shrink-0 rounded-lg bg-gray-800" imgClassName="h-11 w-11 rounded-lg object-cover" />
+                  <button key={`${item.game.appid}-${item.kind}`} onClick={() => navigate(`/game/${item.game.appid}`)} className="list-surface-row">
+                    <GameCover game={item.game} className="h-11 w-20 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-gray-100">{item.game.name}</p>
                       <p className="mt-0.5 text-xs text-gray-500">
@@ -226,35 +199,36 @@ export default function Almanac() {
           )}
         </section>
 
-        <aside className="space-y-4">
+        <aside className="space-y-8">
           {stats.rarest && (
-            <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
-              <div className="flex items-center gap-2">
-                <Gem className="h-4 w-4 text-violet-400" />
-                <h2 className="text-sm font-bold uppercase tracking-wide text-gray-300">Desbloqueio mais raro</h2>
+            <section>
+              <div className="section-head">
+                <Gem className="h-5 w-5 text-violet-400" aria-hidden="true" />
+                <h2>Desbloqueio mais raro</h2>
               </div>
-              <div className="mt-4 flex items-center gap-3">
-                {stats.rarest.icon && (
-                  <img src={stats.rarest.icon} alt="" className="h-12 w-12 rounded-lg border border-gray-800 object-cover" />
-                )}
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-gray-100">{stats.rarest.achievementTitle}</p>
-                  <p className="truncate text-xs text-gray-500">{stats.rarest.gameName}</p>
+              <div className="surface surface-pad">
+                <div className="flex items-center gap-3">
+                  {stats.rarest.icon && (
+                    <img src={stats.rarest.icon} alt="" className="h-12 w-12 rounded-lg border border-gray-800 object-cover" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-100">{stats.rarest.achievementTitle}</p>
+                    <p className="truncate text-xs text-gray-500">{stats.rarest.gameName}</p>
+                  </div>
                 </div>
+                <p className="mt-4 text-2xl font-bold tabular-nums text-violet-400">
+                  {stats.rarest.rarity}%
+                  <span className="ml-1.5 text-xs font-medium text-gray-500">dos jogadores têm essa conquista</span>
+                </p>
               </div>
-              <p className="mt-3 font-display text-2xl font-bold text-violet-400">
-                {stats.rarest.rarity}%
-                <span className="ml-1.5 text-xs font-medium normal-case text-gray-500">dos jogadores têm essa conquista</span>
-              </p>
             </section>
           )}
 
-          <section className="rounded-2xl border border-gray-800 bg-gray-900/50 p-5">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4 text-sky-400" />
-              <h2 className="text-sm font-bold uppercase tracking-wide text-gray-300">Por plataforma</h2>
+          <section>
+            <div className="section-head">
+              <h2>Por plataforma</h2>
             </div>
-            <div className="mt-3 space-y-2.5">
+            <div className="surface surface-pad space-y-3">
               {(Object.keys(PLATFORM_META) as Platform[]).map((platform) => {
                 const count = stats.perPlatform.get(platform) ?? 0;
                 const share = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
@@ -263,9 +237,9 @@ export default function Almanac() {
                     <img src={PLATFORM_META[platform].logo} alt="" className="h-4 w-4 object-contain" />
                     <span className="w-14 text-xs font-medium text-gray-400">{PLATFORM_META[platform].short}</span>
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
-                      <div className="h-full rounded-full bg-violet-500" style={{ width: `${share}%` }} />
+                      <div className="h-full rounded-full bg-violet-400" style={{ width: `${share}%` }} />
                     </div>
-                    <span className="w-12 text-right text-xs font-bold tabular-nums text-gray-300">{count}</span>
+                    <span className="w-12 text-right text-xs font-semibold tabular-nums text-gray-300">{count}</span>
                   </div>
                 );
               })}
@@ -276,3 +250,4 @@ export default function Almanac() {
     </div>
   );
 }
+

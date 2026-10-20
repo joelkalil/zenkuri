@@ -54,6 +54,10 @@ export interface PlanningRecord {
   effort: Record<string, string>;
   schedule: Record<string, string>;
   guides: Record<string, string>;
+  /** coleções manuais (franquias/séries) do usuário */
+  collections: { id: number; name: string }[];
+  /** game_id -> id da coleção à qual o jogo pertence */
+  collectionOf: Record<string, number>;
 }
 
 export interface CompletionHistoryItem {

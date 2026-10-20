@@ -1,29 +1,31 @@
 import {
-  getCredential,
   getGameById,
+  pruneUserGames,
   refreshGameAchievementFlag,
   upsertAchievement,
   upsertGame,
 } from '../db';
 import {
-  buildAuthorization,
   getGameInfoAndUserProgress,
   getUserCompletionProgress,
 } from '@retroachievements/api';
+import { raServiceAuth } from '../serviceAuth';
+import { requireVerifiedLink } from '../verification';
 
-function raConfig() {
-  const credential = getCredential('retroachievements');
-  const username = String(credential?.data.username ?? '');
-  const webApiKey = String(credential?.data.webApiKey ?? '');
-  if (!username || !webApiKey) throw new Error('RetroAchievements is not configured.');
-  return { username, webApiKey, authorization: buildAuthorization({ username, webApiKey }) };
+function raConfig(userId: number) {
+  // Credencial de serviço (.env) consultando o username público vinculado.
+  const link = requireVerifiedLink(userId, 'retroachievements');
+  const username = String(link.username ?? '');
+  if (!username) throw new Error('RetroAchievements is not configured.');
+  return { username, authorization: raServiceAuth() };
 }
 
-export async function syncRetroAchievementsLibrary() {
-  const { username, authorization } = raConfig();
+export async function syncRetroAchievementsLibrary(userId: number) {
+  const { username, authorization } = raConfig(userId);
   let offset = 0;
   const count = 500;
   let received = 0;
+  const seen: string[] = [];
 
   while (true) {
     const response = await getUserCompletionProgress(authorization, { username, count, offset });
@@ -32,9 +34,11 @@ export async function syncRetroAchievementsLibrary() {
     received += results.length;
 
     for (const game of results) {
-      upsertGame({
+      const externalId = String(game.gameId);
+      seen.push(externalId);
+      upsertGame(userId, {
         platform: 'retroachievements',
-        externalId: String(game.gameId),
+        externalId,
         title: game.title,
         coverUrl: game.imageIcon ? `https://media.retroachievements.org${game.imageIcon}` : '',
         iconUrl: game.imageIcon ? `https://media.retroachievements.org${game.imageIcon}` : '',
@@ -47,13 +51,16 @@ export async function syncRetroAchievementsLibrary() {
     if (received >= total || results.length === 0) break;
   }
 
+  // Destaca jogos que não pertencem mais a este usuário RA (ex.: username trocado).
+  pruneUserGames(userId, 'retroachievements', seen);
+
   return received;
 }
 
-export async function syncRetroAchievementsForGame(gameId: number) {
+export async function syncRetroAchievementsForGame(userId: number, gameId: number) {
   const game = getGameById(gameId);
   if (!game || game.platform !== 'retroachievements') throw new Error('RetroAchievements game not found.');
-  const { username, authorization } = raConfig();
+  const { username, authorization } = raConfig(userId);
   const response = await getGameInfoAndUserProgress(authorization, {
     username,
     gameId: Number(game.external_id),
@@ -69,7 +76,7 @@ export async function syncRetroAchievementsForGame(gameId: number) {
   );
   for (const achievement of achievements as any[]) {
     const earnedAt = achievement.dateEarnedHardcore ?? achievement.dateEarned;
-    upsertAchievement({
+    upsertAchievement(userId, {
       gameId,
       externalId: String(achievement.id),
       title: achievement.title,

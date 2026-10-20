@@ -32,7 +32,7 @@ const TYPE_ICON: Record<string, string> = {
 
 const TYPE_COLOR: Record<string, string> = {
   platinum: 'text-slate-200',
-  gold: 'text-yellow-300',
+  gold: 'text-yellow-400',
   silver: 'text-gray-300',
   bronze: 'text-orange-300',
 };

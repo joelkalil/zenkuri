@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { randomBytes, scryptSync } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import type { ApiAchievement, ApiGame, CompletionHistoryItem, Platform, PlanningRecord, StoredCredential } from './types';
 import { achievementMediaUrl, coverMediaUrl, heroMediaUrl, iconMediaUrl, portraitMediaUrl } from './mediaPaths';
@@ -11,11 +12,37 @@ export const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+/*
+  Schema v2 — multiusuário
+  ────────────────────────
+  Catálogo compartilhado: game_groups, games, achievements descrevem os jogos
+  e seus sets de conquistas, independentes de quem sincronizou.
+  Dados por usuário: user_games (posse + tempo de jogo + progresso agregado),
+  user_achievements (status de desbloqueio), planning, user_platform_accounts
+  (credenciais Steam/PSN/RA) e sync_runs referenciam users(id).
+*/
 db.exec(`
-  create table if not exists credentials (
-    platform text primary key,
+  create table if not exists users (
+    id integer primary key autoincrement,
+    username text not null collate nocase unique,
+    display_name text not null,
+    password_hash text not null,
+    created_at text not null
+  );
+
+  create table if not exists sessions (
+    token text primary key,
+    user_id integer not null references users(id) on delete cascade,
+    created_at text not null,
+    expires_at text not null
+  );
+
+  create table if not exists user_platform_accounts (
+    user_id integer not null references users(id) on delete cascade,
+    platform text not null,
     data text not null,
-    updated_at text not null
+    updated_at text not null,
+    primary key (user_id, platform)
   );
 
   create table if not exists game_groups (
@@ -57,15 +84,28 @@ db.exec(`
     unique(game_id, external_id)
   );
 
-  create table if not exists achievement_status (
-    achievement_id integer primary key references achievements(id) on delete cascade,
+  create table if not exists user_games (
+    user_id integer not null references users(id) on delete cascade,
+    game_id integer not null references games(id) on delete cascade,
+    playtime_minutes integer not null default 0,
+    recent_playtime_minutes integer,
+    progress_json text not null default '{}',
+    last_synced_at text not null,
+    primary key (user_id, game_id)
+  );
+
+  create table if not exists user_achievements (
+    user_id integer not null references users(id) on delete cascade,
+    achievement_id integer not null references achievements(id) on delete cascade,
     achieved integer not null default 0,
     unlock_time integer not null default 0,
-    metadata_json text not null default '{}'
+    metadata_json text not null default '{}',
+    primary key (user_id, achievement_id)
   );
 
   create table if not exists planning (
-    game_id integer primary key references games(id) on delete cascade,
+    user_id integer not null references users(id) on delete cascade,
+    game_id integer not null references games(id) on delete cascade,
     in_backlog integer not null default 0,
     backlog_order integer,
     pinned integer not null default 0,
@@ -73,7 +113,8 @@ db.exec(`
     note text not null default '',
     effort text,
     schedule text,
-    guide_url text not null default ''
+    guide_url text not null default '',
+    primary key (user_id, game_id)
   );
 
   create table if not exists sync_runs (
@@ -85,48 +126,9 @@ db.exec(`
     message text
   );
 
-  create view if not exists game_common_view as
-    select
-      g.id as game_id,
-      g.group_id,
-      g.platform,
-      g.external_id,
-      g.title,
-      count(a.id) as total_items,
-      sum(case when s.achieved = 1 then 1 else 0 end) as unlocked_items,
-      case
-        when count(a.id) = 0 then 0
-        else round((sum(case when s.achieved = 1 then 1 else 0 end) * 100.0) / count(a.id))
-      end as completion_percent
-    from games g
-    left join achievements a on a.game_id = g.id
-    left join achievement_status s on s.achievement_id = a.id
-    group by g.id;
-
-  create view if not exists psn_trophy_view as
-    select
-      id as game_id,
-      title,
-      json_extract(metadata_json, '$.earnedTrophies.platinum') as earned_platinum,
-      json_extract(metadata_json, '$.definedTrophies.platinum') as total_platinum,
-      json_extract(metadata_json, '$.earnedTrophies.gold') as earned_gold,
-      json_extract(metadata_json, '$.definedTrophies.gold') as total_gold,
-      json_extract(metadata_json, '$.earnedTrophies.silver') as earned_silver,
-      json_extract(metadata_json, '$.definedTrophies.silver') as total_silver,
-      json_extract(metadata_json, '$.earnedTrophies.bronze') as earned_bronze,
-      json_extract(metadata_json, '$.definedTrophies.bronze') as total_bronze
-    from games
-    where platform = 'psn';
-
-  create view if not exists retroachievements_view as
-    select
-      id as game_id,
-      title,
-      json_extract(metadata_json, '$.numAwardedHardcore') as hardcore_unlocked,
-      json_extract(metadata_json, '$.maxPossible') as hardcore_total,
-      json_extract(metadata_json, '$.consoleName') as console_name
-    from games
-    where platform = 'retroachievements';
+  create index if not exists idx_user_achievements_user on user_achievements(user_id, achieved, unlock_time);
+  create index if not exists idx_user_games_user on user_games(user_id);
+  create index if not exists idx_achievements_game on achievements(game_id);
 `);
 
 function hasColumn(table: string, column: string) {
@@ -134,19 +136,203 @@ function hasColumn(table: string, column: string) {
     .some((row) => row.name === column);
 }
 
+function tableExists(table: string) {
+  return Boolean(db.prepare("select name from sqlite_master where type = 'table' and name = ?").get(table));
+}
+
 if (!hasColumn('games', 'group_id')) {
   db.prepare('alter table games add column group_id integer').run();
 }
 
-if (!hasColumn('planning', 'dropped')) {
-  db.prepare('alter table planning add column dropped integer not null default 0').run();
+if (!hasColumn('sync_runs', 'user_id')) {
+  db.prepare('alter table sync_runs add column user_id integer').run();
 }
 
 function now() {
   return new Date().toISOString();
 }
 
-function parseJson<T>(raw: string | null | undefined, fallback: T): T {
+export function hashPassword(password: string) {
+  const salt = randomBytes(16).toString('hex');
+  const hash = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+/*
+  Migração v1 → v2: o banco single-user tinha credentials, achievement_status
+  e planning sem dono. Todo o histórico é movido para um usuário legado
+  (ZENKURI_LEGACY_USER / ZENKURI_LEGACY_PASSWORD, padrão joel / zenkuri —
+  troque a senha após o primeiro login).
+*/
+function migrateToMultiUser() {
+  const version = Number(db.pragma('user_version', { simple: true }));
+  if (version >= 2) return;
+
+  const hasLegacyData = tableExists('credentials') || tableExists('achievement_status')
+    || (tableExists('planning') && !hasColumn('planning', 'user_id'));
+
+  if (hasLegacyData && existsSync(dbPath)) {
+    try {
+      copyFileSync(dbPath, `${dbPath}.pre-v2.bak`);
+    } catch {
+      // backup é best-effort; a migração roda em transação de qualquer forma
+    }
+  }
+
+  const tx = db.transaction(() => {
+    // As views v1 referenciam achievement_status; precisam sair antes de
+    // qualquer drop/rename para o SQLite não tentar revalidá-las.
+    db.prepare('drop view if exists game_common_view').run();
+    db.prepare('drop view if exists psn_trophy_view').run();
+    db.prepare('drop view if exists retroachievements_view').run();
+
+    let legacyUserId: number | null = null;
+
+    if (hasLegacyData) {
+      const username = process.env.ZENKURI_LEGACY_USER ?? 'joel';
+      const password = process.env.ZENKURI_LEGACY_PASSWORD ?? 'zenkuri';
+      const existing = db.prepare('select id from users where username = ?').get(username) as { id: number } | undefined;
+      if (existing) {
+        legacyUserId = existing.id;
+      } else {
+        const inserted = db.prepare(`
+          insert into users (username, display_name, password_hash, created_at)
+          values (?, ?, ?, ?)
+        `).run(username, username.charAt(0).toUpperCase() + username.slice(1), hashPassword(password), now());
+        legacyUserId = Number(inserted.lastInsertRowid);
+        console.warn(`[zenkuri] Dados existentes migrados para o usuário "${username}" (senha inicial "${password}" — troque no perfil).`);
+      }
+    }
+
+    if (legacyUserId !== null && tableExists('credentials')) {
+      db.prepare(`
+        insert or ignore into user_platform_accounts (user_id, platform, data, updated_at)
+        select ?, platform, data, updated_at from credentials
+      `).run(legacyUserId);
+      db.prepare('drop table credentials').run();
+    }
+
+    if (legacyUserId !== null) {
+      db.prepare(`
+        insert or ignore into user_games (user_id, game_id, playtime_minutes, recent_playtime_minutes, progress_json, last_synced_at)
+        select ?, id, playtime_minutes, recent_playtime_minutes, metadata_json, last_synced_at from games
+      `).run(legacyUserId);
+    }
+
+    if (tableExists('achievement_status')) {
+      if (legacyUserId !== null) {
+        db.prepare(`
+          insert or ignore into user_achievements (user_id, achievement_id, achieved, unlock_time, metadata_json)
+          select ?, achievement_id, achieved, unlock_time, metadata_json from achievement_status
+        `).run(legacyUserId);
+      }
+      db.prepare('drop table achievement_status').run();
+    }
+
+    if (tableExists('planning') && !hasColumn('planning', 'user_id')) {
+      db.prepare('alter table planning rename to planning_legacy').run();
+      db.prepare(`
+        create table planning (
+          user_id integer not null references users(id) on delete cascade,
+          game_id integer not null references games(id) on delete cascade,
+          in_backlog integer not null default 0,
+          backlog_order integer,
+          pinned integer not null default 0,
+          dropped integer not null default 0,
+          note text not null default '',
+          effort text,
+          schedule text,
+          guide_url text not null default '',
+          primary key (user_id, game_id)
+        )
+      `).run();
+      if (legacyUserId !== null) {
+        db.prepare(`
+          insert or ignore into planning (user_id, game_id, in_backlog, backlog_order, pinned, dropped, note, effort, schedule, guide_url)
+          select ?, game_id, in_backlog, backlog_order, pinned, dropped, note, effort, schedule, guide_url from planning_legacy
+        `).run(legacyUserId);
+      }
+      db.prepare('drop table planning_legacy').run();
+    }
+
+    if (legacyUserId !== null) {
+      db.prepare('update sync_runs set user_id = ? where user_id is null').run(legacyUserId);
+    }
+
+    db.pragma('user_version = 2');
+  });
+  tx();
+}
+
+migrateToMultiUser();
+
+/*
+  Migração v2 → v3: user_platform_accounts guarda apenas identificadores
+  públicos. Remove API keys, NPSSO e tokens que possam ter vindo do schema
+  single-user, além do antigo cache persistente de tokens PSN.
+*/
+function migrateServiceSecretsOutOfDatabase() {
+  const version = Number(db.pragma('user_version', { simple: true }));
+  if (version >= 3) return;
+
+  const tx = db.transaction(() => {
+    const rows = db.prepare('select user_id, platform, data, updated_at from user_platform_accounts').all() as Array<{
+      user_id: number;
+      platform: Platform;
+      data: string;
+      updated_at: string;
+    }>;
+    const update = db.prepare('update user_platform_accounts set data = ? where user_id = ? and platform = ?');
+    const remove = db.prepare('delete from user_platform_accounts where user_id = ? and platform = ?');
+
+    for (const row of rows) {
+      const data = parseJson<Record<string, unknown>>(row.data, {});
+      const verifiedAt = typeof data.verifiedAt === 'string' ? data.verifiedAt : row.updated_at;
+      let safe: Record<string, unknown> | null = null;
+
+      if (row.platform === 'steam' && data.steamid) {
+        safe = { steamid: String(data.steamid), verified: Boolean(data.verified ?? true), verifiedAt };
+      } else if (row.platform === 'retroachievements' && data.username) {
+        safe = { username: String(data.username), verified: Boolean(data.verified ?? true), verifiedAt };
+      } else if (row.platform === 'psn' && data.onlineId && data.accountId) {
+        safe = {
+          onlineId: String(data.onlineId),
+          accountId: String(data.accountId),
+          verified: Boolean(data.verified),
+          ...(data.verified ? { verifiedAt } : {}),
+          ...(!data.verified && data.code ? { code: String(data.code) } : {}),
+        };
+      }
+
+      if (safe) update.run(JSON.stringify(safe), row.user_id, row.platform);
+      else remove.run(row.user_id, row.platform);
+    }
+
+    db.prepare('drop table if exists service_state').run();
+    db.pragma('user_version = 3');
+  });
+  tx();
+}
+
+migrateServiceSecretsOutOfDatabase();
+
+/*
+  Coleções manuais por usuário (franquias/séries): tabela própria + coluna
+  collection_id em planning apontando para a coleção do jogo.
+*/
+db.exec(`
+  create table if not exists collections (
+    id integer primary key autoincrement,
+    user_id integer not null references users(id) on delete cascade,
+    name text not null
+  );
+`);
+
+if (!hasColumn('planning', 'collection_id')) {
+  db.prepare('alter table planning add column collection_id integer').run();
+}
+
+export function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
@@ -159,7 +345,7 @@ function normalizeTitle(title: string) {
   return title
     .replace(/[™®©]/g, '')
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/\b(director'?s cut|complete edition|definitive edition|game of the year|goty|enhanced edition|remastered|remake)\b/gi, '')
     .replace(/\s*[:|-]\s*$/g, '')
     .replace(/[^a-z0-9]+/gi, ' ')
@@ -185,30 +371,111 @@ function upsertGameGroup(title: string) {
     .get(normalizedTitle) as { id: number; displayTitle: string; normalizedTitle: string };
 }
 
-export function getCredential(platform: Platform): StoredCredential | null {
-  const row = db.prepare('select * from credentials where platform = ?').get(platform) as any;
+// ─── Usuários e sessões ─────────────────────────────────────────────────────
+
+export interface UserRecord {
+  id: number;
+  username: string;
+  displayName: string;
+  passwordHash: string;
+  createdAt: string;
+}
+
+function mapUser(row: any): UserRecord {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    passwordHash: row.password_hash,
+    createdAt: row.created_at,
+  };
+}
+
+export function createUser(username: string, displayName: string, passwordHash: string): UserRecord {
+  const inserted = db.prepare(`
+    insert into users (username, display_name, password_hash, created_at)
+    values (?, ?, ?, ?)
+  `).run(username, displayName, passwordHash, now());
+  return getUserById(Number(inserted.lastInsertRowid))!;
+}
+
+export function getUserByUsername(username: string): UserRecord | null {
+  const row = db.prepare('select * from users where username = ?').get(username) as any;
+  return row ? mapUser(row) : null;
+}
+
+export function getUserById(id: number): UserRecord | null {
+  const row = db.prepare('select * from users where id = ?').get(id) as any;
+  return row ? mapUser(row) : null;
+}
+
+export function updateUserPassword(userId: number, passwordHash: string) {
+  db.prepare('update users set password_hash = ? where id = ?').run(passwordHash, userId);
+}
+
+export function updateUserProfile(userId: number, displayName: string) {
+  db.prepare('update users set display_name = ? where id = ?').run(displayName, userId);
+}
+
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 90; // 90 dias
+
+export function createSession(userId: number): string {
+  const token = randomBytes(32).toString('hex');
+  const created = Date.now();
+  db.prepare('insert into sessions (token, user_id, created_at, expires_at) values (?, ?, ?, ?)')
+    .run(token, userId, new Date(created).toISOString(), new Date(created + SESSION_TTL_MS).toISOString());
+  db.prepare('delete from sessions where expires_at < ?').run(now());
+  return token;
+}
+
+export function getSessionUser(token: string): UserRecord | null {
+  const row = db.prepare(`
+    select u.* from sessions s
+    join users u on u.id = s.user_id
+    where s.token = ? and s.expires_at > ?
+  `).get(token, now()) as any;
+  return row ? mapUser(row) : null;
+}
+
+export function deleteSession(token: string) {
+  db.prepare('delete from sessions where token = ?').run(token);
+}
+
+// ─── Contas de plataforma (por usuário) ─────────────────────────────────────
+
+export function getCredential(userId: number, platform: Platform): StoredCredential | null {
+  const row = db.prepare('select * from user_platform_accounts where user_id = ? and platform = ?')
+    .get(userId, platform) as any;
   if (!row) return null;
   return { platform, data: parseJson(row.data, {}), updatedAt: row.updated_at };
 }
 
-export function setCredential(platform: Platform, data: Record<string, unknown>) {
+export function setCredential(userId: number, platform: Platform, data: Record<string, unknown>) {
   db.prepare(`
-    insert into credentials (platform, data, updated_at)
-    values (@platform, @data, @updatedAt)
-    on conflict(platform) do update set data = excluded.data, updated_at = excluded.updated_at
-  `).run({ platform, data: JSON.stringify(data), updatedAt: now() });
+    insert into user_platform_accounts (user_id, platform, data, updated_at)
+    values (@userId, @platform, @data, @updatedAt)
+    on conflict(user_id, platform) do update set data = excluded.data, updated_at = excluded.updated_at
+  `).run({ userId, platform, data: JSON.stringify(data), updatedAt: now() });
 }
 
-export function deleteCredential(platform: Platform) {
-  db.prepare('delete from credentials where platform = ?').run(platform);
+export function deleteCredential(userId: number, platform: Platform) {
+  db.prepare('delete from user_platform_accounts where user_id = ? and platform = ?').run(userId, platform);
 }
 
-export function listConfiguredPlatforms() {
-  return (db.prepare('select platform, updated_at from credentials order by platform').all() as any[])
-    .map((row) => ({ platform: row.platform as Platform, updatedAt: row.updated_at as string }));
+export function listConfiguredPlatforms(userId: number) {
+  return (db.prepare('select platform, data, updated_at from user_platform_accounts where user_id = ? order by platform').all(userId) as any[])
+    .map((row) => ({
+      platform: row.platform as Platform,
+      updatedAt: row.updated_at as string,
+      verified: Boolean(parseJson<Record<string, unknown>>(row.data, {}).verified),
+    }));
 }
 
-export function upsertGame(input: {
+// ─── Estado do serviço (tokens da conta de serviço, etc.) ───────────────────
+
+// ─── Catálogo + posse ───────────────────────────────────────────────────────
+
+export function upsertGame(userId: number, input: {
   platform: Platform;
   externalId: string;
   title: string;
@@ -222,20 +489,18 @@ export function upsertGame(input: {
   const group = upsertGameGroup(input.title);
   db.prepare(`
     insert into games (
-      platform, external_id, group_id, title, cover_url, icon_url, playtime_minutes,
-      recent_playtime_minutes, has_achievements, metadata_json, last_synced_at
+      platform, external_id, group_id, title, cover_url, icon_url,
+      has_achievements, metadata_json, last_synced_at
     )
     values (
-      @platform, @externalId, @groupId, @title, @coverUrl, @iconUrl, @playtimeMinutes,
-      @recentPlaytimeMinutes, @hasAchievements, @metadata, @lastSyncedAt
+      @platform, @externalId, @groupId, @title, @coverUrl, @iconUrl,
+      @hasAchievements, @metadata, @lastSyncedAt
     )
     on conflict(platform, external_id) do update set
       group_id = excluded.group_id,
       title = excluded.title,
       cover_url = excluded.cover_url,
       icon_url = excluded.icon_url,
-      playtime_minutes = excluded.playtime_minutes,
-      recent_playtime_minutes = excluded.recent_playtime_minutes,
       has_achievements = excluded.has_achievements,
       metadata_json = excluded.metadata_json,
       last_synced_at = excluded.last_synced_at
@@ -246,19 +511,37 @@ export function upsertGame(input: {
     title: input.title,
     coverUrl: input.coverUrl ?? '',
     iconUrl: input.iconUrl ?? '',
-    playtimeMinutes: input.playtimeMinutes ?? 0,
-    recentPlaytimeMinutes: input.recentPlaytimeMinutes ?? null,
     hasAchievements: input.hasAchievements ? 1 : 0,
     metadata: JSON.stringify(input.metadata ?? {}),
     lastSyncedAt: now(),
   });
 
-  return db.prepare('select id from games where platform = ? and external_id = ?')
+  const game = db.prepare('select id from games where platform = ? and external_id = ?')
     .get(input.platform, input.externalId) as { id: number };
+
+  db.prepare(`
+    insert into user_games (user_id, game_id, playtime_minutes, recent_playtime_minutes, progress_json, last_synced_at)
+    values (@userId, @gameId, @playtimeMinutes, @recentPlaytimeMinutes, @progress, @lastSyncedAt)
+    on conflict(user_id, game_id) do update set
+      playtime_minutes = excluded.playtime_minutes,
+      recent_playtime_minutes = excluded.recent_playtime_minutes,
+      progress_json = excluded.progress_json,
+      last_synced_at = excluded.last_synced_at
+  `).run({
+    userId,
+    gameId: game.id,
+    playtimeMinutes: input.playtimeMinutes ?? 0,
+    recentPlaytimeMinutes: input.recentPlaytimeMinutes ?? null,
+    progress: JSON.stringify(input.metadata ?? {}),
+    lastSyncedAt: now(),
+  });
+
+  return game;
 }
 
 export function backfillGameGroups() {
-  const rows = db.prepare('select id, title from games').all() as { id: number; title: string }[];
+  const rows = db.prepare('select id, title from games where group_id is null').all() as { id: number; title: string }[];
+  if (rows.length === 0) return;
   const tx = db.transaction(() => {
     for (const row of rows) {
       const group = upsertGameGroup(row.title);
@@ -268,7 +551,7 @@ export function backfillGameGroups() {
   tx();
 }
 
-export function upsertAchievement(input: {
+export function upsertAchievement(userId: number, input: {
   gameId: number;
   externalId: string;
   title: string;
@@ -321,13 +604,14 @@ export function upsertAchievement(input: {
     .get(input.gameId, input.externalId) as { id: number };
 
   db.prepare(`
-    insert into achievement_status (achievement_id, achieved, unlock_time, metadata_json)
-    values (@achievementId, @achieved, @unlockTime, @metadata)
-    on conflict(achievement_id) do update set
+    insert into user_achievements (user_id, achievement_id, achieved, unlock_time, metadata_json)
+    values (@userId, @achievementId, @achieved, @unlockTime, @metadata)
+    on conflict(user_id, achievement_id) do update set
       achieved = excluded.achieved,
       unlock_time = excluded.unlock_time,
       metadata_json = excluded.metadata_json
   `).run({
+    userId,
     achievementId: row.id,
     achieved: input.achieved ? 1 : 0,
     unlockTime: input.unlockTime ?? 0,
@@ -341,41 +625,53 @@ export function refreshGameAchievementFlag(gameId: number) {
   db.prepare('update games set has_achievements = ? where id = ?').run(total.count > 0 ? 1 : 0, gameId);
 }
 
-export function listGames(platform?: Platform): ApiGame[] {
+export function listGames(userId: number, platform?: Platform): ApiGame[] {
   backfillGameGroups();
   const rows = (platform
     ? db.prepare(`
-        select g.*, gg.display_title as group_title, gg.normalized_title
-        from games g
+        select g.*, gg.display_title as group_title, gg.normalized_title,
+          ug.playtime_minutes as user_playtime, ug.recent_playtime_minutes as user_recent_playtime,
+          ug.progress_json
+        from user_games ug
+        join games g on g.id = ug.game_id
         left join game_groups gg on gg.id = g.group_id
-        where g.platform = ?
+        where ug.user_id = ? and g.platform = ?
         order by g.title collate nocase
-      `).all(platform)
+      `).all(userId, platform)
     : db.prepare(`
-        select g.*, gg.display_title as group_title, gg.normalized_title
-        from games g
+        select g.*, gg.display_title as group_title, gg.normalized_title,
+          ug.playtime_minutes as user_playtime, ug.recent_playtime_minutes as user_recent_playtime,
+          ug.progress_json
+        from user_games ug
+        join games g on g.id = ug.game_id
         left join game_groups gg on gg.id = g.group_id
+        where ug.user_id = ?
         order by g.platform, g.title collate nocase
-      `).all()) as any[];
+      `).all(userId)) as any[];
 
   const progressStmt = db.prepare(`
     select
       count(a.id) as total,
-      sum(case when s.achieved = 1 then 1 else 0 end) as unlocked
+      sum(case when ua.achieved = 1 then 1 else 0 end) as unlocked
     from achievements a
-    left join achievement_status s on s.achievement_id = a.id
+    left join user_achievements ua on ua.achievement_id = a.id and ua.user_id = ?
     where a.game_id = ?
   `);
   const relatedStmt = db.prepare(`
-    select distinct platform
-    from games
-    where group_id = ? and id != ?
-    order by platform
+    select distinct g.platform
+    from user_games ug
+    join games g on g.id = ug.game_id
+    where ug.user_id = ? and g.group_id = ? and g.id != ?
+    order by g.platform
   `);
 
   return rows.map((row) => {
-    const progress = progressStmt.get(row.id) as { total: number; unlocked: number | null };
-    const metadata = parseJson<Record<string, any>>(row.metadata_json, {});
+    const progress = progressStmt.get(userId, row.id) as { total: number; unlocked: number | null };
+    // Progresso do usuário sobrepõe o metadata de catálogo (earnedTrophies, numAwarded…)
+    const metadata = {
+      ...parseJson<Record<string, any>>(row.metadata_json, {}),
+      ...parseJson<Record<string, any>>(row.progress_json, {}),
+    };
     let total = Number(progress.total ?? 0);
     let unlocked = Number(progress.unlocked ?? 0);
     let percent = total > 0 ? Math.round((unlocked / total) * 100) : 0;
@@ -410,8 +706,8 @@ export function listGames(platform?: Platform): ApiGame[] {
       coverUrl: coverMediaUrl(row.platform, row.external_id, row.title),
       portraitUrl: portraitMediaUrl(row.platform, row.external_id, row.title),
       heroUrl: heroMediaUrl(row.platform, row.external_id, row.title),
-      playtime_forever: row.playtime_minutes ?? 0,
-      playtime_2weeks: row.recent_playtime_minutes ?? undefined,
+      playtime_forever: row.user_playtime ?? 0,
+      playtime_2weeks: row.user_recent_playtime ?? undefined,
       img_icon_url: row.icon_url ? iconMediaUrl(row.platform, row.external_id, row.title) : '',
       has_community_visible_stats: Boolean(row.has_achievements) || total > 0,
       completion: {
@@ -420,7 +716,7 @@ export function listGames(platform?: Platform): ApiGame[] {
         percent,
       },
       metadata,
-      relatedPlatforms: (relatedStmt.all(row.group_id, row.id) as { platform: Platform }[]).map((item) => item.platform),
+      relatedPlatforms: (relatedStmt.all(userId, row.group_id, row.id) as { platform: Platform }[]).map((item) => item.platform),
     };
   });
 }
@@ -429,12 +725,60 @@ export function getGameById(id: number) {
   return db.prepare('select * from games where id = ?').get(id) as any | undefined;
 }
 
+/*
+  Reconciliação de posse: uma sync de biblioteca só faz upsert dos jogos que a
+  conta ainda tem. Esta função remove o que o usuário deixou de possuir naquela
+  plataforma (ex.: SteamID trocado por outro), destacando user_games, o status
+  de conquistas e o planning daqueles jogos. O catálogo compartilhado (games /
+  achievements) permanece intacto para os demais usuários.
+
+  `seenExternalIds` deve conter os external_id retornados pela sync atual. Se
+  vier vazio (perfil privado, falha transitória da API), nada é removido — a
+  chamadora deve pular a poda nesse caso para não apagar a biblioteca inteira.
+*/
+export function pruneUserGames(userId: number, platform: Platform, seenExternalIds: Iterable<string>): number {
+  const seen = new Set<string>();
+  for (const id of seenExternalIds) seen.add(String(id));
+  if (seen.size === 0) return 0;
+
+  const owned = db.prepare(`
+    select g.id as id, g.external_id as externalId
+    from user_games ug
+    join games g on g.id = ug.game_id
+    where ug.user_id = ? and g.platform = ?
+  `).all(userId, platform) as { id: number; externalId: string }[];
+
+  const stale = owned.filter((row) => !seen.has(String(row.externalId)));
+  if (stale.length === 0) return 0;
+
+  const delUserGame = db.prepare('delete from user_games where user_id = ? and game_id = ?');
+  const delUserAchievements = db.prepare(`
+    delete from user_achievements
+    where user_id = ? and achievement_id in (select id from achievements where game_id = ?)
+  `);
+  const delPlanning = db.prepare('delete from planning where user_id = ? and game_id = ?');
+
+  const tx = db.transaction(() => {
+    for (const row of stale) {
+      delUserAchievements.run(userId, row.id);
+      delPlanning.run(userId, row.id);
+      delUserGame.run(userId, row.id);
+    }
+  });
+  tx();
+  return stale.length;
+}
+
+export function userOwnsGame(userId: number, gameId: number) {
+  return Boolean(db.prepare('select 1 from user_games where user_id = ? and game_id = ?').get(userId, gameId));
+}
+
 /**
  * Percentual global de jogadores que possuem a conquista (0–100), quando a
  * plataforma fornece: PSN traz trophyEarnedRate no status, Steam grava
  * globalPercent no metadata (sync), RA deriva de numAwarded / players do set.
  */
-function extractRarity(
+export function extractRarity(
   platform: Platform,
   achievementMeta: Record<string, any>,
   statusMeta: Record<string, any>,
@@ -455,16 +799,16 @@ function extractRarity(
   return null;
 }
 
-export function listAchievements(gameId: number): ApiAchievement[] {
+export function listAchievements(userId: number, gameId: number): ApiAchievement[] {
   const game = db.prepare('select platform, external_id, title from games where id = ?')
     .get(gameId) as { platform: Platform; external_id: string; title: string } | undefined;
   const rows = db.prepare(`
-    select a.*, s.achieved, s.unlock_time, s.metadata_json as status_metadata_json
+    select a.*, ua.achieved, ua.unlock_time, ua.metadata_json as status_metadata_json
     from achievements a
-    left join achievement_status s on s.achievement_id = a.id
+    left join user_achievements ua on ua.achievement_id = a.id and ua.user_id = ?
     where a.game_id = ?
-    order by s.achieved desc, s.unlock_time desc, a.display_order asc, a.title collate nocase
-  `).all(gameId) as any[];
+    order by ua.achieved desc, ua.unlock_time desc, a.display_order asc, a.title collate nocase
+  `).all(userId, gameId) as any[];
 
   return rows.map((row) => {
     const icon = game && row.icon_url
@@ -505,30 +849,30 @@ export interface UnlockItem {
 }
 
 /** Anos (UTC) com pelo menos um desbloqueio registrado, mais recente primeiro. */
-export function listUnlockYears(): number[] {
+export function listUnlockYears(userId: number): number[] {
   return (db.prepare(`
     select distinct strftime('%Y', unlock_time, 'unixepoch') as year
-    from achievement_status
-    where achieved = 1 and unlock_time > 0
+    from user_achievements
+    where user_id = ? and achieved = 1 and unlock_time > 0
     order by year desc
-  `).all() as { year: string }[]).map((row) => Number(row.year));
+  `).all(userId) as { year: string }[]).map((row) => Number(row.year));
 }
 
 /** Todos os desbloqueios de um ano, ordem cronológica, com raridade quando disponível. */
-export function listUnlocks(year: number): UnlockItem[] {
+export function listUnlocks(userId: number, year: number): UnlockItem[] {
   const rows = db.prepare(`
     select
-      s.unlock_time, s.metadata_json as status_metadata_json,
+      ua.unlock_time, ua.metadata_json as status_metadata_json,
       a.metadata_json as achievement_metadata_json, a.title as achievement_title,
       a.external_id as achievement_external_id, a.type, a.icon_url,
       g.id as game_id, g.title as game_title, g.platform, g.external_id as game_external_id
-    from achievement_status s
-    join achievements a on a.id = s.achievement_id
+    from user_achievements ua
+    join achievements a on a.id = ua.achievement_id
     join games g on g.id = a.game_id
-    where s.achieved = 1 and s.unlock_time > 0
-      and strftime('%Y', s.unlock_time, 'unixepoch') = ?
-    order by s.unlock_time asc
-  `).all(String(year)) as any[];
+    where ua.user_id = ? and ua.achieved = 1 and ua.unlock_time > 0
+      and strftime('%Y', ua.unlock_time, 'unixepoch') = ?
+    order by ua.unlock_time asc
+  `).all(userId, String(year)) as any[];
 
   return rows.map((row) => ({
     unlockTime: row.unlock_time,
@@ -549,18 +893,18 @@ export function listUnlocks(year: number): UnlockItem[] {
 }
 
 /** Conquistas desbloqueadas mais raras da coleção inteira (raridade crescente). */
-export function listRarestUnlocked(limit = 3): UnlockItem[] {
+export function listRarestUnlocked(userId: number, limit = 3): UnlockItem[] {
   const rows = db.prepare(`
     select
-      s.unlock_time, s.metadata_json as status_metadata_json,
+      ua.unlock_time, ua.metadata_json as status_metadata_json,
       a.metadata_json as achievement_metadata_json, a.title as achievement_title,
       a.external_id as achievement_external_id, a.type, a.icon_url,
       g.id as game_id, g.title as game_title, g.platform, g.external_id as game_external_id
-    from achievement_status s
-    join achievements a on a.id = s.achievement_id
+    from user_achievements ua
+    join achievements a on a.id = ua.achievement_id
     join games g on g.id = a.game_id
-    where s.achieved = 1
-  `).all() as any[];
+    where ua.user_id = ? and ua.achieved = 1
+  `).all(userId) as any[];
 
   const withRarity = rows.flatMap((row) => {
     const rarity = extractRarity(
@@ -586,36 +930,37 @@ export function listRarestUnlocked(limit = 3): UnlockItem[] {
   return withRarity.sort((a, b) => a.rarity! - b.rarity!).slice(0, limit);
 }
 
-export function listCompletionHistory(limit = 8): { platinums: CompletionHistoryItem[]; perfects: CompletionHistoryItem[] } {
-  const games = new Map(listGames().map((game) => [game.id, game]));
+export function listCompletionHistory(userId: number, limit = 8): { platinums: CompletionHistoryItem[]; perfects: CompletionHistoryItem[] } {
+  const games = new Map(listGames(userId).map((game) => [game.id, game]));
 
   const platinumRows = db.prepare(`
-    select g.id as game_id, max(s.unlock_time) as completed_at
+    select g.id as game_id, max(ua.unlock_time) as completed_at
     from games g
     join achievements a on a.game_id = g.id
-    join achievement_status s on s.achievement_id = a.id
+    join user_achievements ua on ua.achievement_id = a.id and ua.user_id = ?
     where g.platform = 'psn'
       and lower(coalesce(a.type, '')) = 'platinum'
-      and s.achieved = 1
-      and s.unlock_time > 0
+      and ua.achieved = 1
+      and ua.unlock_time > 0
     group by g.id
     order by completed_at desc
     limit ?
-  `).all(limit) as { game_id: number; completed_at: number }[];
+  `).all(userId, limit) as { game_id: number; completed_at: number }[];
 
   const perfectRows = db.prepare(`
-    select g.id as game_id, max(s.unlock_time) as completed_at
-    from games g
+    select g.id as game_id, max(ua.unlock_time) as completed_at
+    from user_games ug
+    join games g on g.id = ug.game_id
     join achievements a on a.game_id = g.id
-    left join achievement_status s on s.achievement_id = a.id
-    where g.platform != 'psn'
+    left join user_achievements ua on ua.achievement_id = a.id and ua.user_id = ug.user_id
+    where g.platform != 'psn' and ug.user_id = ?
     group by g.id
     having count(a.id) > 0
-      and sum(case when s.achieved = 1 then 1 else 0 end) = count(a.id)
+      and sum(case when ua.achieved = 1 then 1 else 0 end) = count(a.id)
       and completed_at > 0
     order by completed_at desc
     limit ?
-  `).all(limit) as { game_id: number; completed_at: number }[];
+  `).all(userId, limit) as { game_id: number; completed_at: number }[];
 
   const mapRows = (rows: { game_id: number; completed_at: number }[], kind: CompletionHistoryItem['kind']) =>
     rows.flatMap((row) => {
@@ -629,9 +974,17 @@ export function listCompletionHistory(limit = 8): { platinums: CompletionHistory
   };
 }
 
-export function readPlanning(): PlanningRecord {
-  const rows = db.prepare('select * from planning').all() as any[];
-  const result: PlanningRecord = { backlog: [], pinned: [], dropped: [], notes: {}, effort: {}, schedule: {}, guides: {} };
+// ─── Planning (por usuário) ─────────────────────────────────────────────────
+
+export function readPlanning(userId: number): PlanningRecord {
+  const rows = db.prepare('select * from planning where user_id = ?').all(userId) as any[];
+  const collections = db.prepare('select id, name from collections where user_id = ? order by name collate nocase')
+    .all(userId) as { id: number; name: string }[];
+  const collectionIds = new Set(collections.map((collection) => collection.id));
+  const result: PlanningRecord = {
+    backlog: [], pinned: [], dropped: [], notes: {}, effort: {}, schedule: {}, guides: {},
+    collections, collectionOf: {},
+  };
   for (const row of rows) {
     const id = String(row.game_id);
     if (row.in_backlog) result.backlog.push(id);
@@ -641,6 +994,7 @@ export function readPlanning(): PlanningRecord {
     if (row.effort) result.effort[id] = row.effort;
     if (row.schedule) result.schedule[id] = row.schedule;
     if (row.guide_url) result.guides[id] = row.guide_url;
+    if (row.collection_id && collectionIds.has(row.collection_id)) result.collectionOf[id] = row.collection_id;
   }
   result.backlog.sort((a, b) => {
     const ar = rows.find((row) => String(row.game_id) === a)?.backlog_order ?? 999999;
@@ -650,7 +1004,7 @@ export function readPlanning(): PlanningRecord {
   return result;
 }
 
-export function patchPlanning(gameId: number, patch: Partial<{
+export function patchPlanning(userId: number, gameId: number, patch: Partial<{
   inBacklog: boolean;
   pinned: boolean;
   dropped: boolean;
@@ -659,10 +1013,11 @@ export function patchPlanning(gameId: number, patch: Partial<{
   schedule: string;
   guideUrl: string;
   backlogOrder: number | null;
+  collectionId: number | null;
 }>) {
-  db.prepare('insert or ignore into planning (game_id) values (?)').run(gameId);
+  db.prepare('insert or ignore into planning (user_id, game_id) values (?, ?)').run(userId, gameId);
   const sets: string[] = [];
-  const params: Record<string, unknown> = { gameId };
+  const params: Record<string, unknown> = { userId, gameId };
   if ('inBacklog' in patch) { sets.push('in_backlog = @inBacklog'); params.inBacklog = patch.inBacklog ? 1 : 0; }
   if ('pinned' in patch) { sets.push('pinned = @pinned'); params.pinned = patch.pinned ? 1 : 0; }
   if ('dropped' in patch) { sets.push('dropped = @dropped'); params.dropped = patch.dropped ? 1 : 0; }
@@ -671,21 +1026,89 @@ export function patchPlanning(gameId: number, patch: Partial<{
   if ('schedule' in patch) { sets.push('schedule = @schedule'); params.schedule = patch.schedule ?? ''; }
   if ('guideUrl' in patch) { sets.push('guide_url = @guideUrl'); params.guideUrl = patch.guideUrl ?? ''; }
   if ('backlogOrder' in patch) { sets.push('backlog_order = @backlogOrder'); params.backlogOrder = patch.backlogOrder ?? null; }
-  if (sets.length > 0) db.prepare(`update planning set ${sets.join(', ')} where game_id = @gameId`).run(params);
-  return readPlanning();
+  if ('collectionId' in patch) { sets.push('collection_id = @collectionId'); params.collectionId = patch.collectionId ?? null; }
+  if (sets.length > 0) db.prepare(`update planning set ${sets.join(', ')} where user_id = @userId and game_id = @gameId`).run(params);
+  return readPlanning(userId);
 }
 
-export function reorderBacklog(ids: string[]) {
+// ─── Coleções (franquias manuais, por usuário) ─────────────────────────────
+
+export function createCollection(userId: number, name: string, gameIds: string[] = []) {
   const tx = db.transaction(() => {
-    ids.forEach((id, index) => patchPlanning(Number(id), { inBacklog: true, backlogOrder: index }));
+    const inserted = db.prepare('insert into collections (user_id, name) values (?, ?)').run(userId, name.trim());
+    const collectionId = Number(inserted.lastInsertRowid);
+    const assign = db.prepare('insert or ignore into planning (user_id, game_id) values (?, ?)');
+    const update = db.prepare('update planning set collection_id = ? where user_id = ? and game_id = ?');
+    for (const id of gameIds) {
+      assign.run(userId, Number(id));
+      update.run(collectionId, userId, Number(id));
+    }
   });
   tx();
-  return readPlanning();
+  return readPlanning(userId);
 }
 
-export function listSyncRuns(limit = 12) {
-  return (db.prepare('select id, platform, started_at, finished_at, status, message from sync_runs order by id desc limit ?')
-    .all(limit) as any[])
+export function renameCollection(userId: number, collectionId: number, name: string) {
+  db.prepare('update collections set name = ? where id = ? and user_id = ?').run(name.trim(), collectionId, userId);
+  return readPlanning(userId);
+}
+
+export function deleteCollection(userId: number, collectionId: number) {
+  const tx = db.transaction(() => {
+    db.prepare('update planning set collection_id = null where user_id = ? and collection_id = ?').run(userId, collectionId);
+    db.prepare('delete from collections where id = ? and user_id = ?').run(collectionId, userId);
+  });
+  tx();
+  return readPlanning(userId);
+}
+
+export function reorderBacklog(userId: number, ids: string[]) {
+  const tx = db.transaction(() => {
+    ids.forEach((id, index) => patchPlanning(userId, Number(id), { inBacklog: true, backlogOrder: index }));
+  });
+  tx();
+  return readPlanning(userId);
+}
+
+export function resetPlanning(userId: number, scope: 'all' | 'notes' | 'backlog') {
+  if (scope === 'all') {
+    db.prepare('delete from planning where user_id = ?').run(userId);
+    db.prepare('delete from collections where user_id = ?').run(userId);
+  }
+  else if (scope === 'notes') db.prepare("update planning set note = '' where user_id = ?").run(userId);
+  else if (scope === 'backlog') db.prepare('update planning set in_backlog = 0, backlog_order = null where user_id = ?').run(userId);
+}
+
+export function importPlanning(userId: number, record: Partial<PlanningRecord>) {
+  const tx = db.transaction(() => {
+    db.prepare('delete from planning where user_id = ?').run(userId);
+    db.prepare('delete from collections where user_id = ?').run(userId);
+    const collectionIdMap = new Map<number, number>();
+    for (const collection of record.collections ?? []) {
+      const inserted = db.prepare('insert into collections (user_id, name) values (?, ?)').run(userId, collection.name);
+      collectionIdMap.set(collection.id, Number(inserted.lastInsertRowid));
+    }
+    Object.entries(record.collectionOf ?? {}).forEach(([id, oldCollectionId]) => {
+      const collectionId = collectionIdMap.get(Number(oldCollectionId));
+      if (collectionId) patchPlanning(userId, Number(id), { collectionId });
+    });
+    (record.backlog ?? []).forEach((id, index) => patchPlanning(userId, Number(id), { inBacklog: true, backlogOrder: index }));
+    (record.pinned ?? []).forEach((id) => patchPlanning(userId, Number(id), { pinned: true }));
+    (record.dropped ?? []).forEach((id) => patchPlanning(userId, Number(id), { dropped: true }));
+    Object.entries(record.notes ?? {}).forEach(([id, note]) => patchPlanning(userId, Number(id), { note }));
+    Object.entries(record.effort ?? {}).forEach(([id, effort]) => patchPlanning(userId, Number(id), { effort }));
+    Object.entries(record.schedule ?? {}).forEach(([id, schedule]) => patchPlanning(userId, Number(id), { schedule }));
+    Object.entries(record.guides ?? {}).forEach(([id, guideUrl]) => patchPlanning(userId, Number(id), { guideUrl }));
+  });
+  tx();
+  return readPlanning(userId);
+}
+
+// ─── Sync runs (por usuário) ────────────────────────────────────────────────
+
+export function listSyncRuns(userId: number, limit = 12) {
+  return (db.prepare('select id, platform, started_at, finished_at, status, message from sync_runs where user_id = ? order by id desc limit ?')
+    .all(userId, limit) as any[])
     .map((row) => ({
       id: row.id as number,
       platform: row.platform as Platform,
@@ -697,40 +1120,19 @@ export function listSyncRuns(limit = 12) {
 }
 
 /** Latest sync run per platform (for the connection/status panels). */
-export function latestSyncByPlatform() {
+export function latestSyncByPlatform(userId: number) {
   const rows = db.prepare(`
     select platform, max(started_at) as started_at, status, finished_at
-    from sync_runs group by platform
-  `).all() as any[];
+    from sync_runs where user_id = ? group by platform
+  `).all(userId) as any[];
   const map: Record<string, { startedAt: string; status: string; finishedAt: string | null }> = {};
   for (const row of rows) map[row.platform] = { startedAt: row.started_at, status: row.status, finishedAt: row.finished_at };
   return map;
 }
 
-export function resetPlanning(scope: 'all' | 'notes' | 'backlog') {
-  if (scope === 'all') db.prepare('delete from planning').run();
-  else if (scope === 'notes') db.prepare("update planning set note = ''").run();
-  else if (scope === 'backlog') db.prepare('update planning set in_backlog = 0, backlog_order = null').run();
-}
-
-export function importPlanning(record: Partial<PlanningRecord>) {
-  const tx = db.transaction(() => {
-    db.prepare('delete from planning').run();
-    (record.backlog ?? []).forEach((id, index) => patchPlanning(Number(id), { inBacklog: true, backlogOrder: index }));
-    (record.pinned ?? []).forEach((id) => patchPlanning(Number(id), { pinned: true }));
-    (record.dropped ?? []).forEach((id) => patchPlanning(Number(id), { dropped: true }));
-    Object.entries(record.notes ?? {}).forEach(([id, note]) => patchPlanning(Number(id), { note }));
-    Object.entries(record.effort ?? {}).forEach(([id, effort]) => patchPlanning(Number(id), { effort }));
-    Object.entries(record.schedule ?? {}).forEach(([id, schedule]) => patchPlanning(Number(id), { schedule }));
-    Object.entries(record.guides ?? {}).forEach(([id, guideUrl]) => patchPlanning(Number(id), { guideUrl }));
-  });
-  tx();
-  return readPlanning();
-}
-
-export function createSyncRun(platform: Platform) {
-  const run = db.prepare('insert into sync_runs (platform, started_at, status) values (?, ?, ?)')
-    .run(platform, now(), 'running');
+export function createSyncRun(userId: number, platform: Platform) {
+  const run = db.prepare('insert into sync_runs (user_id, platform, started_at, status) values (?, ?, ?, ?)')
+    .run(userId, platform, now(), 'running');
   return Number(run.lastInsertRowid);
 }
 

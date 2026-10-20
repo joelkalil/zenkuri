@@ -61,6 +61,11 @@ export interface UnlockItem {
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'grind';
 export type Platform = 'steam' | 'retroachievements' | 'psn';
 
+export interface GameCollection {
+  id: number;
+  name: string;
+}
+
 export interface PatinaDb {
   backlog: string[];
   pinned: string[];
@@ -69,4 +74,8 @@ export interface PatinaDb {
   effort: Record<string, EffortLevel>;
   schedule: Record<string, string>; // appid -> "YYYY-MM"
   guides: Record<string, string>;
+  /** coleções manuais (franquias/séries) criadas pelo usuário */
+  collections: GameCollection[];
+  /** appid -> id da coleção à qual o jogo pertence */
+  collectionOf: Record<string, number>;
 }

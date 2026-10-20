@@ -1,5 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
-import { fetchPlanning, patchPlanning, reorderBacklogApi } from '../lib/api';
+import {
+  createCollectionApi,
+  deleteCollectionApi,
+  fetchPlanning,
+  patchPlanning,
+  renameCollectionApi,
+  reorderBacklogApi,
+} from '../lib/api';
 import type { PatinaDb, EffortLevel } from '../types/steam';
 
 const DEFAULT_DB: PatinaDb = {
@@ -10,6 +17,8 @@ const DEFAULT_DB: PatinaDb = {
   effort: {},
   schedule: {},
   guides: {},
+  collections: [],
+  collectionOf: {},
 };
 
 export function readDb(): PatinaDb {
@@ -97,6 +106,49 @@ export function useLocalDb() {
     [refresh],
   );
 
+  const createCollection = useCallback(
+    (name: string, gameIds: string[] = []) => {
+      return createCollectionApi(name, gameIds).then((next) => setDb({ ...DEFAULT_DB, ...next })).catch(refresh);
+    },
+    [refresh],
+  );
+
+  const renameCollection = useCallback(
+    (id: number, name: string) => {
+      setDb((prev) => ({
+        ...prev,
+        collections: prev.collections.map((c) => (c.id === id ? { ...c, name } : c)),
+      }));
+      renameCollectionApi(id, name).then(setDb).catch(refresh);
+    },
+    [refresh],
+  );
+
+  const deleteCollection = useCallback(
+    (id: number) => {
+      setDb((prev) => ({
+        ...prev,
+        collections: prev.collections.filter((c) => c.id !== id),
+        collectionOf: Object.fromEntries(Object.entries(prev.collectionOf).filter(([, cid]) => cid !== id)),
+      }));
+      deleteCollectionApi(id).then(setDb).catch(refresh);
+    },
+    [refresh],
+  );
+
+  const setCollection = useCallback(
+    (appid: string, collectionId: number | null) => {
+      setDb((prev) => {
+        const collectionOf = { ...prev.collectionOf };
+        if (collectionId) collectionOf[appid] = collectionId;
+        else delete collectionOf[appid];
+        return { ...prev, collectionOf };
+      });
+      patchPlanning(appid, { collectionId }).then(setDb).catch(refresh);
+    },
+    [refresh],
+  );
+
   const reorderBacklog = useCallback(
     (newOrder: string[]) => {
       setDb((prev) => ({ ...prev, backlog: newOrder }));
@@ -116,5 +168,8 @@ export function useLocalDb() {
     URL.revokeObjectURL(url);
   }, [db]);
 
-  return { db, refresh, toggleBacklog, togglePinned, toggleDropped, setNote, setGuide, setEffort, setSchedule, reorderBacklog, exportDb };
+  return {
+    db, refresh, toggleBacklog, togglePinned, toggleDropped, setNote, setGuide, setEffort, setSchedule,
+    reorderBacklog, exportDb, createCollection, renameCollection, deleteCollection, setCollection,
+  };
 }

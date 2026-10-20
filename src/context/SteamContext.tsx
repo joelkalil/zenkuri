@@ -21,7 +21,8 @@ interface SteamContextValue {
   lastSyncAt: number | null;
   /** average completion across tracked games (0–100) */
   overallPercent: number;
-  sync: () => void;
+  /** Resolves to `false` when any platform failed (see `error` for the message). */
+  sync: () => Promise<boolean>;
 }
 
 const LAST_SYNC_KEY = 'zenkuri-last-sync';
@@ -71,14 +72,26 @@ export function SteamProvider({ children }: { children: React.ReactNode }) {
   const sync = useCallback(() => {
     setScanning(true);
     setError(null);
-    syncAllPlatforms()
-      .then(() => {
+    return syncAllPlatforms()
+      .then((response) => {
+        // A requisição em si pode "dar certo" (200 OK) mesmo que uma
+        // plataforma tenha falhado por dentro (ex.: key da Steam inválida) —
+        // isso é o que ficava silencioso antes. `results[].ok` é a fonte de
+        // verdade por plataforma, não a resolução da promise.
+        const failed = response.results.filter((result) => !result.ok);
+        if (failed.length > 0) {
+          setError(failed.map((result) => `${result.platform}: ${result.error ?? 'falha desconhecida'}`).join(' · '));
+        }
         const now = Date.now();
         localStorage.setItem(LAST_SYNC_KEY, String(now));
         setLastSyncAt(now);
         setRefreshToken((token) => token + 1);
+        return failed.length === 0;
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to sync platforms'))
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to sync platforms');
+        return false;
+      })
       .finally(() => setScanning(false));
   }, []);
 
