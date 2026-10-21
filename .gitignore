@@ -35,3 +35,7 @@ data/copy_steam
 
 # Dados pessoais exportados (plano e notas), nunca vão para o repositório
 data/personal/
+
+# Local tool settings and design references (kept locally, never pushed)
+.claude/
+.target_design/
