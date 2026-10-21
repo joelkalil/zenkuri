@@ -328,6 +328,23 @@ db.exec(`
   );
 `);
 
+/*
+  Metadados de loja (coleções automáticas): nomes crus de dev/pub/franquia como o
+  provedor devolveu. `games` é global, então a tabela não tem user_id. As regras
+  de normalização vivem em server/collections/rules.ts e são aplicadas na leitura.
+*/
+db.exec(`
+  create table if not exists game_store_meta (
+    game_id integer primary key references games(id) on delete cascade,
+    source text not null,
+    developers_json text not null default '[]',
+    publishers_json text not null default '[]',
+    franchises_json text not null default '[]',
+    fetched_at text not null,
+    error text
+  );
+`);
+
 if (!hasColumn('planning', 'collection_id')) {
   db.prepare('alter table planning add column collection_id integer').run();
 }
@@ -1139,4 +1156,100 @@ export function createSyncRun(userId: number, platform: Platform) {
 export function finishSyncRun(id: number, status: 'success' | 'error', message?: string) {
   db.prepare('update sync_runs set finished_at = ?, status = ?, message = ? where id = ?')
     .run(now(), status, message ?? '', id);
+}
+
+// ─── Metadados de loja (coleções automáticas) ───────────────────────────────
+
+export interface GameStoreMetaInput {
+  gameId: number;
+  source: 'steam' | 'retroachievements';
+  developers: string[];
+  publishers: string[];
+  franchises: string[];
+  /** null em sucesso; mensagem em falha (nova tentativa após o TTL). */
+  error?: string | null;
+}
+
+export interface GameStoreMetaRow {
+  gameId: number;
+  source: string;
+  developers: string[];
+  publishers: string[];
+  franchises: string[];
+  fetchedAt: string;
+  error: string | null;
+}
+
+export function upsertGameStoreMeta(input: GameStoreMetaInput) {
+  db.prepare(`
+    insert into game_store_meta (game_id, source, developers_json, publishers_json, franchises_json, fetched_at, error)
+    values (@gameId, @source, @developers, @publishers, @franchises, @fetchedAt, @error)
+    on conflict(game_id) do update set
+      source = excluded.source,
+      developers_json = excluded.developers_json,
+      publishers_json = excluded.publishers_json,
+      franchises_json = excluded.franchises_json,
+      fetched_at = excluded.fetched_at,
+      error = excluded.error
+  `).run({
+    gameId: input.gameId,
+    source: input.source,
+    developers: JSON.stringify(input.developers),
+    publishers: JSON.stringify(input.publishers),
+    franchises: JSON.stringify(input.franchises),
+    fetchedAt: now(),
+    error: input.error ?? null,
+  });
+}
+
+const SQLITE_VARIABLE_CHUNK = 500;
+
+export function getGameStoreMeta(gameIds: number[]): GameStoreMetaRow[] {
+  const rows: GameStoreMetaRow[] = [];
+  for (let start = 0; start < gameIds.length; start += SQLITE_VARIABLE_CHUNK) {
+    const chunk = gameIds.slice(start, start + SQLITE_VARIABLE_CHUNK);
+    const found = db.prepare(`
+      select game_id, source, developers_json, publishers_json, franchises_json, fetched_at, error
+      from game_store_meta
+      where game_id in (${chunk.map(() => '?').join(',')})
+    `).all(...chunk) as {
+      game_id: number; source: string; developers_json: string; publishers_json: string;
+      franchises_json: string; fetched_at: string; error: string | null;
+    }[];
+    for (const row of found) {
+      rows.push({
+        gameId: row.game_id,
+        source: row.source,
+        developers: parseJson<string[]>(row.developers_json, []),
+        publishers: parseJson<string[]>(row.publishers_json, []),
+        franchises: parseJson<string[]>(row.franchises_json, []),
+        fetchedAt: row.fetched_at,
+        error: row.error,
+      });
+    }
+  }
+  return rows;
+}
+
+/** Jogos da plataforma sem linha de metadados, ou com erro anterior a `olderThan` (ISO). */
+export function listGamesMissingStoreMeta(platform: Platform, olderThan: string) {
+  return db.prepare(`
+    select g.id, g.external_id as externalId, g.title
+    from games g
+    left join game_store_meta m on m.game_id = g.id
+    where g.platform = ?
+      and (m.game_id is null or (m.error is not null and m.fetched_at < ?))
+    order by g.id
+  `).all(platform, olderThan) as { id: number; externalId: string; title: string }[];
+}
+
+/** Jogos do usuário no formato que o motor de coleções automáticas espera. */
+export function listUserGamesForCollections(userId: number) {
+  backfillGameGroups();
+  return (db.prepare(`
+    select g.id, g.platform, g.external_id as externalId, g.title, g.group_id as groupId
+    from user_games ug
+    join games g on g.id = ug.game_id
+    where ug.user_id = ?
+  `).all(userId)) as { id: number; platform: string; externalId: string; title: string; groupId: number | null }[];
 }
