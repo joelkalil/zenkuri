@@ -1,4 +1,5 @@
 import { join, resolve, sep } from 'node:path';
+import { envString } from './env';
 import type { Platform } from './types';
 
 /*
@@ -7,7 +8,7 @@ import type { Platform } from './types';
   `media.ts` (which reads/writes the files) can import it without a cycle.
 */
 
-export const MEDIA_ROOT = process.env.ZENKURI_MEDIA_PATH ?? join(process.cwd(), 'data', 'media');
+export const MEDIA_ROOT = envString('ZENKURI_MEDIA_PATH', join(process.cwd(), 'data', 'media'));
 
 export const PLACEHOLDER_MARKER = 'zenkuri:placeholder';
 

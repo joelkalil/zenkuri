@@ -2,13 +2,14 @@ import { getProfileFromUserName } from 'psn-api';
 import { getUserProfile } from '@retroachievements/api';
 import type { Platform } from './types';
 import { getCredential, setCredential } from './db';
+import { ApiError } from './errors';
 import { psnServiceAuth, raServiceAuth, steamServiceKey } from './serviceAuth';
 
 /*
-  Vínculo de contas por perfil público
-  ───────────────────────────────────────
-  O usuário informa só um identificador público. A existência do perfil é
-  conferida pela API da plataforma e o vínculo é liberado para sincronização.
+  Account linking by public profile
+  ─────────────────────────────────
+  The user only provides a public identifier. The profile's existence is
+  checked against the platform API and the link is then enabled for syncing.
 */
 
 export interface PlatformLinkData {
@@ -29,7 +30,7 @@ async function resolveSteamId(input: string): Promise<string> {
   if (/^\d{17}$/.test(raw)) return raw;
 
   const vanity = raw.match(/steamcommunity\.com\/id\/([^/\s?]+)/i)?.[1] ?? raw;
-  if (!vanity) throw new Error('Informe o SteamID64 ou a URL do seu perfil Steam.');
+  if (!vanity) throw new ApiError('sync.steam_id_required', 400);
   const url = new URL('https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/');
   url.searchParams.set('key', steamServiceKey());
   url.searchParams.set('vanityurl', vanity);
@@ -37,19 +38,19 @@ async function resolveSteamId(input: string): Promise<string> {
   if (!res.ok) throw new Error(`Steam API error ${res.status}`);
   const json = await res.json() as { response?: { success?: number; steamid?: string } };
   if (json.response?.success !== 1 || !json.response.steamid) {
-    throw new Error('Perfil Steam não encontrado. Informe o SteamID64 ou a URL do perfil.');
+    throw new ApiError('sync.steam_profile_not_found', 400);
   }
   return json.response.steamid;
 }
 
 /**
- * Registra (ou re-registra) o vínculo de plataforma do usuário a partir do
- * identificador público. Validar que o perfil existe é suficiente para
- * habilitar o vínculo, pois apenas dados públicos são sincronizados.
+ * Registers (or re-registers) the user's platform link from the public
+ * identifier. Checking that the profile exists is enough to enable the link,
+ * since only public data is synced.
  */
 export async function linkPlatform(userId: number, platform: Platform, identifierInput: string): Promise<PlatformLinkData> {
   const input = String(identifierInput ?? '').trim();
-  if (!input) throw new Error('Informe o identificador do seu perfil.');
+  if (!input) throw new ApiError('sync.identifier_required', 400);
   const existing = (getCredential(userId, platform)?.data ?? {}) as PlatformLinkData;
 
   let fields: Record<string, string>;
@@ -61,7 +62,7 @@ export async function linkPlatform(userId: number, platform: Platform, identifie
     try {
       profile = (await getProfileFromUserName(auth, input)).profile;
     } catch {
-      throw new Error('Perfil PSN não encontrado. Confira o online ID.');
+      throw new ApiError('sync.psn_profile_not_found', 400);
     }
     fields = { onlineId: profile.onlineId, accountId: String(profile.accountId) };
   } else {
@@ -69,7 +70,7 @@ export async function linkPlatform(userId: number, platform: Platform, identifie
     try {
       profile = await getUserProfile(raServiceAuth(), { username: input });
     } catch {
-      throw new Error('Usuário do RetroAchievements não encontrado.');
+      throw new ApiError('sync.ra_user_not_found', 400);
     }
     fields = { username: profile.user };
   }
@@ -83,7 +84,7 @@ export async function linkPlatform(userId: number, platform: Platform, identifie
   return data;
 }
 
-/** Texto do perfil onde o usuário deve colar o código de verificação. */
+/** Profile text where the user must paste the verification code. */
 async function fetchProfileText(platform: Platform, data: PlatformLinkData): Promise<string> {
   if (platform === 'psn') {
     const auth = await psnServiceAuth();
@@ -92,7 +93,7 @@ async function fetchProfileText(platform: Platform, data: PlatformLinkData): Pro
   }
   if (platform === 'steam') {
     const res = await fetch(`https://steamcommunity.com/profiles/${data.steamid}/?xml=1`);
-    if (!res.ok) throw new Error('Não foi possível ler o perfil Steam. Ele está público?');
+    if (!res.ok) throw new ApiError('sync.steam_profile_unreadable', 400);
     const xml = await res.text();
     return xml.match(/<summary>\s*<!\[CDATA\[([\s\S]*?)\]\]>/i)?.[1] ?? '';
   }
@@ -102,13 +103,13 @@ async function fetchProfileText(platform: Platform, data: PlatformLinkData): Pro
 
 export async function verifyPlatformLink(userId: number, platform: Platform): Promise<PlatformLinkData> {
   const data = getCredential(userId, platform)?.data as PlatformLinkData | undefined;
-  if (!data) throw new Error('Vincule a conta antes de verificar.');
+  if (!data) throw new ApiError('sync.verification_not_linked', 400);
   if (data.verified) return data;
-  if (!data.code) throw new Error('Nenhum código de verificação pendente. Vincule a conta novamente.');
+  if (!data.code) throw new ApiError('sync.verification_no_pending_code', 400);
 
   const text = await fetchProfileText(platform, data);
   if (!text.toUpperCase().includes(String(data.code).toUpperCase())) {
-    throw new Error('Código não encontrado no perfil. Confira se salvou a alteração e tente de novo em alguns instantes.');
+    throw new ApiError('sync.verification_code_not_found', 400);
   }
 
   const next: PlatformLinkData = { ...data, verified: true, verifiedAt: new Date().toISOString() };
@@ -117,10 +118,10 @@ export async function verifyPlatformLink(userId: number, platform: Platform): Pr
   return next;
 }
 
-/** Lança erro amigável quando o vínculo não existe ou ainda não foi verificado. */
+/** Throws a typed error when the link does not exist or is not verified yet. */
 export function requireVerifiedLink(userId: number, platform: Platform): PlatformLinkData {
   const data = getCredential(userId, platform)?.data as PlatformLinkData | undefined;
-  if (!data) throw new Error(`${platform} não está vinculado a esta conta.`);
-  if (!data.verified) throw new Error(`O vínculo com ${platform} ainda não foi verificado.`);
+  if (!data) throw new ApiError('sync.not_configured', 400, { message: `${platform} is not linked to this account.` });
+  if (!data.verified) throw new ApiError('sync.link_not_verified', 400, { message: `The ${platform} link has not been verified yet.` });
   return data;
 }

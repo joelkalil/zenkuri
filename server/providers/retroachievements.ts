@@ -15,7 +15,7 @@ import { requireVerifiedLink } from '../verification';
 import { raCredit } from '../storeMeta';
 
 function raConfig(userId: number) {
-  // Credencial de serviço (.env) consultando o username público vinculado.
+  // Service credential (.env) querying the linked public username.
   const link = requireVerifiedLink(userId, 'retroachievements');
   const username = String(link.username ?? '');
   if (!username) throw new Error('RetroAchievements is not configured.');
@@ -53,7 +53,7 @@ export async function syncRetroAchievementsLibrary(userId: number) {
     if (received >= total || results.length === 0) break;
   }
 
-  // Destaca jogos que não pertencem mais a este usuário RA (ex.: username trocado).
+  // Prunes games that no longer belong to this RA user (e.g. username changed).
   pruneUserGames(userId, 'retroachievements', seen);
 
   return received;
@@ -81,7 +81,7 @@ export async function syncRetroAchievementsForGame(userId: number, gameId: numbe
   }
 
   const achievements = Object.values(response.achievements ?? {});
-  // Total de jogadores do set: usado para derivar a raridade (numAwarded / players).
+  // Total players of the set: used to derive rarity (numAwarded / players).
   const distinctPlayers = Number(
     (response as any).numDistinctPlayers
       ?? (response as any).numDistinctPlayersHardcore

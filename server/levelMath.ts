@@ -1,24 +1,25 @@
 /*
-  Matemática pura do sistema de nível do Zenkuri.
+  Pure math of Zenkuri's level system.
 
-  Sem I/O e sem dependência de `db.ts` — de propósito, seguindo o mesmo motivo de
-  `mediaPaths.ts`: mantém o módulo testável isoladamente e evita ciclo de import.
+  No I/O and no dependency on `db.ts` — on purpose, for the same reason as
+  `mediaPaths.ts`: it keeps the module testable in isolation and avoids an
+  import cycle.
 
-  O XP é derivado exclusivamente do acervo de conquistas já desbloqueadas, então
-  o cálculo é determinístico: a mesma coleção sempre produz o mesmo XP e um
-  re-sync nunca faz o número regredir. Nada de XP por tempo de jogo ou por data.
+  XP is derived exclusively from the set of already unlocked achievements, so
+  the computation is deterministic: the same collection always yields the same
+  XP and a re-sync never makes the number regress. No XP for playtime or dates.
 
-  A régua favorece dificuldade sobre volume — raridade global multiplica o XP
-  base, de forma que uma conquista de <1% dos jogadores vale mais que dezenas de
-  conquistas triviais. Isso mantém a divisão de papéis com o Hall da Platina, que
-  já celebra o volume de conclusões.
+  The scale favors difficulty over volume — global rarity multiplies the base
+  XP, so a <1% achievement is worth more than dozens of trivial ones. This keeps
+  the division of roles with the Platinum Hall, which already celebrates the
+  volume of completions.
 */
 
 import type { Platform } from './types';
 
-// ─── Constantes da régua (ponto único de calibração) ────────────────────────
+// ─── Scale constants (single calibration point) ────────────────────────
 
-/** XP base por troféu da PSN, por tipo. */
+/** Base XP per PSN trophy, by type. */
 const PSN_BASE_XP: Record<string, number> = {
   bronze: 15,
   silver: 30,
@@ -26,19 +27,19 @@ const PSN_BASE_XP: Record<string, number> = {
   platinum: 300,
 };
 
-/** Steam não expõe tipo nem pontuação: toda conquista vale o mesmo XP base. */
+/** Steam exposes neither type nor points: every achievement is worth the same base XP. */
 const STEAM_BASE_XP = 20;
 
-/** RetroAchievements pontua de 1 a 100; o fator aproxima a escala das outras. */
+/** RetroAchievements scores from 1 to 100; the factor brings the scale close to the others. */
 const RA_POINTS_FACTOR = 1.5;
 const RA_MAX_POINTS = 100;
 
-/** Bônus por jogo concluído (platina da PSN ou 100% fora dela). */
+/** Bonus per completed game (PSN platinum or 100% elsewhere). */
 export const COMPLETION_BONUS_XP = 500;
 
 /**
- * Faixas de raridade global (% de jogadores que possuem a conquista).
- * Avaliadas em ordem: a primeira faixa cujo teto acomoda a raridade vence.
+ * Global rarity tiers (% of players who own the achievement).
+ * Evaluated in order: the first tier whose ceiling fits the rarity wins.
  */
 export const RARITY_TIERS = [
   { key: 'mythic', label: 'Mítica', maxPercent: 1, multiplier: 4.0 },
@@ -49,18 +50,18 @@ export const RARITY_TIERS = [
   { key: 'trivial', label: 'Trivial', maxPercent: Infinity, multiplier: 1.0 },
 ] as const;
 
-/** Conquistas sem raridade informada não são penalizadas nem premiadas. */
+/** Achievements with no reported rarity are neither penalized nor rewarded. */
 const UNKNOWN_RARITY_MULTIPLIER = 1.0;
 
 /**
- * Curva: XP acumulado exigido para atingir `level` = BASE × (level - 1) ^ EXP.
- * Crescimento super-linear, sem teto — subir de nível fica progressivamente
- * mais caro, mas nunca impossível.
+ * Curve: cumulative XP required to reach `level` = BASE × (level - 1) ^ EXP.
+ * Super-linear growth with no ceiling — leveling up gets progressively more
+ * expensive, but never impossible.
  */
 export const CURVE_BASE_XP = 300;
 export const CURVE_EXPONENT = 1.6;
 
-/** Faixas de progressão. `minLevel` crescente; a última não tem teto. */
+/** Progression tiers. `minLevel` ascending; the last one has no ceiling. */
 export const LEVEL_TIERS = [
   { key: 'alvorada', label: 'Alvorada', minLevel: 1, accent: 'gray' },
   { key: 'aurora', label: 'Aurora', minLevel: 5, accent: 'violet-300' },
@@ -75,9 +76,9 @@ export const LEVEL_TIERS = [
 export type LevelTier = (typeof LEVEL_TIERS)[number];
 export type RarityTierKey = (typeof RARITY_TIERS)[number]['key'];
 
-// ─── Matemática pura (sem I/O, testável isoladamente) ───────────────────────
+// ─── Pure math (no I/O, testable in isolation) ───────────────────────
 
-/** Faixa de raridade de uma conquista; `null` quando a plataforma não informa. */
+/** Rarity tier of an achievement; `null` when the platform does not report it. */
 export function rarityTier(rarity: number | null) {
   if (rarity === null || !Number.isFinite(rarity)) return null;
   return RARITY_TIERS.find((tier) => rarity < tier.maxPercent) ?? RARITY_TIERS[RARITY_TIERS.length - 1];
@@ -87,7 +88,7 @@ export function rarityMultiplier(rarity: number | null): number {
   return rarityTier(rarity)?.multiplier ?? UNKNOWN_RARITY_MULTIPLIER;
 }
 
-/** XP base de uma conquista, antes do multiplicador de raridade. */
+/** Base XP of an achievement, before the rarity multiplier. */
 export function baseXp(input: { platform: Platform; type?: string | null; points?: number | null }): number {
   if (input.platform === 'psn') {
     return PSN_BASE_XP[String(input.type ?? '').toLowerCase()] ?? PSN_BASE_XP.bronze;
@@ -99,7 +100,7 @@ export function baseXp(input: { platform: Platform; type?: string | null; points
   return clamped * RA_POINTS_FACTOR;
 }
 
-/** XP final de uma conquista desbloqueada. */
+/** Final XP of an unlocked achievement. */
 export function achievementXp(input: {
   platform: Platform;
   type?: string | null;
@@ -109,7 +110,7 @@ export function achievementXp(input: {
   return Math.round(baseXp(input) * rarityMultiplier(input.rarity));
 }
 
-/** XP acumulado necessário para alcançar um nível. Nível 1 custa zero. */
+/** Cumulative XP needed to reach a level. Level 1 costs zero. */
 export function xpForLevel(level: number): number {
   if (level <= 1) return 0;
   return Math.round(CURVE_BASE_XP * (level - 1) ** CURVE_EXPONENT);
@@ -123,25 +124,26 @@ export function tierForLevel(level: number): LevelTier {
 
 export interface LevelProgress {
   level: number;
-  /** XP já acumulado dentro do nível atual. */
+  /** XP already accumulated within the current level. */
   xpIntoLevel: number;
-  /** XP que o nível atual exige para virar (0 quando o XP total é 0). */
+  /** XP the current level requires to roll over (0 when total XP is 0). */
   xpForNextLevel: number;
-  /** 0–100, progresso dentro do nível atual. */
+  /** 0–100, progress within the current level. */
   progressPercent: number;
   tier: LevelTier;
   nextTier: LevelTier | null;
 }
 
-/** Converte XP total em nível + progresso dentro do nível. */
+/** Converts total XP into a level + progress within the level. */
 export function levelFromXp(xp: number): LevelProgress {
   const safeXp = Math.max(0, Math.floor(xp));
 
   /*
-    A inversa analítica dá o nível quase certo, mas `xpForLevel` arredonda os
-    limiares — e sem esta correção os dois discordam justamente na virada, com a
-    barra travando em 100% sem subir de nível. Os limiares arredondados são a
-    fonte da verdade; o ajuste abaixo custa no máximo uma iteração.
+    The analytic inverse gives almost the right level, but `xpForLevel` rounds
+    the thresholds — and without this correction the two disagree exactly at the
+    rollover, with the bar stuck at 100% without leveling up. The rounded
+    thresholds are the source of truth; the adjustment below costs at most one
+    iteration.
   */
   let level = Math.max(1, Math.floor((safeXp / CURVE_BASE_XP) ** (1 / CURVE_EXPONENT)) + 1);
   while (xpForLevel(level + 1) <= safeXp) level += 1;
@@ -164,5 +166,5 @@ export function levelFromXp(xp: number): LevelProgress {
   };
 }
 
-/** Exposto para o script de calibração. */
+/** Exposed for the calibration script. */
 export const LEVEL_CURVE = { CURVE_BASE_XP, CURVE_EXPONENT, LEVEL_TIERS };

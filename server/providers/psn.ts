@@ -66,7 +66,7 @@ export async function syncPsnLibrary(userId: number) {
 
   await refreshPsnConceptArt(userId, trophyTitles);
 
-  // Destaca jogos que não pertencem mais a esta conta PSN (ex.: accountId trocado).
+  // Prunes games that no longer belong to this PSN account (e.g. accountId changed).
   pruneUserGames(userId, platform, seen);
 
   return received;

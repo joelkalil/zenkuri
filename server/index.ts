@@ -36,6 +36,8 @@ import {
   requireAuth,
   toPublicUser,
 } from './auth';
+import { envInt } from './env';
+import { ApiError, sendError, toErrorResponse } from './errors';
 import { linkPlatform, verifyPlatformLink, type PlatformLinkData } from './verification';
 import type { ApiGame, Platform } from './types';
 import { syncPsnAchievementsForGame, syncPsnLibrary } from './providers/psn';
@@ -45,17 +47,26 @@ import { clearMediaCache, serveMedia, warmAchievementMedia, warmGameMedia } from
 import { getUserLevel, invalidateUserLevel } from './level';
 import { getPlatformLevels, invalidatePlatformLevels } from './platformLevels';
 import { getAutoCollections } from './collections/auto';
+import { getAutoRankings } from './rankings/auto';
 import { scheduleStoreMetaFill } from './storeMeta';
+import { importCommunityPacksOnStart } from './community/importPacks';
+import { communityRouter } from './routes/community';
+import { gameNotesRouter, planRouter } from './routes/plan';
 
 const app = express();
-const port = Number(process.env.ZENKURI_API_PORT ?? 4343);
+const port = envInt('ZENKURI_API_PORT', 4343);
 const platforms: Platform[] = ['steam', 'retroachievements', 'psn'];
+
+// Community packs (community/*.json) -> database; never takes the server down.
+importCommunityPacksOnStart();
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
 function assertPlatform(value: string): Platform {
-  if (!platforms.includes(value as Platform)) throw new Error(`Unsupported platform: ${value}`);
+  if (!platforms.includes(value as Platform)) {
+    throw new ApiError('sync.unsupported_platform', 400, { message: `Unsupported platform: ${value}` });
+  }
   return value as Platform;
 }
 
@@ -74,7 +85,7 @@ function publicCredential(userId: number, platform: Platform) {
     identifier: linkIdentifier(platform, data),
     verified: Boolean(data.verified),
     configured: Boolean(data.verified),
-    // O código só é exposto enquanto o vínculo está pendente de verificação.
+    // The code is only exposed while the link is pending verification.
     code: data.verified ? undefined : data.code,
     updatedAt: credential.updatedAt,
   };
@@ -121,8 +132,8 @@ async function syncPlatform(userId: number, platform: Platform) {
   try {
     return await runPlatformSync(userId, platform);
   } finally {
-    // Conquistas novas mudam o XP. Invalidar no `finally` cobre também o sync
-    // que falha no meio: o que já entrou no banco precisa contar.
+    // New achievements change the XP. Invalidating in `finally` also covers a
+    // sync that fails midway: whatever already reached the database must count.
     invalidateUserLevel(userId);
     invalidatePlatformLevels(userId);
   }
@@ -132,14 +143,14 @@ async function runPlatformSync(userId: number, platform: Platform) {
   const count = await syncLibrary(userId, platform);
   // Mirror every cover + game icon locally (best effort, never blocks the sync).
   await warmGameMedia(platform).catch(() => 0);
-  // Dev/pub/franquias para as coleções automáticas (não bloqueia; falha não derruba o sync).
+  // Dev/pub/franchises for the automatic collections (non-blocking; a failure does not break the sync).
   scheduleStoreMetaFill(platform);
   const games = listGames(userId, platform);
   let achievementSets = 0;
   let detailErrors = 0;
-  // Guarda a última mensagem (ex.: key da Steam inválida) pra aparecer no
-  // histórico de sync mesmo quando o erro não chega a abortar o sync inteiro
-  // (cada jogo falha isolado no try/catch abaixo).
+  // Keeps the last message (e.g. invalid Steam key) so it shows up in the sync
+  // history even when the error does not abort the whole sync (each game fails
+  // in isolation in the try/catch below).
   let lastDetailError: string | undefined;
 
   for (const game of games.filter((item) => shouldHydrateAchievements(platform, item))) {
@@ -171,7 +182,7 @@ app.get('/api/health', (_req, res) => {
 
 // Local media cache: serves a mirrored file, lazily downloading from the
 // original source on first hit, and falling back to a branded placeholder.
-// O catálogo de artes é compartilhado entre usuários, então fica público.
+// The art catalog is shared between users, so it is public.
 app.use('/media', async (req, res, next) => {
   try {
     const parts = req.path.replace(/^\/+/, '').split('/').filter(Boolean);
@@ -191,25 +202,18 @@ app.use('/media', async (req, res, next) => {
   }
 });
 
-// ─── Autenticação ───────────────────────────────────────────────────────────
+// ─── Authentication ───────────────────────────────────────────────────────────
 
+// Typed ApiErrors thrown below (auth, link, sync) are mapped by the global error handler.
 app.post('/api/auth/register', (req, res) => {
-  try {
-    const { username, password, displayName } = req.body ?? {};
-    const result = registerUser(String(username ?? ''), String(password ?? ''), displayName ? String(displayName) : undefined);
-    res.json(result);
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Falha ao criar conta.' });
-  }
+  const { username, password, displayName } = req.body ?? {};
+  const result = registerUser(String(username ?? ''), String(password ?? ''), displayName ? String(displayName) : undefined);
+  res.json(result);
 });
 
 app.post('/api/auth/login', (req, res) => {
-  try {
-    const { username, password } = req.body ?? {};
-    res.json(loginUser(String(username ?? ''), String(password ?? '')));
-  } catch (error) {
-    res.status(401).json({ error: error instanceof Error ? error.message : 'Falha ao entrar.' });
-  }
+  const { username, password } = req.body ?? {};
+  res.json(loginUser(String(username ?? ''), String(password ?? '')));
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -217,7 +221,7 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-// Tudo abaixo exige sessão válida.
+// Everything below requires a valid session.
 app.use('/api', requireAuth);
 
 app.get('/api/auth/me', (req, res) => {
@@ -225,27 +229,23 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 app.post('/api/auth/password', (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body ?? {};
-    changePassword(req.user!, String(currentPassword ?? ''), String(newPassword ?? ''));
-    res.json({ ok: true });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Falha ao alterar a senha.' });
-  }
+  const { currentPassword, newPassword } = req.body ?? {};
+  changePassword(req.user!, String(currentPassword ?? ''), String(newPassword ?? ''));
+  res.json({ ok: true });
 });
 
 app.patch('/api/auth/profile', (req, res) => {
   const displayName = String(req.body?.displayName ?? '').trim();
-  if (!displayName) return res.status(400).json({ error: 'O nome de exibição é obrigatório.' });
+  if (!displayName) return void sendError(res, 400, 'auth.display_name_required');
   updateUserProfile(req.userId!, displayName);
   res.json({ user: { ...toPublicUser(req.user!), displayName } });
 });
 
-// ─── Contas de plataforma ───────────────────────────────────────────────────
+// ─── Platform accounts ───────────────────────────────────────────────────
 
 app.get('/api/config', (req, res) => {
-  // "configured" = plataformas prontas para sync (vínculo verificado);
-  // "credentials" inclui também vínculos pendentes, com o código de verificação.
+  // "configured" = platforms ready to sync (verified link);
+  // "credentials" also includes pending links, with the verification code.
   const configured = listConfiguredPlatforms(req.userId!).filter((entry) => entry.verified);
   res.json({
     configured,
@@ -253,30 +253,22 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// Vincula uma conta de plataforma a partir do identificador público
-// (SteamID/URL, online ID da PSN ou username do RA). Nenhuma credencial
-// do usuário é pedida — as consultas usam a conta de serviço do .env.
+// Links a platform account from the public identifier (SteamID/URL, PSN
+// online ID or RA username). No user credential is requested — lookups use the
+// service account from .env.
 app.post('/api/config/:platform', async (req, res) => {
-  try {
-    const platform = assertPlatform(req.params.platform);
-    const body = req.body ?? {};
-    const identifier = String(body.identifier ?? body.steamid ?? body.onlineId ?? body.username ?? '');
-    await linkPlatform(req.userId!, platform, identifier);
-    res.json({ ok: true, credential: publicCredential(req.userId!, platform) });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Falha ao vincular a conta.' });
-  }
+  const platform = assertPlatform(req.params.platform);
+  const body = req.body ?? {};
+  const identifier = String(body.identifier ?? body.steamid ?? body.onlineId ?? body.username ?? '');
+  await linkPlatform(req.userId!, platform, identifier);
+  res.json({ ok: true, credential: publicCredential(req.userId!, platform) });
 });
 
-// Confere se o código de verificação está na descrição do perfil.
+// Checks that the verification code is in the profile description.
 app.post('/api/config/:platform/verify', async (req, res) => {
-  try {
-    const platform = assertPlatform(req.params.platform);
-    await verifyPlatformLink(req.userId!, platform);
-    res.json({ ok: true, credential: publicCredential(req.userId!, platform) });
-  } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : 'Falha ao verificar o vínculo.' });
-  }
+  const platform = assertPlatform(req.params.platform);
+  await verifyPlatformLink(req.userId!, platform);
+  res.json({ ok: true, credential: publicCredential(req.userId!, platform) });
 });
 
 app.delete('/api/config/:platform', (req, res) => {
@@ -285,7 +277,7 @@ app.delete('/api/config/:platform', (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── Jogos e conquistas ─────────────────────────────────────────────────────
+// ─── Games and achievements ─────────────────────────────────────────────────────
 
 app.get('/api/games', (req, res) => {
   const platform = req.query.platform ? assertPlatform(String(req.query.platform)) : undefined;
@@ -296,7 +288,7 @@ app.get('/api/games/:id/achievements', async (req, res, next) => {
   try {
     const gameId = Number(req.params.id);
     const game = getGameById(gameId);
-    if (!game || !userOwnsGame(req.userId!, gameId)) return res.status(404).json({ error: 'Game not found.' });
+    if (!game || !userOwnsGame(req.userId!, gameId)) return void sendError(res, 404, 'game.not_found');
     let achievements = listAchievements(req.userId!, gameId);
     if (achievements.length === 0) {
       await syncAchievements(req.userId!, game.platform, gameId);
@@ -314,9 +306,9 @@ app.post('/api/sync/:platform', async (req, res, next) => {
   try {
     const result = await syncPlatform(req.userId!, platform);
     finishSyncRun(runId, 'success', describeSyncResult(result));
-    // `ok` reflete se o sync ficou 100% limpo — mesmo sem lançar, jogos
-    // individuais podem ter falhado (ex.: key inválida no meio da hidratação
-    // de conquistas), e a UI precisa saber disso pra avisar o usuário.
+    // `ok` reflects whether the sync came out 100% clean — even without
+    // throwing, individual games may have failed (e.g. an invalid key midway
+    // through achievement hydration), and the UI needs to know to warn the user.
     res.json({ ok: result.detailErrors === 0, platform, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown sync error';
@@ -340,7 +332,7 @@ app.post('/api/sync', async (req, res, next) => {
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown sync error';
         finishSyncRun(runId, 'error', message);
-        results.push({ platform, ok: false, error: message });
+        results.push({ platform, ok: false, error: message, code: error instanceof ApiError ? error.code : undefined });
       }
     }
     res.json({ ok: results.every((r) => r.ok), results });
@@ -359,19 +351,19 @@ app.get('/api/completions/recent', (req, res) => {
   res.json(listCompletionHistory(req.userId!, limit));
 });
 
-// Desbloqueios de um ano (heatmap + almanaque). Sem `year`, usa o ano corrente.
+// Unlocks of a year (heatmap + almanac). Without `year`, uses the current year.
 app.get('/api/unlocks', (req, res) => {
   const requested = Number(req.query.year);
   const year = Number.isInteger(requested) && requested > 1970 ? requested : new Date().getUTCFullYear();
   res.json({ year, years: listUnlockYears(req.userId!), unlocks: listUnlocks(req.userId!, year) });
 });
 
-// Nível do usuário, derivado das conquistas desbloqueadas.
+// The user's level, derived from the unlocked achievements.
 app.get('/api/level', (req, res) => {
   res.json(getUserLevel(req.userId!));
 });
 
-// Nível nativo de cada plataforma (Steam, PSN, RetroAchievements), ao vivo.
+// Native level of each platform (Steam, PSN, RetroAchievements), live.
 app.get('/api/level/platforms', async (req, res, next) => {
   try {
     res.json({ items: await getPlatformLevels(req.userId!, { fresh: req.query.fresh === '1' }) });
@@ -380,7 +372,7 @@ app.get('/api/level/platforms', async (req, res, next) => {
   }
 });
 
-// Conquistas desbloqueadas mais raras da coleção (vitrine do painel).
+// The rarest unlocked achievements of the collection (dashboard showcase).
 app.get('/api/showcase/rarest', (req, res) => {
   const requested = Number(req.query.limit ?? 3);
   const limit = Number.isFinite(requested) ? Math.min(12, Math.max(1, Math.round(requested))) : 3;
@@ -417,18 +409,33 @@ app.post('/api/planning/backlog/reorder', (req, res) => {
   res.json(reorderBacklog(req.userId!, order));
 });
 
-// ─── Coleções automáticas (franquias e empresas, derivadas na leitura) ──────
+// ─── Plan and personal notes (per user) ───────────────────────────────────
+
+app.use('/api/plan', planRouter);
+app.use('/api/game-notes', gameNotesRouter);
+
+// ─── Community (global, read-only content; comes from the packs) ───────────
+
+app.use('/api/community', communityRouter);
+
+// ─── Automatic collections (franchises and companies, derived on read) ──────
 
 app.get('/api/collections/auto', (req, res) => {
   res.json(getAutoCollections(req.userId!));
 });
 
-// ─── Coleções (franquias manuais) ───────────────────────────────────────────
+// ─── Automatic rankings (derived on read, per user) ───────────────
+
+app.get('/api/rankings', (req, res) => {
+  res.json(getAutoRankings(req.userId!));
+});
+
+// ─── Collections (manual franchises) ───────────────────────────────────────────
 
 app.post('/api/collections', (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   if (!name) {
-    res.status(400).json({ error: 'Nome da coleção é obrigatório' });
+    sendError(res, 400, 'collections.name_required');
     return;
   }
   const gameIds = Array.isArray(req.body?.gameIds) ? req.body.gameIds.map(String) : [];
@@ -438,7 +445,7 @@ app.post('/api/collections', (req, res) => {
 app.patch('/api/collections/:id', (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   if (!name) {
-    res.status(400).json({ error: 'Nome da coleção é obrigatório' });
+    sendError(res, 400, 'collections.name_required');
     return;
   }
   res.json(renameCollection(req.userId!, Number(req.params.id), name));
@@ -450,8 +457,9 @@ app.delete('/api/collections/:id', (req, res) => {
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   void _next;
-  const message = error instanceof Error ? error.message : 'Unexpected server error';
-  res.status(500).json({ error: message });
+  const response = toErrorResponse(error);
+  if (response.status >= 500) console.error(error);
+  sendError(res, response.status, response.code, response.details, response.message);
 });
 
 app.listen(port, () => {
