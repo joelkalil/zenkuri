@@ -32,3 +32,6 @@ data/copy_steam
 
 # Artefatos locais (planos, designs, pesquisa)
 .artefacts
+
+# Dados pessoais exportados (plano e notas), nunca vão para o repositório
+data/personal/
