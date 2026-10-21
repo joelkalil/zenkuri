@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, CheckCircle2, Flame, Gem, Printer, Trophy } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   fetchRecentCompletions,
   fetchUnlocks,
@@ -8,9 +7,12 @@ import {
 } from '../lib/api';
 import type { UnlockItem } from '../types/steam';
 import { GameCover } from '../components/GameCover';
+import { SectionHead } from '../components/SectionHead';
+import { Stamp } from '../components/Stamp';
 import { UnlockHeatmap } from '../components/UnlockHeatmap';
 import { PLATFORM_META } from '../lib/platforms';
 import type { Platform } from '../types/steam';
+import '../styles/almanaque.css';
 
 const MONTHS_LONG_PT = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -21,21 +23,6 @@ function unlockDayKey(unlockTime: number): string {
   return new Date(unlockTime * 1000).toISOString().slice(0, 10);
 }
 
-function StatBlock({ label, value, hint, icon: Icon, accent }: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  icon: typeof Trophy;
-  accent: string;
-}) {
-  return (
-    <div className="stat-tile">
-      <span className="stat-tile-label"><Icon className={`h-4 w-4 ${accent}`} aria-hidden="true" />{label}</span>
-      <span className="stat-tile-value text-gray-100">{value}</span>
-      {hint && <span className="stat-tile-hint truncate">{hint}</span>}
-    </div>
-  );
-}
 export default function Almanac() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -117,129 +104,124 @@ export default function Almanac() {
     ? new Date(`${stats.busiest.key}T00:00:00Z`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', timeZone: 'UTC' })
     : '—';
 
+  const byMonth = useMemo(() => {
+    const groups = new Map<number, CompletionHistoryItem[]>();
+    for (const item of yearCompletions) {
+      const month = new Date(item.completedAt * 1000).getUTCMonth();
+      groups.set(month, [...(groups.get(month) ?? []), item]);
+    }
+    return [...groups.entries()].sort((a, b) => b[0] - a[0]);
+  }, [yearCompletions]);
+
+  const n = (value: number) => value.toLocaleString('pt-BR');
+
   return (
-    <div className="page page-narrow">
+    <div className="page page-narrow almanac">
       <header className="page-head">
         <div>
-          <span className="page-eyebrow"><CalendarDays className="h-3.5 w-3.5" aria-hidden="true" /> Retrospectiva anual</span>
-          <h1 className="page-title">Almanaque <span className="text-violet-400">{year}</span></h1>
-          <p className="page-desc">Um ano de caçada em números: cada quadrado é um dia, cada conquista uma marca no papel.</p>
+          <Link to="/hall" className="page-eyebrow no-print hover:text-gray-100">‹ Hall</Link>
+          <h1 className="page-title">Almanaque <span className="al-year">{year}</span></h1>
+          <p className="page-desc">Um ano de caçada em números: cada quadrado é um dia, cada carimbo uma conclusão.</p>
         </div>
         <div className="page-actions no-print">
-          <button onClick={() => navigate('/hall')} className="btn btn-secondary">
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Hall da Platina
-          </button>
           <label className="sr-only" htmlFor="almanac-year">Ano</label>
-          <select id="almanac-year" value={year} onChange={(event) => setSearchParams({ ano: event.target.value })} className="field h-10 w-auto cursor-pointer pr-8 font-semibold">
+          <select id="almanac-year" value={year} onChange={(event) => setSearchParams({ ano: event.target.value })} className="field h-9 w-auto cursor-pointer pr-8 font-semibold">
             {(years.includes(year) ? years : [year, ...years]).map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
-          <button onClick={() => window.print()} className="btn btn-secondary">
-            <Printer className="h-4 w-4" aria-hidden="true" /> Imprimir
-          </button>
+          <button onClick={() => window.print()} className="btn btn-secondary">Imprimir</button>
         </div>
       </header>
 
-      {error && <div className="rounded-xl border border-red-800/30 bg-red-900/20 p-4 text-sm text-red-400">{error}</div>}
+      {error && <p role="alert" className="border-l-2 border-zk-danger py-1 pl-3 text-sm text-zk-danger">{error}</p>}
 
-      <div className="stat-strip stat-strip-4">
-        <StatBlock icon={CheckCircle2} accent="text-sky-400" label="Conquistas" value={stats.total} hint={`Desbloqueadas em ${year}`} />
-        <StatBlock icon={Trophy} accent="text-amber-400" label="Platinas" value={stats.platinums} hint="Troféus de platina" />
-        <StatBlock icon={CheckCircle2} accent="text-emerald-400" label="100%" value={stats.perfects} hint="Jogos perfeitos" />
-        <StatBlock icon={Flame} accent="text-red-400" label="Dia mais ativo" value={stats.busiest?.count ?? '—'} hint={busiestLabel} />
-      </div>
+      <p className="lede" aria-label={`Resumo de ${year}`}>
+        Em <strong>{year}</strong>: <span className="num">{n(stats.total)}</span> {stats.total === 1 ? 'conquista' : 'conquistas'},
+        {' '}<span className="num">{stats.platinums}</span> {stats.platinums === 1 ? 'platina' : 'platinas'},
+        {' '}<span className="num">{stats.perfects}</span> {stats.perfects === 1 ? 'jogo' : 'jogos'} a 100%.
+        {stats.busiest && <> Dia mais ativo: {busiestLabel} (<span className="num">{stats.busiest.count}</span>).</>}
+      </p>
 
-      <section className="surface surface-pad">
-        <div className="section-head">
-          <h2>Um ano de desbloqueios</h2>
-          <span className="spacer" />
-          {stats.topMonth !== null && (
-            <span className="section-sub">Mês mais intenso: <span className="font-semibold text-gray-300">{MONTHS_LONG_PT[stats.topMonth]}</span></span>
-          )}
-        </div>
+      <section aria-labelledby="al-heat">
+        <SectionHead className="sh-wrap"
+          number="01"
+          title={<span id="al-heat">Um ano de desbloqueios</span>}
+          sub={stats.topMonth !== null ? <>Mês mais intenso: <span className="font-semibold text-gray-300">{MONTHS_LONG_PT[stats.topMonth]}</span></> : undefined}
+        />
         {unlocks === null ? (
-          <div className="h-28 animate-pulse rounded-lg bg-gray-800/50" />
+          <div className="h-32 animate-pulse rounded-sm bg-gray-850" />
         ) : (
-          <div className="overflow-x-auto"><UnlockHeatmap year={year} counts={dayCounts} /></div>
+          <UnlockHeatmap year={year} counts={dayCounts} />
         )}
       </section>
 
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <section>
-          <div className="section-head">
-            <h2>Conclusões de {year}</h2>
-            <span className="section-sub">{yearCompletions.length} no ano</span>
-          </div>
+      <div className="grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <section aria-labelledby="al-done">
+          <SectionHead className="sh-wrap" number="02" title={<span id="al-done">Conclusões de {year}</span>} sub={`${yearCompletions.length} no ano`} />
           {yearCompletions.length === 0 ? (
-            <div className="empty-state py-10">Nenhuma platina ou 100% registrada neste ano.</div>
+            <p className="py-6 text-sm text-gray-500">Nenhuma platina ou 100% registrada neste ano.</p>
           ) : (
-            <div className="list-surface">
-              {yearCompletions.map((item) => {
-                const meta = item.game.platform ? PLATFORM_META[item.game.platform] : null;
-                return (
-                  <button key={`${item.game.appid}-${item.kind}`} onClick={() => navigate(`/game/${item.game.appid}`)} className="list-surface-row">
-                    <GameCover game={item.game} className="h-11 w-20 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-gray-100">{item.game.name}</p>
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {new Date(item.completedAt * 1000).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}
-                        {meta ? ` · ${meta.short}` : ''}
-                      </p>
-                    </div>
-                    <img
-                      src={item.kind === 'platinum' ? '/trophies/platinum.png' : '/trophies/achievement-100.png'}
-                      alt={item.kind === 'platinum' ? 'Platina' : '100%'}
-                      className="h-5 w-5 shrink-0 object-contain"
-                    />
-                  </button>
-                );
-              })}
-            </div>
+            byMonth.map(([month, items]) => (
+              <div key={month}>
+                <div className="al-month">
+                  <h3>{MONTHS_LONG_PT[month]}</h3>
+                  <span className="num text-xs text-gray-500">{items.length}</span>
+                </div>
+                {items.map((item) => {
+                  const meta = item.game.platform ? PLATFORM_META[item.game.platform] : null;
+                  return (
+                    <button key={`${item.game.appid}-${item.kind}`} onClick={() => navigate(`/game/${item.game.appid}`)} className="al-row">
+                      <Stamp kind={item.kind === 'platinum' ? 'platina' : '100'} size={24} seed={item.game.appid} />
+                      <GameCover game={item.game} className="al-cover h-9 w-14 shrink-0 rounded-sm bg-gray-800" imgClassName="object-cover" />
+                      <span className="min-w-0">
+                        <span className="al-name block truncate">{item.game.name}</span>
+                        <span className="al-date">{new Date(item.completedAt * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })}</span>
+                      </span>
+                      <span className="al-plat">{meta?.short ?? ''}</span>
+                      <span className="al-kind" data-kind={item.kind}>{item.kind === 'platinum' ? 'Platina' : '100%'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
           )}
         </section>
 
         <aside className="space-y-8">
           {stats.rarest && (
             <section>
-              <div className="section-head">
-                <Gem className="h-5 w-5 text-violet-400" aria-hidden="true" />
-                <h2>Desbloqueio mais raro</h2>
-              </div>
-              <div className="surface surface-pad">
-                <div className="flex items-center gap-3">
-                  {stats.rarest.icon && (
-                    <img src={stats.rarest.icon} alt="" className="h-12 w-12 rounded-lg border border-gray-800 object-cover" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-100">{stats.rarest.achievementTitle}</p>
-                    <p className="truncate text-xs text-gray-500">{stats.rarest.gameName}</p>
-                  </div>
+              <SectionHead className="sh-wrap" number="03" title="Desbloqueio mais raro" />
+              <div className="flex items-center gap-3">
+                {stats.rarest.icon && (
+                  <img src={stats.rarest.icon} alt="" className="h-12 w-12 rounded-sm object-cover" />
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-gray-100">{stats.rarest.achievementTitle}</p>
+                  <p className="truncate text-xs text-gray-500">{stats.rarest.gameName}</p>
                 </div>
-                <p className="mt-4 text-2xl font-bold tabular-nums text-violet-400">
-                  {stats.rarest.rarity}%
-                  <span className="ml-1.5 text-xs font-medium text-gray-500">dos jogadores têm essa conquista</span>
-                </p>
               </div>
+              <p className="mt-3 font-display text-3xl font-black text-gray-100">
+                <span className="tabular-nums">{stats.rarest.rarity?.toLocaleString('pt-BR')}%</span>
+                <span className="ml-2 font-sans text-xs font-medium text-gray-500">dos jogadores têm essa conquista</span>
+              </p>
             </section>
           )}
 
           <section>
-            <div className="section-head">
-              <h2>Por plataforma</h2>
-            </div>
-            <div className="surface surface-pad space-y-3">
+            <SectionHead className="sh-wrap" number={stats.rarest ? '04' : '03'} title="Por plataforma" />
+            <div>
               {(Object.keys(PLATFORM_META) as Platform[]).map((platform) => {
                 const count = stats.perPlatform.get(platform) ?? 0;
                 const share = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
                 return (
-                  <div key={platform} className="flex items-center gap-2.5">
+                  <div key={platform} className="flex items-center gap-2.5 border-b border-gray-800 py-2.5">
                     <img src={PLATFORM_META[platform].logo} alt="" className="h-4 w-4 object-contain" />
-                    <span className="w-14 text-xs font-medium text-gray-400">{PLATFORM_META[platform].short}</span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-800">
-                      <div className="h-full rounded-full bg-violet-400" style={{ width: `${share}%` }} />
+                    <span className="w-28 truncate text-xs font-medium text-gray-300" title={PLATFORM_META[platform].label}>{platform === 'psn' ? 'PlayStation' : PLATFORM_META[platform].label}</span>
+                    <div className="h-1 flex-1 bg-gray-800" aria-hidden="true">
+                      <div className="h-full bg-violet-500" style={{ width: `${share}%` }} />
                     </div>
-                    <span className="w-12 text-right text-xs font-semibold tabular-nums text-gray-300">{count}</span>
+                    <span className="num w-12 text-right text-xs text-gray-200">{n(count)}</span>
                   </div>
                 );
               })}
@@ -250,4 +232,3 @@ export default function Almanac() {
     </div>
   );
 }
-

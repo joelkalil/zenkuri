@@ -1,15 +1,17 @@
+import '../styles/almanaque.css';
+
 const MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-const CELL = 12; // px
+const CELL = 15; // px
 const GAP = 3; // px
 
-/** Escala de calor quente: papel → âmbar → laranja → vermelho solar. */
-function bucketClass(count: number): string {
-  if (count === 0) return 'bg-gray-800/50';
-  if (count <= 2) return 'bg-amber-400/30';
-  if (count <= 5) return 'bg-amber-400/60';
-  if (count <= 9) return 'bg-orange-400/80';
-  return 'bg-red-500';
+/** Escala de intensidade (0–4) com o acento: do filete ao vermelhão cheio. */
+function levelOf(count: number): 0 | 1 | 2 | 3 | 4 {
+  if (count === 0) return 0;
+  if (count <= 2) return 1;
+  if (count <= 5) return 2;
+  if (count <= 9) return 3;
+  return 4;
 }
 
 function dayKey(date: Date): string {
@@ -48,41 +50,31 @@ export function UnlockHeatmap({ year, counts }: UnlockHeatmapProps) {
   }));
 
   return (
-    <div className="overflow-x-auto pb-1">
+    <div className="hm-heat overflow-x-auto pb-1">
       <div style={{ width: totalCols * (CELL + GAP) }}>
-        <div className="relative h-4">
+        <div className="relative h-5">
           {monthOffsets.map(({ label, col: monthCol }) => (
-            <span
-              key={label}
-              className="absolute top-0 text-[10px] font-medium uppercase tracking-wide text-gray-600"
-              style={{ left: monthCol * (CELL + GAP) }}
-            >
-              {label}
-            </span>
+            <span key={label} className="hm-month" style={{ left: monthCol * (CELL + GAP) }}>{label}</span>
           ))}
         </div>
-        <div className="relative" style={{ height: 7 * (CELL + GAP) }}>
+        <div className="relative" style={{ height: 7 * (CELL + GAP) }} role="img" aria-label={`Desbloqueios por dia em ${year}`}>
           {days.map((day) => {
             const count = counts.get(day.key) ?? 0;
             return (
               <span
                 key={day.key}
                 title={`${day.label}: ${count} ${count === 1 ? 'conquista' : 'conquistas'}`}
-                className={`absolute rounded-[3px] ${bucketClass(count)}`}
-                style={{
-                  width: CELL,
-                  height: CELL,
-                  left: day.col * (CELL + GAP),
-                  top: day.row * (CELL + GAP),
-                }}
+                className="hm-cell"
+                data-level={levelOf(count)}
+                style={{ width: CELL, height: CELL, left: day.col * (CELL + GAP), top: day.row * (CELL + GAP) }}
               />
             );
           })}
         </div>
-        <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-gray-600">
+        <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] text-gray-500">
           Menos
-          {[0, 1, 3, 6, 10].map((sample) => (
-            <span key={sample} className={`h-3 w-3 rounded-[3px] ${bucketClass(sample)}`} />
+          {[0, 1, 2, 3, 4].map((level) => (
+            <span key={level} className="hm-swatch" data-level={level} aria-hidden="true" />
           ))}
           Mais
         </div>

@@ -20,6 +20,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X } from 'lucide-react';
 import { GameCover } from '../GameCover';
 import { ProgressBar } from '../ProgressBar';
+import { SectionHead } from '../SectionHead';
 import { monthKey, monthKeyLabel, monthKeyLong, upcomingMonths } from '../../lib/planDates';
 import type { Game } from '../../types/steam';
 
@@ -55,11 +56,11 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`group relative grid grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_auto] items-center gap-x-3 px-3 py-3 ${isDragging ? 'z-10 rounded-lg bg-gray-800 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.6)]' : ''}`}
+      className={`group relative grid grid-cols-[1.25rem_3.5rem_minmax(0,1fr)_auto] items-center gap-x-3 border-b border-gray-800 px-1 py-3 ${isDragging ? 'z-10 rounded bg-gray-850 shadow-[var(--popover-shadow)]' : ''}`}
     >
-      <span className="text-right text-sm tabular-nums text-gray-500">{index + 1}</span>
+      <span className="num text-right text-sm text-gray-500">{index + 1}</span>
       <Link to={`/game/${game.appid}`} tabIndex={-1} aria-hidden="true">
-        <GameCover game={game} className="h-8 w-14 rounded-md bg-gray-800" imgClassName="object-cover" />
+        <GameCover game={game} className="h-8 w-14 rounded-sm bg-gray-800" imgClassName="object-cover" />
       </Link>
       <div className="min-w-0">
         <Link to={`/game/${game.appid}`} className="block truncate text-sm font-medium text-gray-100 hover:text-violet-400">
@@ -67,13 +68,13 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
         </Link>
         <div className="mt-1.5 flex items-center gap-2">
           <span className="block min-w-6 flex-1"><ProgressBar percent={percent} height="h-1" /></span>
-          <span className={`w-9 shrink-0 text-xs tabular-nums ${percent === 100 ? 'text-emerald-400' : 'text-gray-500'}`}>{percent}%</span>
+          <span className={`num w-9 shrink-0 text-right text-xs ${percent === 100 ? 'text-zk-complete' : 'text-gray-500'}`}>{percent}%</span>
           <select
             value={month}
             onChange={(event) => onSetMonth(event.target.value)}
             aria-label={`Mês para fechar ${game.name}`}
-            className={`h-7 w-[5.5rem] shrink-0 rounded-md border bg-transparent px-1.5 text-xs transition-colors hover:border-gray-700 focus:border-violet-500 focus:outline-none ${
-              month === thisMonth ? 'border-violet-600/40 text-violet-400' : late ? 'border-amber-400/40 text-amber-400' : 'border-gray-800 text-gray-500'
+            className={`h-7 w-[5.5rem] shrink-0 rounded border bg-transparent px-1.5 text-xs transition-colors hover:border-gray-500 focus:border-violet-400 focus:outline-none ${
+              month === thisMonth ? 'border-violet-400 text-violet-400' : late ? 'border-zk-gold text-zk-gold' : 'border-gray-600 text-gray-400'
             }`}
           >
             <option value="">Sem mês</option>
@@ -88,7 +89,7 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
           {...attributes}
           {...listeners}
           aria-label={`Mover ${game.name} na fila`}
-          className="grid h-9 w-8 cursor-grab touch-none place-items-center rounded-md text-gray-500 hover:bg-gray-800 hover:text-gray-200 active:cursor-grabbing"
+          className="grid h-9 w-8 cursor-grab touch-none place-items-center rounded text-gray-500 hover:bg-gray-850 hover:text-gray-200 active:cursor-grabbing"
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -97,7 +98,7 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
           onClick={onRemove}
           aria-label={`Tirar ${game.name} da fila`}
           title="Tirar da fila"
-          className="grid h-9 w-8 place-items-center rounded-md text-gray-500 transition-colors hover:bg-gray-800 hover:text-red-400 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
+          className="grid h-9 w-8 place-items-center rounded text-gray-500 transition-colors hover:bg-gray-850 hover:text-zk-danger [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -133,30 +134,27 @@ export function Queue({ games, order, schedule, completionMap, today, onReorder,
   }
 
   return (
-    <section aria-labelledby="queue-title">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id="queue-title" className="text-[1.0625rem] font-semibold text-gray-100">Minha fila</h2>
-        <Link to="/library" className="btn btn-secondary h-8 px-3 text-xs">Adicionar</Link>
-      </div>
-      <p className="mt-1 text-sm text-gray-500">
+    <section aria-label="Minha fila">
+      <SectionHead className="sh-wrap" number="03" title="Minha fila" action={<Link to="/library" className="btn btn-secondary btn-sm">Adicionar jogo</Link>} />
+      <p className="lede">
         {games.length === 0
           ? 'Ordem de prioridade e mês para fechar cada jogo.'
           : <>
-              {games.length} {games.length === 1 ? 'jogo' : 'jogos'}
-              {average !== null && <>, média de <span className="tabular-nums text-gray-300">{average.toLocaleString('pt-BR')}%</span></>}
+              <span className="num text-gray-100">{games.length}</span> {games.length === 1 ? 'jogo' : 'jogos'}
+              {average !== null && <>, média de <span className="num text-gray-100">{average.toLocaleString('pt-BR')}%</span></>}
               {thisMonthCount > 0 && <>; {thisMonthCount} para {monthKeyLong(thisMonth).split(' ')[0]}</>}
             </>}
       </p>
 
       {games.length === 0 ? (
-        <p className="empty-state mt-3 py-8 text-sm leading-relaxed">
+        <p className="mt-3 border-t border-gray-800 py-6 text-sm leading-relaxed text-gray-500">
           A fila está vazia. Use o botão de fila nos jogos do plano ao lado, ou adicione pela
           {' '}<Link to="/library" className="text-violet-400 hover:text-violet-300">Biblioteca</Link>.
         </p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={order} strategy={verticalListSortingStrategy}>
-            <ol className="list-surface mt-3">
+            <ol className="mt-3 border-t border-gray-800">
               {games.map((game, index) => (
                 <QueueRow
                   key={game.appid}

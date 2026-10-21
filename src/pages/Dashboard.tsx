@@ -1,133 +1,95 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ElementType, ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Activity, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Crosshair, Gem, Pin, PinOff, Target, Trophy, XCircle } from 'lucide-react';
+import type { KeyboardEvent, ReactNode } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Pin } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
+import { useNextEasiest } from '../hooks/useNextEasiest';
 import { fetchRarestUnlocked } from '../lib/api';
+import { MILESTONES, PHASES } from '../data/plan';
+import { daysBetween, formatDay, formatMinutes, isoDay, parseDay, relativeDays, todayStart } from '../lib/planDates';
 import type { UnlockItem } from '../types/steam';
-import { completionColor, completionTextColor } from '../components/ProgressBar';
+import { ProgressBar } from '../components/ProgressBar';
+import { SectionHead } from '../components/SectionHead';
 import { SkeletonCard } from '../components/SkeletonCard';
 import { GameCover } from '../components/GameCover';
 import { LibraryCard } from '../components/LibraryCard';
-import { PLATFORM_META, type PlatformFilter, type ViewMode, platformLabel, platformStats } from '../lib/platforms';
+import { PLATFORM_META, type PlatformFilter, platformStats } from '../lib/platforms';
 import type { Game } from '../types/steam';
+import '../styles/hoje.css';
 
-/** Bloco de número do painel: rótulo com ícone, valor grande e dica. Abre a biblioteca filtrada. */
-function StatCell({
-  label,
-  value,
-  icon: Icon,
-  accentText,
-  valueClass = 'text-gray-100',
-  hint,
-  onClick,
-}: {
-  label: string;
-  value: number | string;
-  icon: ElementType;
-  accentText: string;
-  valueClass?: string;
-  hint: string;
-  onClick: () => void;
-}) {
-  return (
-    <button onClick={onClick} className="stat-tile">
-      <span className="stat-tile-label"><Icon className={`h-4 w-4 ${accentText}`} aria-hidden="true" />{label}</span>
-      <span className={`stat-tile-value ${valueClass}`}>{value}</span>
-      <span className="stat-tile-hint truncate">{hint}</span>
-    </button>
-  );
-}
+const FROM_TODAY = { from: { to: '/', label: 'Hoje' } };
+
+const PLATFORM_OPTIONS: { key: PlatformFilter; label: string }[] = [
+  { key: 'all', label: 'Todas' },
+  { key: 'steam', label: 'Steam' },
+  { key: 'psn', label: 'PSN' },
+  { key: 'retroachievements', label: 'RA' },
+];
+
+const PLATFORM_LONG: Record<PlatformFilter, string> = {
+  all: 'Todas as plataformas',
+  steam: 'Steam',
+  psn: 'PlayStation Network',
+  retroachievements: 'RetroAchievements',
+};
 
 function platformQuery(platform: PlatformFilter) {
   return platform === 'all' ? '' : `&platform=${platform}`;
 }
 
-/** "27h 49m" from total minutes. */
+const numberFormat = new Intl.NumberFormat('pt-BR');
+const percentFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
 function formatPlaytime(minutes: number): string {
-  if (!minutes || minutes < 1) return '—';
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h === 0 ? `${m}m` : `${h}h ${String(m).padStart(2, '0')}m`;
+  return !minutes || minutes < 1 ? '—' : formatMinutes(minutes);
 }
-
-/** "Hoje" / "Ontem" / "3 dias atrás" from Steam's rtime_last_played. */
-function lastPlayedDate(game: Game): string {
-  const ts = Number((game.metadata as Record<string, unknown> | undefined)?.rtime_last_played ?? 0);
-  if (ts <= 0) return '—';
-  const days = Math.floor((Date.now() - ts * 1000) / 86_400_000);
-  if (days <= 0) return 'Hoje';
-  if (days === 1) return 'Ontem';
-  if (days === 2) return 'Anteontem';
-  if (days < 30) return `${days} dias atrás`;
-  const months = Math.floor(days / 30);
-  return months <= 1 ? '1 mês atrás' : `${months} meses atrás`;
-}
-
-/** Bloco de número dos painéis por plataforma — mesma linguagem do StatCell. */
-function PanelCell({
-  leading,
-  label,
-  value,
-  valueClass = 'text-gray-100',
-  hint,
-}: {
-  leading: ReactNode;
-  label: string;
-  value: ReactNode;
-  valueClass?: string;
-  hint?: string;
-}) {
-  return (
-    <div className="stat-tile">
-      <span className="stat-tile-label">{leading}{label}</span>
-      <span className={`stat-tile-value ${valueClass}`}>{value}</span>
-      {hint && <span className="stat-tile-hint truncate">{hint}</span>}
-    </div>
-  );
-}
-
-const panelGrid = 'grid grid-cols-2 gap-3 lg:grid-cols-4';
 
 function pct(part: number, whole: number) {
   return whole > 0 ? Math.round((part / whole) * 100) : 0;
 }
 
-function PlatformSpecificPanel({ platform, games }: { platform: PlatformFilter; games: Game[] }) {
+/** Linha de ficha: rótulo à esquerda, valor tabular à direita. */
+function FicheItem({ label, value, leading }: { label: string; value: ReactNode; leading?: ReactNode }) {
+  return (
+    <div className="fiche-item">
+      <dt>{leading}{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+/** Detalhe da plataforma: só aparece quando uma plataforma específica está selecionada. */
+function PlatformSpecificPanel({ number, platform, games }: { number: string; platform: PlatformFilter; games: Game[] }) {
   const stats = platformStats(games);
   const [showTotals, setShowTotals] = useState(false);
 
   if (platform === 'psn') {
     const trophyRows = [
-      ['Platina', stats.psn.earned.platinum, stats.psn.total.platinum, 'text-slate-100', '/trophies/platinum.png'],
-      ['Ouro', stats.psn.earned.gold, stats.psn.total.gold, 'text-amber-300', '/trophies/gold.png'],
-      ['Prata', stats.psn.earned.silver, stats.psn.total.silver, 'text-gray-200', '/trophies/silver.png'],
-      ['Bronze', stats.psn.earned.bronze, stats.psn.total.bronze, 'text-orange-300', '/trophies/bronze.png'],
+      ['Platina', stats.psn.earned.platinum, stats.psn.total.platinum, '/trophies/platinum.png'],
+      ['Ouro', stats.psn.earned.gold, stats.psn.total.gold, '/trophies/gold.png'],
+      ['Prata', stats.psn.earned.silver, stats.psn.total.silver, '/trophies/silver.png'],
+      ['Bronze', stats.psn.earned.bronze, stats.psn.total.bronze, '/trophies/bronze.png'],
     ] as const;
     return (
       <section>
-        <div className="section-head">
-          <Trophy className="h-5 w-5 text-blue-400" />
-          <h2>Troféus da PSN</h2>
-          <div className="segmented ml-auto" role="group" aria-label="Exibir troféus">
+        <SectionHead number={number} title="Troféus da PSN" action={
+          <div className="segmented" role="group" aria-label="Exibir troféus">
             {([['Obtidos', false], ['Total', true]] as const).map(([label, total]) => (
               <button key={label} onClick={() => setShowTotals(total)} aria-pressed={showTotals === total}>{label}</button>
             ))}
           </div>
-        </div>
-        <div className={panelGrid}>
-          {trophyRows.map(([label, earned, total, color, icon]) => (
-            <PanelCell
+        } />
+        <dl className="fiche">
+          {trophyRows.map(([label, earned, total, icon]) => (
+            <FicheItem
               key={label}
-              leading={<img src={icon} alt="" className="h-[18px] w-[18px] object-contain" />}
+              leading={<img src={icon} alt="" />}
               label={label}
-              value={showTotals ? `${earned}/${total}` : earned}
-              valueClass={color}
-              hint={`${pct(earned, total)}% obtidos`}
+              value={showTotals ? `${earned}/${total}` : `${earned} · ${pct(earned, total)}%`}
             />
           ))}
-        </div>
+        </dl>
       </section>
     );
   }
@@ -135,80 +97,27 @@ function PlatformSpecificPanel({ platform, games }: { platform: PlatformFilter; 
   if (platform === 'steam') {
     return (
       <section>
-        <div className="section-head">
-          <img src={PLATFORM_META.steam.logo} alt="" className="h-5 w-5 object-contain" />
-          <h2>Conquistas da Steam</h2>
-        </div>
-        <div className={panelGrid}>
-          <PanelCell
-            leading={<img src="/trophies/achievement-100.png" alt="" className="h-[18px] w-[18px] object-contain" />}
-            label="Jogos perfeitos"
-            value={stats.steam.perfectGames}
-            valueClass="text-emerald-400"
-            hint="100% das conquistas"
-          />
-          <PanelCell
-            leading={<CheckCircle2 className="h-[18px] w-[18px] text-sky-400" />}
-            label="Conquistas"
-            value={`${stats.steam.unlocked}/${stats.steam.total}`}
-            valueClass="text-sky-400"
-            hint={`${pct(stats.steam.unlocked, stats.steam.total)}% desbloqueadas`}
-          />
-          <PanelCell
-            leading={<Clock3 className="h-[18px] w-[18px] text-violet-400" />}
-            label="Tempo recente"
-            value={`${Math.round(stats.steam.recentMinutes / 60)}h`}
-            valueClass="text-violet-300"
-            hint="Últimas 2 semanas"
-          />
-          <PanelCell
-            leading={<Target className="h-[18px] w-[18px] text-gray-400" />}
-            label="Targets"
-            value={games.length}
-            hint="Jogos rastreados"
-          />
-        </div>
+        <SectionHead number={number} title="Detalhe da Steam" />
+        <dl className="fiche">
+          <FicheItem label="Jogos a 100%" value={stats.steam.perfectGames} />
+          <FicheItem label="Conquistas" value={`${numberFormat.format(stats.steam.unlocked)}/${numberFormat.format(stats.steam.total)} · ${pct(stats.steam.unlocked, stats.steam.total)}%`} />
+          <FicheItem label="Últimas 2 semanas" value={formatMinutes(stats.steam.recentMinutes)} />
+          <FicheItem label="Metas" value={games.length} />
+        </dl>
       </section>
     );
   }
 
   if (platform === 'retroachievements') {
-    const raCompletion = pct(stats.retroachievements.hardcoreUnlocked, stats.retroachievements.hardcoreTotal);
     return (
       <section>
-        <div className="section-head">
-          <img src={PLATFORM_META.retroachievements.logo} alt="" className="h-5 w-5 object-contain" />
-          <h2>RetroAchievements</h2>
-        </div>
-        <div className={panelGrid}>
-          <PanelCell
-            leading={<Trophy className="h-[18px] w-[18px] text-emerald-400" />}
-            label="Jogos zerados"
-            value={stats.retroachievements.masteredGames}
-            valueClass="text-emerald-400"
-            hint="Mastered"
-          />
-          <PanelCell
-            leading={<Activity className="h-[18px] w-[18px] text-amber-400" />}
-            label="Hardcore"
-            value={`${stats.retroachievements.hardcoreUnlocked}/${stats.retroachievements.hardcoreTotal}`}
-            valueClass="text-amber-400"
-            hint="Conquistas hardcore"
-          />
-          <PanelCell
-            leading={<Target className="h-[18px] w-[18px] text-gray-400" />}
-            label="Conjuntos"
-            value={games.length}
-            hint="Sets rastreados"
-          />
-          <PanelCell
-            leading={<CheckCircle2 className="h-[18px] w-[18px] text-violet-400" />}
-            label="Conclusão"
-            value={`${raCompletion}%`}
-            valueClass="text-violet-300"
-            hint="Progresso hardcore"
-          />
-        </div>
+        <SectionHead number={number} title="Detalhe da RetroAchievements" />
+        <dl className="fiche">
+          <FicheItem label="Jogos masterizados" value={stats.retroachievements.masteredGames} />
+          <FicheItem label="Conquistas hardcore" value={`${numberFormat.format(stats.retroachievements.hardcoreUnlocked)}/${numberFormat.format(stats.retroachievements.hardcoreTotal)}`} />
+          <FicheItem label="Conjuntos" value={games.length} />
+          <FicheItem label="Progresso hardcore" value={`${pct(stats.retroachievements.hardcoreUnlocked, stats.retroachievements.hardcoreTotal)}%`} />
+        </dl>
       </section>
     );
   }
@@ -217,76 +126,187 @@ function PlatformSpecificPanel({ platform, games }: { platform: PlatformFilter; 
 }
 
 type Completion = { percent: number; unlocked: number; total: number };
-interface SpotItem { game: Game; completion?: Completion; pinned: boolean }
+interface FocusItem { game: Game; completion?: Completion; pinned: boolean }
 
-/**
- * Destaque estilo vitrine do launcher: arte grande à esquerda e a fila de
- * candidatos à direita (fixados primeiro, depois os mais perto de 100%).
- * A troca é por clique — sem rotação automática.
- */
-function Spotlight({ items, onTogglePin }: { items: SpotItem[]; onTogglePin: (appid: string) => void }) {
+/** Linhas "Próximos 3" do jogo em foco; carrega as conquistas pelo hook compartilhado com a página do jogo. */
+function NextThree({ game }: { game: Game }) {
+  const { next, loading, error, loaded } = useNextEasiest(game.appid);
+  const trophyWord = game.platform === 'psn' ? 'troféus' : 'conquistas';
+
+  return (
+    <div className="next3">
+      <p className="col-head">Próximos 3 · mais fáceis</p>
+      {loading || (!loaded && !error) ? (
+        <div aria-hidden="true" className="space-y-2 pt-3 motion-safe:animate-pulse">
+          {[0, 1, 2].map((i) => <div key={i} className="h-8 bg-gray-850" />)}
+        </div>
+      ) : next.length > 0 ? (
+        <ol>
+          {next.map((a, index) => (
+            <li key={a.name}>
+              <Link to={`/game/${game.appid}`} state={FROM_TODAY} className="next3-row">
+                <span className="n">{index + 1}</span>
+                <span className="name" title={a.displayName || a.name}>{a.displayName || a.name}</span>
+                <span className="pct">
+                  {typeof a.rarity === 'number' && a.rarity > 0
+                    ? `${percentFormat.format(a.rarity)}%`
+                    : typeof a.points === 'number' && a.points > 0 ? `${a.points} pts` : ''}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="next3-empty">
+          {error ? `Não foi possível carregar as ${trophyWord}.` : 'Sem dados de raridade para este jogo.'}{' '}
+          <Link to={`/game/${game.appid}`} state={FROM_TODAY}>Ver {trophyWord}</Link>
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface NowCardProps {
+  focus: FocusItem;
+  position: number;
+  total: number;
+  others: Game[];
+  completionOf: (game: Game) => Completion | undefined;
+  onPrev: () => void;
+  onNext: () => void;
+  onTogglePin: (appid: string) => void;
+}
+
+/** 01 · Agora: arte contida, progresso, próximos 3 e ações do jogo em foco. */
+function NowCard({ focus, position, total, others, completionOf, onPrev, onNext, onTogglePin }: NowCardProps) {
   const navigate = useNavigate();
-  const [index, setIndex] = useState(0);
+  const { game, completion, pinned } = focus;
   const [badArt, setBadArt] = useState<string[]>([]);
-  const current = items[Math.min(index, items.length - 1)];
-  const { game, completion, pinned } = current;
   const meta = game.platform ? PLATFORM_META[game.platform] : null;
   const noun = game.platform === 'psn' ? 'troféus' : 'conquistas';
   const art = game.heroUrl && !badArt.includes(game.heroUrl) ? game.heroUrl : null;
   const markBad = (url: string) => setBadArt((list) => (list.includes(url) ? list : [...list, url]));
+  const remaining = completion ? completion.total - completion.unlocked : 0;
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (total < 2) return;
+    if (event.key === 'ArrowLeft') onPrev();
+    else if (event.key === 'ArrowRight') onNext();
+  }
 
   return (
-    <section className="spotlight" aria-label="Em foco">
-      <div className="spotlight-hero">
+    <div className="now">
+      <div className="now-art">
         {art ? (
-          <img key={art} className="spotlight-art" src={art} alt=""
-            onError={() => markBad(art)}
+          <img key={art} src={art} alt="" onError={() => markBad(art)}
             onLoad={(event) => { if (event.currentTarget.naturalWidth < 640) markBad(art); }} />
         ) : (
-          <GameCover key={game.appid} game={game} className="spotlight-art" imgClassName="object-cover" />
+          <GameCover key={game.appid} game={game} imgClassName="object-cover" />
         )}
-        <div className="spotlight-body">
-          <span className="spotlight-eyebrow">
-            {pinned ? <><Pin size={12} aria-hidden="true" />Prioridade fixada</> : <><Crosshair size={12} aria-hidden="true" />Quase lá</>}
-          </span>
-          <h2 className="spotlight-title">{game.name}</h2>
-          <div className="spotlight-meta">
-            {meta && <span className="inline-flex items-center gap-1.5"><img src={meta.logo} alt="" />{meta.short}</span>}
-            {completion && <span>{completion.unlocked} / {completion.total} {noun}</span>}
-            {game.playtime_forever > 0 && <span>{formatPlaytime(game.playtime_forever)} jogados</span>}
-          </div>
-          {completion && <div className="spotlight-progress">
-            <strong>{completion.percent}%</strong>
-            <span className="game-card-meter-track" role="progressbar" aria-label="Conclusão do jogo" aria-valuenow={completion.percent} aria-valuemin={0} aria-valuemax={100}>
-              <span className="game-card-meter-fill" data-complete={completion.percent === 100} style={{ width: `${completion.percent}%` }} />
+      </div>
+
+      <div className="min-w-0">
+        <div className="now-eyebrow" onKeyDown={onKeyDown}>
+          <span className="micro">{pinned ? 'Prioridade fixada' : 'Sugestão: o mais perto de fechar'}</span>
+          {pinned && total > 1 && (
+            <span className="now-switch">
+              <button onClick={onPrev} aria-label="Prioridade anterior"><ChevronLeft size={16} aria-hidden="true" /></button>
+              <span className="num micro" aria-live="polite">{position} de {total}</span>
+              <button onClick={onNext} aria-label="Próxima prioridade"><ChevronRight size={16} aria-hidden="true" /></button>
             </span>
-          </div>}
-          <div className="spotlight-actions">
-            <button className="btn btn-primary btn-lg" onClick={() => navigate(`/game/${game.appid}`)}>Ver conquistas</button>
-            <button className="btn btn-glass btn-lg btn-icon" aria-pressed={pinned} onClick={() => onTogglePin(String(game.appid))}
-              aria-label={pinned ? `Desafixar ${game.name}` : `Fixar ${game.name} como prioridade`} title={pinned ? 'Desafixar' : 'Fixar como prioridade'}>
-              <Pin size={18} fill={pinned ? 'currentColor' : 'none'} />
-            </button>
-          </div>
+          )}
         </div>
-      </div>
-      <div className="spotlight-list" role="group" aria-label="Escolher destaque">
-        {items.map((item, i) => (
-          <button key={item.game.appid} className="spotlight-item" aria-pressed={item === current} onClick={() => setIndex(i)}>
-            <GameCover game={item.game} portrait className="bg-gray-800" imgClassName="object-cover" />
-            <span className="min-w-0 flex-1">
-              <span className="line-clamp-2">{item.game.name}</span>
-              {item.completion && <small>{item.completion.percent}% · {item.completion.unlocked}/{item.completion.total}</small>}
-            </span>
+        <h3 className="now-title">{game.name}</h3>
+        <div className="now-meta">
+          {meta && <span><img src={meta.logo} alt="" />{meta.short}</span>}
+          {completion && <span className="num">{completion.unlocked} de {completion.total} {noun}</span>}
+          {game.playtime_forever > 0 && <span className="num">{formatPlaytime(game.playtime_forever)}</span>}
+        </div>
+        {completion && (
+          <>
+            <div className="now-progress">
+              <strong>{completion.percent}%</strong>
+              <ProgressBar className="bar" percent={completion.percent} />
+            </div>
+            {remaining > 0 && <p className="now-left">Faltam {remaining}</p>}
+          </>
+        )}
+        <div className="now-actions">
+          <button className="btn btn-primary" onClick={() => navigate(`/game/${game.appid}`, { state: FROM_TODAY })}>Ver {noun}</button>
+          <button className="btn btn-secondary" aria-pressed={pinned} onClick={() => onTogglePin(String(game.appid))}>
+            <Pin size={14} aria-hidden="true" fill={pinned ? 'currentColor' : 'none'} />
+            {pinned ? 'Desafixar' : 'Fixar como prioridade'}
           </button>
-        ))}
+        </div>
+        {others.length > 0 && (
+          <p className="now-also">
+            Também fixados:{' '}
+            {others.slice(0, 3).map((other, index) => {
+              const c = completionOf(other);
+              return (
+                <span key={other.appid}>
+                  {index > 0 && ' · '}
+                  <Link to={`/game/${other.appid}`} state={FROM_TODAY}>{other.name}</Link>
+                  {c && <span className="num"> {c.percent}%</span>}
+                </span>
+              );
+            })}
+            {others.length > 3 && <span> · +{others.length - 3}</span>}
+          </p>
+        )}
       </div>
-    </section>
+
+      <NextThree key={game.appid} game={game} />
+    </div>
   );
 }
 
-/** Prateleira horizontal com setas, como as fileiras da loja. */
-function Shelf({ title, icon, onSeeAll, children }: { title: string; icon: ReactNode; onSeeAll?: () => void; children: ReactNode }) {
+/** 02 · Plano: fase atual, próximo marco e começo da fila (dados de data/plan.ts, como em Plan.tsx). */
+function PlanSummary({ queue, completionOf }: { queue: Game[]; completionOf: (game: Game) => Completion | undefined }) {
+  const today = todayStart();
+  const todayIso = isoDay(today);
+  const phase = PHASES.find((item) => item.start <= todayIso && todayIso <= item.end)
+    ?? (todayIso < PHASES[0].start ? PHASES[0] : PHASES[PHASES.length - 1]);
+  const active = phase.start <= todayIso && todayIso <= phase.end;
+  const milestone = MILESTONES.find((item) => item.date && item.date >= todayIso) ?? null;
+  const days = milestone?.date ? daysBetween(today, parseDay(milestone.date)) : null;
+
+  return (
+    <dl className="plan-lines">
+      <dt>Fase</dt>
+      <dd>
+        <span className="num">{phase.id}</span> · {phase.title}
+        <span className="dim num"> · {active ? 'até' : 'de'} {active ? formatDay(phase.end, today) : `${formatDay(phase.start, today)} a ${formatDay(phase.end, today)}`}</span>
+      </dd>
+      <dt>Próximo marco</dt>
+      <dd>
+        {milestone ? (
+          <>{milestone.title}<span className="dim num"> · {milestone.label}{days !== null ? ` · ${relativeDays(days)}` : ''}</span></>
+        ) : <span className="dim">Nenhum marco à frente</span>}
+      </dd>
+      <dt>Na fila</dt>
+      <dd>
+        {queue.length === 0 ? <span className="dim">A fila está vazia.</span> : (
+          <ol className="plan-queue">
+            {queue.map((game, index) => {
+              const c = completionOf(game);
+              return (
+                <li key={game.appid}>
+                  <span className="num dim">{index + 1}</span>{' '}
+                  <Link to={`/game/${game.appid}`} state={FROM_TODAY}>{game.name}</Link>
+                  {c && <span className="num dim"> {c.percent}%</span>}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </dd>
+    </dl>
+  );
+}
+
+/** Prateleira horizontal com setas. */
+function Shelf({ number, title, onSeeAll, seeAllLabel, children }: { number: string; title: string; onSeeAll: () => void; seeAllLabel: string; children: ReactNode }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ start: true, end: false });
 
@@ -309,50 +329,34 @@ function Shelf({ title, icon, onSeeAll, children }: { title: string; icon: React
 
   return (
     <section className="shelf">
-      <div className="section-head">
-        {icon}
-        <h2>{onSeeAll ? <button onClick={onSeeAll}>{title}<ChevronRight size={18} aria-hidden="true" /></button> : title}</h2>
-        <span className="spacer" />
-        <div className="shelf-arrows">
-          <button onClick={() => scroll(-1)} disabled={edges.start} aria-label={`Rolar ${title} para a esquerda`}><ChevronLeft size={16} /></button>
-          <button onClick={() => scroll(1)} disabled={edges.end} aria-label={`Rolar ${title} para a direita`}><ChevronRight size={16} /></button>
+      <SectionHead number={number} title={title} action={
+        <div className="flex items-center gap-3">
+          <button onClick={onSeeAll} className="btn btn-ghost btn-sm">{seeAllLabel}</button>
+          <div className="shelf-arrows">
+            <button onClick={() => scroll(-1)} disabled={edges.start} aria-label={`Rolar ${title} para a esquerda`}><ChevronLeft size={16} aria-hidden="true" /></button>
+            <button onClick={() => scroll(1)} disabled={edges.end} aria-label={`Rolar ${title} para a direita`}><ChevronRight size={16} aria-hidden="true" /></button>
+          </div>
         </div>
-      </div>
+      } />
       <div ref={trackRef} className="shelf-track" onScroll={measure}>{children}</div>
     </section>
   );
 }
 
-/** Relíquia: uma conquista rara desbloqueada, exibida como peça de coleção. */
-function RelicCard({ relic }: { relic: UnlockItem }) {
-  const navigate = useNavigate();
+/** Raridade da coleção: uma conquista rara desbloqueada. */
+function RarityRow({ relic }: { relic: UnlockItem }) {
   const meta = PLATFORM_META[relic.platform];
   return (
-    <button
-      onClick={() => navigate(`/game/${relic.gameId}`)}
-      className="group flex items-center gap-4 rounded-xl border border-gray-800 bg-gray-900 p-4 text-left transition-colors hover:border-gray-700"
-    >
-      {relic.icon ? (
-        <img src={relic.icon} alt="" className="h-14 w-14 shrink-0 rounded-lg border border-gray-800 object-cover" />
-      ) : (
-        <span className="grid h-14 w-14 shrink-0 place-items-center rounded-lg border border-gray-800 bg-gray-800">
-          <Gem className="h-6 w-6 text-violet-400" />
+    <li>
+      <Link to={`/game/${relic.gameId}`} state={FROM_TODAY} className="rarity-row">
+        {relic.icon ? <img src={relic.icon} alt="" /> : <span aria-hidden="true" className="h-10 w-10 bg-gray-850" />}
+        <span className="min-w-0">
+          <span className="t block">{relic.achievementTitle}</span>
+          <span className="g"><img src={meta.logo} alt="" />{relic.gameName}</span>
         </span>
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-gray-100">{relic.achievementTitle}</p>
-        <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-gray-500">
-          <img src={meta.logo} alt="" className="h-3 w-3 object-contain" />
-          {relic.gameName}
-        </p>
-      </div>
-      <div className="shrink-0 text-right">
-        <p className="font-display text-xl font-bold tabular-nums text-violet-400">
-          {relic.rarity?.toFixed(1).replace(/\.0$/, '')}%
-        </p>
-        <p className="text-[10px] uppercase tracking-wide text-gray-600">dos jogadores</p>
-      </div>
-    </button>
+        <span className="p">{relic.rarity !== null ? `${percentFormat.format(relic.rarity)}%` : ''}</span>
+      </Link>
+    </li>
   );
 }
 
@@ -361,17 +365,12 @@ export default function Dashboard() {
   const { games, gamesWithStats, loading, completionMap } = useSteam();
   const { db, togglePinned } = useLocalDb();
   const [platform, setPlatform] = useState<PlatformFilter>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('common');
+  const [focusIndex, setFocusIndex] = useState(0);
   const [relics, setRelics] = useState<UnlockItem[]>([]);
 
   useEffect(() => {
     fetchRarestUnlocked(3).then(setRelics).catch(() => setRelics([]));
   }, []);
-
-  const scopedGames = useMemo(
-    () => games.filter((game) => platform === 'all' || game.platform === platform),
-    [games, platform],
-  );
 
   const scopedGamesWithStats = useMemo(
     () => gamesWithStats.filter((game) => platform === 'all' || game.platform === platform),
@@ -379,35 +378,29 @@ export default function Dashboard() {
   );
 
   const stats = useMemo(() => {
-    let completed = 0, inProgress = 0, notStarted = 0;
+    let completed = 0, inProgress = 0;
     for (const g of scopedGamesWithStats) {
       if (db.dropped.includes(String(g.appid))) continue;
       const c = completionMap.get(g.appid);
-      if (!c) { notStarted++; continue; }
+      if (!c) continue;
       if (c.percent === 100) completed++;
       else if (c.unlocked > 0) inProgress++;
-      else notStarted++;
     }
     const platformSpecific = platformStats(scopedGamesWithStats);
     return {
       total: scopedGamesWithStats.length,
       completed,
       inProgress,
-      notStarted,
       dropped: db.dropped.filter((id) => scopedGamesWithStats.some((game) => String(game.appid) === id)).length,
       platinums: platformSpecific.psn.earned.platinum,
     };
   }, [scopedGamesWithStats, completionMap, db.dropped]);
 
-  const pctHint = (value: number) =>
-    stats.total > 0 ? `${((value / stats.total) * 100).toFixed(1)}% do total` : '0% do total';
-
   const almostDone = useMemo(() => {
     return scopedGamesWithStats
       .map((g) => ({ game: g, c: completionMap.get(g.appid) }))
       .filter((x) => x.c && x.c.percent > 0 && x.c.percent < 100 && !db.dropped.includes(String(x.game.appid)))
-      .sort((a, b) => b.c!.percent - a.c!.percent)
-      .slice(0, 12);
+      .sort((a, b) => b.c!.percent - a.c!.percent);
   }, [scopedGamesWithStats, completionMap, db.dropped]);
 
   const recentlyPlayed = useMemo(
@@ -421,78 +414,123 @@ export default function Dashboard() {
   );
 
   const pinnedGames = useMemo(
-    () => db.pinned.map((id) => scopedGames.find((g) => String(g.appid) === id)).filter(Boolean) as typeof games,
-    [db.pinned, scopedGames],
+    () => db.pinned
+      .map((id) => scopedGamesWithStats.find((g) => String(g.appid) === id))
+      .filter((game): game is Game => Boolean(game)),
+    [db.pinned, scopedGamesWithStats],
   );
 
-  const spotItems = useMemo(() => {
-    const items: SpotItem[] = [];
-    for (const id of db.pinned) {
-      const game = scopedGamesWithStats.find((g) => String(g.appid) === id);
-      if (game) items.push({ game, completion: completionMap.get(game.appid), pinned: true });
+  const queueGames = useMemo(
+    () => db.backlog
+      .map((id) => games.find((g) => String(g.appid) === id))
+      .filter((game): game is Game => Boolean(game))
+      .slice(0, 3),
+    [db.backlog, games],
+  );
+
+  const completionOf = (game: Game) => completionMap.get(game.appid);
+
+  const focus: FocusItem | null = useMemo(() => {
+    if (pinnedGames.length > 0) {
+      const game = pinnedGames[Math.min(focusIndex, pinnedGames.length - 1)];
+      return { game, completion: completionMap.get(game.appid), pinned: true };
     }
-    for (const { game, c } of almostDone) {
-      if (items.length >= 5) break;
-      if (!items.some((item) => item.game.appid === game.appid)) items.push({ game, completion: c, pinned: false });
-    }
-    return items.slice(0, 5);
-  }, [db.pinned, scopedGamesWithStats, completionMap, almostDone]);
+    const first = almostDone[0];
+    return first ? { game: first.game, completion: first.c, pinned: false } : null;
+  }, [pinnedGames, focusIndex, almostDone, completionMap]);
+
+  const focusPosition = Math.min(focusIndex, Math.max(pinnedGames.length - 1, 0));
+  const others = pinnedGames.filter((_, i) => i !== focusPosition);
+  const shelfGames = almostDone.filter((item) => item.game.appid !== focus?.game.appid).slice(0, 12);
+  const noGames = !loading && games.length === 0;
+
+  const query = platformQuery(platform);
+  const lede: { label: string; to: string; value: number }[] = [
+    { label: 'metas', to: `/library?status=all${query}`, value: stats.total },
+    { label: 'em 100%', to: `/library?status=completed${query}`, value: stats.completed },
+    { label: stats.platinums === 1 ? 'platina' : 'platinas', to: '/library?status=platinum&platform=psn', value: stats.platinums },
+    { label: 'em progresso', to: `/library?status=inprogress${query}`, value: stats.inProgress },
+  ];
+  if (stats.dropped > 0) lede.push({ label: stats.dropped === 1 ? 'abandonado' : 'abandonados', to: `/library?status=dropped${query}`, value: stats.dropped });
+
+  const showPlatformPanel = platform !== 'all';
+  const extraNumber = (offset: number) => String(4 + offset).padStart(2, '0');
 
   return (
-    <div className="home-page">
-      <h1 className="sr-only">Painel</h1>
-      <div className="home-top">
-        <div className="subtabs" role="group" aria-label="Plataforma do painel">
-          {(['all', 'steam', 'psn', 'retroachievements'] as PlatformFilter[]).map((item) => (
-            <button
-              key={item}
-              className="subtab"
-              aria-pressed={platform === item}
-              onClick={() => {
-                setPlatform(item);
-                if (item === 'all') setViewMode('common');
-              }}
-            >
-              {item !== 'all' && <img src={PLATFORM_META[item].logo} alt="" className="h-4 w-4 object-contain" />}
-              {item === 'all' ? 'Todas as plataformas' : platformLabel(item)}
-            </button>
-          ))}
-        </div>
-        <div className="segmented" role="group" aria-label="Tipo de visão">
-          {(['common', 'platform'] as ViewMode[]).map((mode) => (
-            <button key={mode} onClick={() => setViewMode(mode)} aria-pressed={viewMode === mode} disabled={mode === 'platform' && platform === 'all'}
-              title={mode === 'platform' && platform === 'all' ? 'Escolha uma plataforma para ver os números específicos' : undefined}>
-              {mode === 'common' ? 'Comum' : 'Por plataforma'}
+    <div className="page hoje">
+      <h1 className="sr-only">Hoje</h1>
+
+      <div className="hoje-top">
+        {loading && games.length === 0 ? (
+          <p className="hoje-lede" aria-hidden="true"><span className="inline-block h-5 w-72 max-w-full bg-gray-850" /></p>
+        ) : (
+          <p className="hoje-lede">
+            {lede.map(({ label, to, value }, index) => (
+              <span key={label}>
+                {index > 0 && <span className="sep" aria-hidden="true">·</span>}
+                <Link to={to} className="num">{numberFormat.format(value)}</Link> {label}
+              </span>
+            ))}
+          </p>
+        )}
+        <div className="segmented platform-filter" role="group" aria-label="Plataforma">
+          {PLATFORM_OPTIONS.map(({ key, label }) => (
+            <button key={key} aria-pressed={platform === key} title={PLATFORM_LONG[key]}
+              onClick={() => { setPlatform(key); setFocusIndex(0); }}>
+              {key !== 'all' && <img src={PLATFORM_META[key].logo} alt="" />}
+              {label}
             </button>
           ))}
         </div>
       </div>
 
-      {spotItems.length > 0 ? (
-        <Spotlight key={platform} items={spotItems} onTogglePin={togglePinned} />
-      ) : loading ? (
-        <div className="spotlight"><div className="spotlight-hero animate-pulse" /></div>
-      ) : null}
+      <section aria-label="Agora">
+        <SectionHead number="01" title="Agora" />
+        {focus ? (
+          <NowCard
+            focus={focus}
+            position={focusPosition + 1}
+            total={pinnedGames.length}
+            others={others}
+            completionOf={completionOf}
+            onPrev={() => setFocusIndex((focusPosition - 1 + pinnedGames.length) % pinnedGames.length)}
+            onNext={() => setFocusIndex((focusPosition + 1) % pinnedGames.length)}
+            onTogglePin={togglePinned}
+          />
+        ) : loading ? (
+          <div className="now" aria-hidden="true">
+            <div className="now-art motion-safe:animate-pulse" />
+          </div>
+        ) : noGames ? (
+          <div>
+            <p className="font-display text-lg font-bold">Nada por aqui ainda</p>
+            <p className="lede mt-1">Conecte uma plataforma para ver o que jogar agora.</p>
+            <Link to="/settings?tab=connections" className="btn btn-primary mt-3">Conectar uma plataforma</Link>
+          </div>
+        ) : (
+          <p className="lede">Fixe um jogo como prioridade para acompanhá-lo aqui.</p>
+        )}
+      </section>
 
-      <div className="stat-strip">
-        <StatCell label="Targets" value={stats.total} icon={Target} accentText="text-violet-400" hint="Definidos" onClick={() => navigate(`/library?status=all${platformQuery(platform)}`)} />
-        <StatCell label="100%" value={stats.completed} icon={CheckCircle2} accentText="text-emerald-400" valueClass="text-emerald-400" hint={pctHint(stats.completed)} onClick={() => navigate(`/library?status=completed${platformQuery(platform)}`)} />
-        <StatCell label="Platinas" value={stats.platinums} icon={Trophy} accentText="text-amber-400" valueClass="text-amber-400" hint={pctHint(stats.platinums)} onClick={() => navigate('/library?status=platinum&platform=psn')} />
-        <StatCell label="Em progresso" value={stats.inProgress} icon={Activity} accentText="text-sky-400" valueClass="text-sky-400" hint={pctHint(stats.inProgress)} onClick={() => navigate(`/library?status=inprogress${platformQuery(platform)}`)} />
-        <StatCell label="Abandonados" value={stats.dropped} icon={XCircle} accentText="text-red-400" valueClass={stats.dropped > 0 ? 'text-red-400' : 'text-gray-500'} hint={pctHint(stats.dropped)} onClick={() => navigate(`/library?status=dropped${platformQuery(platform)}`)} />
-      </div>
-
-      {viewMode === 'platform' && <PlatformSpecificPanel platform={platform} games={scopedGamesWithStats} />}
+      <section aria-label="Plano">
+        <SectionHead number="02" title="Plano" action={<Link to="/plano" className="btn btn-ghost btn-sm">Ver plano</Link>} />
+        <PlanSummary queue={queueGames} completionOf={completionOf} />
+      </section>
 
       {loading && almostDone.length === 0 ? (
-        <div className="library-grid">{Array.from({ length: 7 }).map((_, i) => <SkeletonCard key={i} portrait />)}</div>
-      ) : almostDone.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-800 p-8 text-center">
-          <p className="text-sm text-gray-500">Analisando sua biblioteca… volte em instantes.</p>
-        </div>
+        <section>
+          <SectionHead number="03" title="Quase lá" />
+          <div className="library-grid">{Array.from({ length: 7 }).map((_, i) => <SkeletonCard key={i} portrait />)}</div>
+        </section>
+      ) : shelfGames.length === 0 ? (
+        <section>
+          <SectionHead number="03" title="Quase lá" />
+          <p className="lede">{almostDone.length === 0 ? 'Nenhum jogo em andamento nesta seleção.' : 'Só o jogo em foco está em andamento.'}</p>
+        </section>
       ) : (
-        <Shelf title="Quase lá" icon={<Crosshair className="h-5 w-5 text-emerald-400" aria-hidden="true" />} onSeeAll={() => navigate(`/library?status=inprogress${platformQuery(platform)}`)}>
-          {almostDone.map(({ game, c }) => (
+        <Shelf number="03" title="Quase lá" seeAllLabel={`Ver todos (${stats.inProgress})`}
+          onSeeAll={() => navigate(`/library?status=inprogress${query}`)}>
+          {shelfGames.map(({ game, c }) => (
             <LibraryCard key={game.appid} game={game} completion={c}
               isPinned={db.pinned.includes(String(game.appid))}
               onTogglePinned={togglePinned} />
@@ -500,130 +538,52 @@ export default function Dashboard() {
         </Shelf>
       )}
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {recentlyPlayed.length > 0 && (
-          <section>
-            <div className="section-head">
-              <Clock3 className="h-5 w-5 text-sky-400" aria-hidden="true" />
-              <h2><button onClick={() => navigate('/library?sort=recent')}>Jogados recentemente<ChevronRight size={18} aria-hidden="true" /></button></h2>
-            </div>
-            <div className="list-surface">
-              {recentlyPlayed.map((g) => {
-                const c = completionMap.get(g.appid);
-                return (
-                  <button key={g.appid} onClick={() => navigate(`/game/${g.appid}`)} className="list-surface-row">
-                    <GameCover game={g} className="h-11 w-20 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
-                    <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-100">{g.name}</p>
-                    <span className="hidden shrink-0 items-center gap-1.5 text-xs text-gray-500 sm:flex">
-                      <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                      {formatPlaytime(g.playtime_forever)}
-                    </span>
-                    <span className="hidden w-24 shrink-0 items-center gap-1.5 text-xs text-gray-500 md:flex">
-                      <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-                      {lastPlayedDate(g)}
-                    </span>
-                    <div className="flex w-24 shrink-0 items-center justify-end gap-2">
-                      {c ? (
-                        <>
-                          <div className="hidden h-1 w-10 overflow-hidden rounded-full bg-gray-800 sm:block">
-                            <div className={`h-full rounded-full ${completionColor(c.percent)}`} style={{ width: `${c.percent}%` }} />
-                          </div>
-                          <span className={`text-xs font-semibold tabular-nums ${completionTextColor(c.percent)}`}>{c.percent}%</span>
-                          {c.percent === 100 && <img src="/trophies/gold.png" alt="" className="h-4 w-4 object-contain" />}
-                        </>
-                      ) : (
-                        <span className="text-xs text-gray-600">—</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-              <button onClick={() => navigate('/library?sort=recent')} className="list-surface-foot">
-                Ver histórico completo <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </div>
-          </section>
-        )}
-
+      {recentlyPlayed.length > 0 && (
         <section>
-          <div className="section-head">
-            <Pin className="h-5 w-5 text-violet-400" aria-hidden="true" />
-            <h2>Prioridades</h2>
-            <span className="section-sub">Jogos fixados</span>
-            <span className="spacer" />
-            <button onClick={() => navigate('/plano')} className="btn btn-secondary h-8 px-3 text-xs">Gerenciar</button>
+          <SectionHead number="04" title="Recentes" action={<Link to="/library?status=inprogress" className="btn btn-ghost btn-sm">Ver todos</Link>} />
+          <div className="ledger" role="table" aria-label="Jogos recentes">
+            <div className="ledger-head col-head" role="row">
+              <span role="columnheader">Jogo</span>
+              <span role="columnheader">Plataforma</span>
+              <span role="columnheader" className="r">Últimas 2 sem.</span>
+              <span role="columnheader" className="r">Progresso</span>
+            </div>
+            {recentlyPlayed.map((g) => {
+              const c = completionMap.get(g.appid);
+              const meta = g.platform ? PLATFORM_META[g.platform] : null;
+              return (
+                <Link key={g.appid} to={`/game/${g.appid}`} state={FROM_TODAY} className="ledger-row" role="row">
+                  <span className="ledger-game" role="cell">
+                    <GameCover game={g} portrait className="ledger-cover" imgClassName="object-cover" />
+                    <span>{g.name}</span>
+                  </span>
+                  <span className="ledger-plat" role="cell">{meta && <><img src={meta.logo} alt="" />{meta.short}</>}</span>
+                  <span className="ledger-time r" role="cell">{formatPlaytime(g.playtime_2weeks ?? 0)}</span>
+                  <span className="ledger-prog" role="cell">
+                    {c ? (
+                      <>
+                        <ProgressBar className="bar" percent={c.percent} />
+                        <span className="v">{c.percent}%</span>
+                      </>
+                    ) : <span className="v ml-auto text-gray-500">—</span>}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
-          {pinnedGames.length === 0 ? (
-            <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-gray-800 p-8 text-center">
-              <Pin className="h-6 w-6 text-gray-600" aria-hidden="true" />
-              <p className="text-sm text-gray-500">Fixe jogos como prioridade para vê-los aqui.</p>
-            </div>
-          ) : (
-            <div className="list-surface">
-              {pinnedGames.map((g) => {
-                const c = completionMap.get(g.appid);
-                const meta = g.platform ? PLATFORM_META[g.platform] : null;
-                const isPsn = g.platform === 'psn';
-                return (
-                  <div key={g.appid} className="list-surface-row">
-                    <button onClick={() => navigate(`/game/${g.appid}`)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-                      <GameCover game={g} className="h-11 w-20 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-gray-100">{g.name}</p>
-                          {meta && (
-                            <span className="flex shrink-0 items-center gap-1 rounded-md bg-gray-800 px-1.5 py-0.5 text-[10px] font-semibold text-gray-300">
-                              <img src={meta.logo} alt="" className="h-3 w-3 object-contain" />
-                              {meta.short}
-                            </span>
-                          )}
-                        </div>
-                        {c && (
-                          <p className="mt-0.5 text-xs text-gray-500">
-                            {c.unlocked} / {c.total} {isPsn ? 'troféus' : 'conquistas'}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                    {c && (
-                      <div className="hidden w-28 shrink-0 items-center gap-2 sm:flex">
-                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-gray-800">
-                          <div className={`h-full rounded-full ${completionColor(c.percent)}`} style={{ width: `${c.percent}%` }} />
-                        </div>
-                        <span className="w-9 text-right text-xs font-semibold tabular-nums text-gray-300">{c.percent}%</span>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => togglePinned(String(g.appid))}
-                      title="Desafixar"
-                      aria-label={`Desafixar ${g.name}`}
-                      className="icon-btn h-8 w-8 shrink-0"
-                    >
-                      <PinOff className="h-4 w-4" />
-                    </button>
-                  </div>
-                );
-              })}
-              <button onClick={() => navigate('/plano')} className="list-surface-foot">
-                Abrir o plano <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </div>
-          )}
         </section>
-      </div>
+      )}
+
+      {showPlatformPanel && <PlatformSpecificPanel number={extraNumber(recentlyPlayed.length > 0 ? 1 : 0)} platform={platform} games={scopedGamesWithStats} />}
 
       {relics.length > 0 && (
         <section>
-          <div className="section-head">
-            <Gem className="h-5 w-5 text-violet-400" aria-hidden="true" />
-            <h2>Relíquias da coleção</h2>
-            <span className="section-sub">Suas conquistas mais raras entre todos os jogadores</span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <SectionHead number={extraNumber((recentlyPlayed.length > 0 ? 1 : 0) + (showPlatformPanel ? 1 : 0))} title="Raridades da coleção" sub="Suas conquistas mais raras entre todos os jogadores" />
+          <ul className="rarities">
             {relics.map((relic) => (
-              <RelicCard key={`${relic.gameId}-${relic.achievementTitle}`} relic={relic} />
+              <RarityRow key={`${relic.gameId}-${relic.achievementTitle}`} relic={relic} />
             ))}
-          </div>
+          </ul>
         </section>
       )}
     </div>

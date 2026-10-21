@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { BookmarkCheck, BookmarkPlus, Check, CircleSlash, Pin } from 'lucide-react';
+import { BookmarkCheck, BookmarkPlus, CircleSlash, Pin } from 'lucide-react';
 import { GameCover } from './GameCover';
+import { Stamp } from './Stamp';
 import { PLATFORM_META, hasPsnPlatinum, psnTrophyBreakdown } from '../lib/platforms';
 import type { Game } from '../types/steam';
 
@@ -24,7 +25,7 @@ const TROPHY_TYPES = [
 /**
  * Capa no estilo do launcher: a arte ocupa o cartão, o progresso fica numa
  * barra fina sobre a base da capa e o texto embaixo é só nome + uma linha.
- * Ações (backlog, fixar) aparecem no canto ao passar o ponteiro ou focar.
+ * Ações (plano, fixar) aparecem no canto ao passar o ponteiro ou focar.
  */
 export function LibraryCard({ game, completion, isPinned, inBacklog, isDropped, onToggleBacklog, onTogglePinned }: LibraryCardProps) {
   const meta = game.platform ? PLATFORM_META[game.platform] : null;
@@ -39,8 +40,7 @@ export function LibraryCard({ game, completion, isPinned, inBacklog, isDropped, 
         <div className="game-card-cover">
           <GameCover game={game} portrait className="h-full w-full" imgClassName="object-cover" />
           {(platinum || complete || isDropped) && <div className="game-card-badges">
-            {platinum && <span className="cover-badge"><img src="/trophies/platinum.png" alt="" />Platina</span>}
-            {!platinum && complete && <span className="cover-badge" data-tone="done"><Check size={12} aria-hidden="true" />100%</span>}
+            {(platinum || complete) && <span className="cover-stamp"><Stamp kind={platinum ? 'platina' : '100'} size={24} /></span>}
             {isDropped && <span className="cover-badge" data-tone="drop"><CircleSlash size={12} aria-hidden="true" />Abandonado</span>}
           </div>}
           {completion && <>
@@ -69,7 +69,7 @@ export function LibraryCard({ game, completion, isPinned, inBacklog, isDropped, 
         })}
       </div>}
       {(onToggleBacklog || onTogglePinned) && <div className="game-card-actions">
-        {onToggleBacklog && <button className="game-card-action" onClick={() => onToggleBacklog(String(game.appid))} aria-pressed={Boolean(inBacklog)} aria-label={`${inBacklog ? 'Remover do backlog' : 'Adicionar ao backlog'}: ${game.name}`} title={inBacklog ? 'Remover do backlog' : 'Adicionar ao backlog'}>
+        {onToggleBacklog && <button className="game-card-action" onClick={() => onToggleBacklog(String(game.appid))} aria-pressed={Boolean(inBacklog)} aria-label={`${inBacklog ? 'Remover da fila' : 'Adicionar ao plano'}: ${game.name}`} title={inBacklog ? 'Remover da fila' : 'Adicionar ao plano'}>
           {inBacklog ? <BookmarkCheck size={15} /> : <BookmarkPlus size={15} />}
         </button>}
         {onTogglePinned && <button className="game-card-action" onClick={() => onTogglePinned(String(game.appid))} aria-pressed={Boolean(isPinned)} aria-label={`${isPinned ? 'Desafixar' : 'Fixar'}: ${game.name}`} title={isPinned ? 'Desafixar' : 'Fixar como prioridade'}>

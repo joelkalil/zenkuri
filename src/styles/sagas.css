@@ -1,0 +1,40 @@
+/* Sagas: faixa compacta, fases como seções numeradas e tabela por jogo. */
+@layer components {
+  .sg-banner { position: relative; display: flex; align-items: flex-end; min-height: 128px; padding: 1.25rem 1.5rem; overflow: hidden; border-radius: var(--radius-cover); background: var(--color-gray-900); color: #fff; isolation: isolate; }
+  .sg-banner > img, .sg-banner > .sg-banner-fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
+  .sg-banner::before { content: ''; position: absolute; inset: 0; z-index: -1; background: rgb(14 12 11 / 74%); }
+  .sg-banner h1 { font-size: clamp(1.5rem, 2.6vw, 2rem); line-height: 1.1; font-weight: 700; letter-spacing: -0.015em; color: #fff; }
+  .sg-banner p { max-width: 44rem; margin-top: 0.375rem; font-size: 0.8125rem; line-height: 1.5; color: rgb(255 255 255 / 82%); }
+  .sg-eyebrow { font-family: var(--font-mono); font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(255 255 255 / 72%); }
+
+  .sg-progress { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+  .sg-track { display: block; flex: 1; height: 4px; min-width: 3rem; background: var(--color-gray-800); overflow: hidden; border-radius: 1px; }
+  .sg-fill { display: block; height: 100%; background: var(--color-violet-500); transition: width 200ms var(--motion-ease); }
+  .sg-fill[data-complete="true"] { background: var(--zk-complete); }
+
+  .sg-row { position: relative; display: grid; grid-template-columns: 2.25rem 3.5rem minmax(0, 1fr) 11rem; align-items: start; gap: 1rem; padding: 0.875rem 0.25rem; border-top: 1px solid var(--color-gray-800); transition: background var(--motion-fast); }
+  .sg-row:last-child { border-bottom: 1px solid var(--color-gray-800); }
+  .sg-row:hover { background: var(--color-gray-850); }
+  .sg-row[data-next="true"] { box-shadow: inset 2px 0 0 var(--color-violet-500); }
+  .sg-order { padding-top: 0.125rem; font-family: var(--font-mono); font-size: 0.875rem; font-weight: 500; color: var(--color-gray-500); font-variant-numeric: tabular-nums; }
+  .sg-order[data-next="true"] { color: var(--color-violet-400); }
+  .sg-title { font-family: var(--font-display); font-size: 0.9375rem; font-weight: 700; color: var(--color-gray-100); }
+  .sg-row a.sg-title:hover { color: var(--color-violet-400); }
+  .sg-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.875rem; margin-top: 0.25rem; font-size: 0.75rem; color: var(--color-gray-500); }
+  .sg-note { margin-top: 0.375rem; font-size: 0.8125rem; line-height: 1.5; color: var(--color-gray-400); }
+  .sg-status { display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; text-align: right; }
+  .sg-status-done { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--zk-complete); }
+
+  @media (max-width: 767px) {
+    .sg-banner { min-height: 112px; padding: 1rem; }
+    .sg-row { grid-template-columns: 1.75rem 3rem minmax(0, 1fr); gap: 0.75rem; }
+    .sg-status { grid-column: 3; align-items: stretch; text-align: left; }
+  }
+
+  /* Cabeçalho de seção que quebra linha no celular: número fixo, ação abaixo do título. */
+  .sh-wrap .section-num { flex-shrink: 0; white-space: nowrap; }
+  @media (max-width: 767px) {
+    .sh-wrap { flex-wrap: wrap; }
+    .sh-wrap .section-action { margin-left: 0; flex-basis: 100%; }
+  }
+}

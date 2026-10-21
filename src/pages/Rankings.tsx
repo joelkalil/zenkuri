@@ -1,42 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ElementType } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  CheckCircle2,
-  ChevronRight,
-  Clock3,
-  Flame,
-  Gauge,
-  Gem,
-  ListChecks,
-  Mountain,
-  ScrollText,
-  Sparkles,
-  Trophy,
-} from 'lucide-react';
 import { GameCover } from '../components/GameCover';
-import { ProgressBar, completionTextColor } from '../components/ProgressBar';
+import { SectionHead } from '../components/SectionHead';
+import { Stamp } from '../components/Stamp';
 import { useSteam } from '../context/SteamContext';
 import { RANKING_CATEGORIES, type RankingCategoryId } from '../data/rankings';
 import { fetchRecentCompletions, type CompletionHistoryItem } from '../lib/api';
 import { hasPsnPlatinum, PLATFORM_META } from '../lib/platforms';
 import type { Game, Platform } from '../types/steam';
-
-const categoryIcons: Record<RankingCategoryId, ElementType> = {
-  finish: ListChecks,
-  grind: Flame,
-  quick: Gauge,
-  demanding: Mountain,
-  essential: Gem,
-};
-
-const categoryColors: Record<RankingCategoryId, string> = {
-  finish: 'text-emerald-400',
-  grind: 'text-orange-400',
-  quick: 'text-sky-400',
-  demanding: 'text-rose-400',
-  essential: 'text-amber-400',
-};
+import '../styles/rankings.css';
 
 function formatCompletionDate(timestamp: number) {
   return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -50,15 +22,15 @@ function RecentCompletion({ item }: { item: CompletionHistoryItem }) {
   const isPlatinum = item.kind === 'platinum';
 
   return (
-    <button onClick={() => navigate(`/game/${item.game.appid}`)} className="list-surface-row group">
-      <GameCover game={item.game} portrait className="h-14 w-10 shrink-0 rounded-md bg-gray-800" imgClassName="object-cover" />
+    <button onClick={() => navigate(`/game/${item.game.appid}`)} className="row group w-full px-1 text-left">
+      <GameCover game={item.game} portrait className="h-14 w-10 shrink-0 rounded-sm bg-gray-800" imgClassName="object-cover" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-gray-200 group-hover:text-gray-50">{item.game.name}</span>
+        <span className="block truncate text-sm font-semibold text-gray-200 group-hover:text-violet-400">{item.game.name}</span>
         <span className="mt-1 flex items-center gap-1.5 text-xs text-gray-500">
           <img src={PLATFORM_META[platform].logo} alt="" className="h-3.5 w-3.5 object-contain" />
           {PLATFORM_META[platform].short}
           <span aria-hidden="true">·</span>
-          {formatCompletionDate(item.completedAt)}
+          <span className="num">{formatCompletionDate(item.completedAt)}</span>
         </span>
       </span>
       <img
@@ -70,25 +42,20 @@ function RecentCompletion({ item }: { item: CompletionHistoryItem }) {
   );
 }
 
-function RecentSection({ title, subtitle, items, icon: Icon, iconClass }: {
+function RecentSection({ number, title, subtitle, items }: {
+  number: string;
   title: string;
   subtitle: string;
   items: CompletionHistoryItem[];
-  icon: ElementType;
-  iconClass: string;
 }) {
   return (
     <section>
-      <div className="section-head">
-        <Icon className={`h-5 w-5 ${iconClass}`} aria-hidden="true" />
-        <h2>{title}</h2>
-        <span className="section-sub">{subtitle}</span>
-      </div>
-      <div className="list-surface">
+      <SectionHead className="sh-wrap" number={number} title={title} sub={subtitle} />
+      <div>
         {items.length > 0 ? items.slice(0, 5).map((item) => (
           <RecentCompletion key={`${item.kind}-${item.game.appid}`} item={item} />
         )) : (
-          <p className="px-4 py-6 text-center text-sm text-gray-500">Nenhuma conclusão sincronizada ainda.</p>
+          <p className="py-4 text-sm text-gray-500">Nenhuma conclusão sincronizada ainda.</p>
         )}
       </div>
     </section>
@@ -99,30 +66,38 @@ function isDone(game: Game) {
   return game.completion?.percent === 100 || hasPsnPlatinum(game);
 }
 
-/** Top 3 da lista: arte larga, posição grande e a nota da curadoria. */
+/** Situação do jogo na sua conta: carimbo se concluído, % se começado, traço se não. */
+function Situation({ game, plain = false }: { game: Game; plain?: boolean }) {
+  const percent = game.completion?.percent ?? 0;
+  if (hasPsnPlatinum(game)) {
+    return <span className="rk-state" data-tone="platina">{!plain && <Stamp kind="platina" size={24} seed={game.appid} />}Platina</span>;
+  }
+  if (percent >= 100) {
+    return <span className="rk-state" data-tone="complete">{!plain && <Stamp kind="100" size={24} seed={game.appid} />}100%</span>;
+  }
+  if (percent > 0) return <span className="rk-state num">{percent}%</span>;
+  return <span className="rk-state text-gray-500">Não iniciado</span>;
+}
+
+/** Top 3: arte larga com sobreposição chapada, posição grande e a nota da curadoria. */
 function FeatureRank({ game, rank, estimate, note }: { game: Game; rank: number; estimate: string; note: string }) {
   const navigate = useNavigate();
   const [artFailed, setArtFailed] = useState(false);
-  const percent = game.completion?.percent ?? 0;
   const platform = game.platform as Platform;
 
   return (
-    <button className="feature-card" onClick={() => navigate(`/game/${game.appid}`)} aria-label={`${rank}º — ${game.name}`}>
+    <button className="feature-card" onClick={() => navigate(`/game/${game.appid}`)} aria-label={`${rank}º, ${game.name}`}>
       {game.heroUrl && !artFailed
         ? <img className="feature-art" src={game.heroUrl} alt="" onError={() => setArtFailed(true)} />
         : <GameCover game={game} className="feature-art" imgClassName="object-cover" />}
-      <span className="feature-rank" aria-hidden="true">{rank}</span>
+      <span className="feature-rank" aria-hidden="true">{String(rank).padStart(2, '0')}</span>
       <span className="feature-body">
-        {isDone(game) && <span className="cover-badge mb-2" data-tone="done"><CheckCircle2 size={12} aria-hidden="true" />Concluído</span>}
-        <span className="feature-title block">{game.name}</span>
+        <span className="feature-title block font-display">{game.name}</span>
         <span className="feature-note">{note}</span>
         <span className="feature-meta">
           <span className="inline-flex items-center gap-1.5"><img src={PLATFORM_META[platform].logo} alt="" />{PLATFORM_META[platform].short}</span>
-          <span className="inline-flex items-center gap-1"><Clock3 size={12} aria-hidden="true" />{estimate}</span>
-          <span className="flex min-w-24 flex-1 items-center gap-2">
-            <span className="game-card-meter-track"><span className="game-card-meter-fill" data-complete={percent === 100} style={{ width: `${percent}%` }} /></span>
-            <span className="font-semibold">{percent}%</span>
-          </span>
+          <span className="num">{estimate}</span>
+          <Situation game={game} plain />
         </span>
       </span>
     </button>
@@ -131,41 +106,26 @@ function FeatureRank({ game, rank, estimate, note }: { game: Game; rank: number;
 
 function RankingRow({ game, rank, estimate, note }: { game: Game; rank: number; estimate: string; note: string }) {
   const navigate = useNavigate();
-  const percent = game.completion?.percent ?? 0;
   const platform = game.platform as Platform;
 
   return (
-    <button onClick={() => navigate(`/game/${game.appid}`)} className="rank-row group">
-      <span className="rank-num">{String(rank).padStart(2, '0')}</span>
-      <span className="rank-cover"><GameCover game={game} portrait className="h-full w-full" imgClassName="object-cover" /></span>
+    <button onClick={() => navigate(`/game/${game.appid}`)} className="rk-row">
+      <span className="rk-pos">{String(rank).padStart(2, '0')}</span>
+      <span className="rk-cover"><GameCover game={game} portrait className="h-full w-full" imgClassName="object-cover" /></span>
       <span className="min-w-0">
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-semibold text-gray-100">{game.name}</span>
-          {isDone(game) && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-label="Concluído" />}
-        </span>
-        <span className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">{note}</span>
-        <span className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-500 md:hidden">
-          <img src={PLATFORM_META[platform].logo} alt="" className="h-3.5 w-3.5 object-contain" />
-          {PLATFORM_META[platform].short} · {estimate} · {percent}%
-        </span>
-      </span>
-      <span className="rank-hide-sm">
-        <span className="mb-1.5 flex items-center justify-between text-[11px]">
-          <span className="text-gray-500">Progresso</span>
-          <span className={`font-semibold tabular-nums ${completionTextColor(percent)}`}>{percent}%</span>
-        </span>
-        <ProgressBar percent={percent} height="h-1" />
-      </span>
-      <span className="rank-hide-sm text-right">
-        <span className="flex items-center justify-end gap-1 text-xs font-semibold text-gray-300">
-          <Clock3 className="h-3.5 w-3.5 text-gray-500" aria-hidden="true" /> {estimate}
-        </span>
-        <span className="mt-1 flex items-center justify-end gap-1 text-[11px] text-gray-500">
+        <span className="rk-name block truncate">{game.name}</span>
+        <span className="rk-note">{note}</span>
+        <span className="rk-mobile-meta">
           <img src={PLATFORM_META[platform].logo} alt="" className="h-3.5 w-3.5 object-contain" />
           {PLATFORM_META[platform].short}
+          <span className="num">· {estimate}</span>
         </span>
       </span>
-      <ChevronRight className="rank-hide-sm h-4 w-4 text-gray-600 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-300" aria-hidden="true" />
+      <span className="rk-plat rk-hide-md">
+        <img src={PLATFORM_META[platform].logo} alt="" />{PLATFORM_META[platform].short}
+      </span>
+      <Situation game={game} />
+      <span className="rk-est num text-xs text-gray-300 rk-hide-md">{estimate}</span>
     </button>
   );
 }
@@ -212,46 +172,43 @@ export default function Rankings() {
     <div className="page">
       <header className="page-head">
         <div>
-          <span className="page-eyebrow"><Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> Curadoria da biblioteca</span>
+          <span className="page-eyebrow">Curadoria externa</span>
           <h1 className="page-title">Rankings de Platina</h1>
-          <p className="page-desc">Prioridades para decidir o próximo jogo sem transformar o backlog em um segundo emprego.</p>
+          <p className="page-desc">Listas escolhidas à mão para decidir o próximo jogo, cruzadas com o que já está na sua biblioteca.</p>
         </div>
         <div className="page-actions">
-          <span className="chip">{RANKING_CATEGORIES.length} listas</span>
-          <span className="chip">{totalEntries} recomendações</span>
-          <Link to="/sagas" className="btn btn-secondary"><ScrollText className="h-4 w-4" aria-hidden="true" /> Sagas: FF e RE</Link>
+          <Link to="/sagas" className="btn btn-secondary">Sagas: FF e RE</Link>
         </div>
       </header>
 
+      <p className="lede">
+        <span className="num">{RANKING_CATEGORIES.length}</span> listas · <span className="num">{totalEntries}</span> recomendações no total
+      </p>
+
       <div className="tabs-bar">
         <div className="subtabs" role="tablist" aria-label="Categorias de ranking">
-          {RANKING_CATEGORIES.map((category) => {
-            const Icon = categoryIcons[category.id];
-            const active = category.id === activeId;
-            return (
-              <button key={category.id} role="tab" aria-selected={active} onClick={() => selectCategory(category.id)} className="subtab">
-                <Icon className={`h-4 w-4 ${active ? categoryColors[category.id] : ''}`} aria-hidden="true" />
-                <span className="sm:hidden">{category.shortLabel}</span>
-                <span className="hidden sm:inline">{category.label}</span>
-              </button>
-            );
-          })}
+          {RANKING_CATEGORIES.map((category) => (
+            <button key={category.id} role="tab" aria-selected={category.id === activeId} onClick={() => selectCategory(category.id)} className="subtab">
+              <span className="sm:hidden">{category.shortLabel}</span>
+              <span className="hidden sm:inline">{category.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <section className="min-w-0 space-y-5" aria-labelledby="ranking-title">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 id="ranking-title" className="text-lg font-semibold text-gray-100">{activeCategory.label}</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">{activeCategory.description}</p>
-            </div>
-            <span className="text-xs text-gray-500">
-              {completedInRanking > 0
-                ? `${completedInRanking} já concluído${completedInRanking > 1 ? 's' : ''} · ${rankedGames.length} jogos`
-                : `${rankedGames.length} jogos na mira`}
-            </span>
-          </div>
+      <div className="grid items-start gap-x-12 gap-y-10 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <section className="min-w-0 space-y-6" aria-labelledby="ranking-title">
+          <SectionHead className="sh-wrap"
+            number="01"
+            title={<span id="ranking-title">{activeCategory.label}</span>}
+            action={
+              <span className="text-xs text-gray-500">
+                Você tem <span className="num text-gray-100">{rankedGames.length}</span> de <span className="num text-gray-100">{activeCategory.entries.length}</span>
+                {completedInRanking > 0 && <> · <span className="num text-gray-100">{completedInRanking}</span> {completedInRanking > 1 ? 'concluídos' : 'concluído'}</>}
+              </span>
+            }
+          />
+          <p className="lede -mt-3 max-w-3xl">{activeCategory.description}</p>
 
           {loading ? (
             <div className="feature-grid">
@@ -267,7 +224,10 @@ export default function Rankings() {
                 </div>
               )}
               {rest.length > 0 && (
-                <div className="list-surface">
+                <div>
+                  <div className="rk-head col-head" aria-hidden="true">
+                    <span>Nº</span><span /><span>Jogo</span><span>Plataforma</span><span>Sua situação</span><span className="text-right">Estimativa</span>
+                  </div>
                   {rest.map(({ game, estimate, note }, index) => (
                     <RankingRow key={`${activeId}-${game.appid}`} game={game} rank={index + 4} estimate={estimate} note={note} />
                   ))}
@@ -279,11 +239,11 @@ export default function Rankings() {
 
         <aside className="space-y-8 xl:sticky xl:top-0">
           {historyLoading ? (
-            <div className="h-80 animate-pulse rounded-xl bg-gray-900" />
+            <div className="h-80 animate-pulse rounded-sm bg-gray-900" />
           ) : (
             <>
-              <RecentSection title="Últimas platinas" subtitle="PSN" items={history.platinums} icon={Trophy} iconClass="text-slate-200" />
-              <RecentSection title="Últimos 100%" subtitle="Steam e RA" items={history.perfects} icon={CheckCircle2} iconClass="text-emerald-400" />
+              <RecentSection number="02" title="Últimas platinas" subtitle="PSN" items={history.platinums} />
+              <RecentSection number="03" title="Últimos 100%" subtitle="Steam e RetroAchievements" items={history.perfects} />
             </>
           )}
         </aside>
