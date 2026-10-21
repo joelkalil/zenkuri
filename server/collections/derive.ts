@@ -1,9 +1,10 @@
 import {
   franchisesFromTitle,
   isExcludedTitle,
+  indexSagaSeeds,
   resolveName,
-  SAGA_FRANCHISE_BY_APPID,
   type CollectionKind,
+  type SagaSeed,
 } from './rules';
 
 export const MIN_GROUPS_PER_COLLECTION = 2;
@@ -11,7 +12,7 @@ export const MIN_GROUPS_PER_COLLECTION = 2;
 export interface CollectionGame {
   id: number;
   platform: string;
-  /** games.external_id; para steam é o appid. */
+  /** games.external_id; for steam it is the appid. */
   externalId: string;
   title: string;
   groupId: number | null;
@@ -74,8 +75,11 @@ function mostFrequentSpelling(spellings: Map<string, number>): string {
 export function deriveAutoCollections(
   games: readonly CollectionGame[],
   metaRows: readonly CollectionMeta[],
+  /** sagas published in the community; they seed franchises where the store gave no key */
+  sagas: readonly SagaSeed[] = [],
 ): { franchises: AutoCollection[]; companies: AutoCollection[] } {
   const metaByGame = new Map(metaRows.map((row) => [row.gameId, row]));
+  const sagaByAppid = indexSagaSeeds(sagas);
   const accumulators = new Map<string, Accumulator>();
 
   function touch(kind: CollectionKind, raw: string, game: CollectionGame): Accumulator | null {
@@ -97,19 +101,19 @@ export function deriveAutoCollections(
     if (isExcludedTitle(game.title, game.platform)) continue;
     const meta = metaByGame.get(game.id);
 
-    // Franquias: a loja vence; título e sagas curadas só entram onde a loja não deu a chave.
+    // Franchises: the store wins; title and published sagas only apply where the store gave no key.
     for (const raw of meta?.franchises ?? []) {
       const acc = touch('franchise', raw, game);
       if (acc) acc.members.set(game.id, { gameId: game.id, source: 'store' });
     }
     const inferred = franchisesFromTitle(game.title);
-    const saga = game.platform === 'steam' ? SAGA_FRANCHISE_BY_APPID.get(game.externalId) : undefined;
+    const saga = game.platform === 'steam' ? sagaByAppid.get(game.externalId) : undefined;
     for (const raw of saga ? [...inferred, saga] : inferred) {
       const acc = touch('franchise', raw, game);
       if (acc && !acc.members.has(game.id)) acc.members.set(game.id, { gameId: game.id, source: 'title' });
     }
 
-    // Empresas: devs e pubs viram uma única coleção; o papel acumula.
+    // Companies: devs and pubs become a single collection; the role accumulates.
     const credits = [
       ...(meta?.developers ?? []).map((raw) => ({ raw, role: 'dev' as const })),
       ...(meta?.publishers ?? []).map((raw) => ({ raw, role: 'pub' as const })),

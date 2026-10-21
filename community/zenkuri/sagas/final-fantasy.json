@@ -1,0 +1,510 @@
+{
+  "schema": "zenkuri.publication/v1",
+  "language": "pt-BR",
+  "kind": "saga",
+  "slug": "final-fantasy",
+  "title": "Final Fantasy",
+  "summary": "Do cristal de 1987 ao Valisthea: todos os Final Fantasy da Steam, na ordem que mais rende platina.",
+  "author": {
+    "handle": "joel",
+    "name": "Joel"
+  },
+  "version": 2,
+  "publishedAt": "2026-10-01",
+  "payload": {
+    "priceCheckedAt": "2026-10-01",
+    "name": "Final Fantasy",
+    "shortName": "FF",
+    "tagline": "Do cristal de 1987 ao Valisthea: todos os Final Fantasy da Steam, na ordem que mais rende platina.",
+    "method": "Começa pelos Pixel Remaster (boosts oficiais, listas curtas) para ganhar ritmo. Versões alternativas do mesmo jogo vêm em sequência, a compilação de FF VII e a trilogia XIII seguem a ordem da história, e o que depende de online fica para o fim.",
+    "phases": [
+      {
+        "id": "pixel",
+        "title": "Aquecimento em pixel",
+        "summary": "Os Pixel Remaster têm boosts oficiais de EXP, gil e encontros. Nenhuma conquista online, e a ordem de lançamento acompanha a curva de duração.",
+        "entries": [
+          {
+            "appid": "1173770",
+            "title": "FINAL FANTASY",
+            "year": 2021,
+            "achievements": 24,
+            "hours": [
+              12,
+              15
+            ],
+            "difficulty": 1,
+            "priceBRL": 27,
+            "note": "O ponto de partida e a régua de ritmo dos Pixel Remaster."
+          },
+          {
+            "appid": "1173780",
+            "title": "FINAL FANTASY II",
+            "year": 2021,
+            "achievements": 28,
+            "hours": [
+              15,
+              20
+            ],
+            "difficulty": 1,
+            "priceBRL": 27,
+            "note": "Evolução por uso; os boosts aceleram o grind de atributos. Bestiário com checklist ao lado."
+          },
+          {
+            "appid": "1173790",
+            "title": "FINAL FANTASY III",
+            "year": 2021,
+            "achievements": 31,
+            "hours": [
+              20,
+              25
+            ],
+            "difficulty": 2,
+            "priceBRL": 42,
+            "note": "Sistema de jobs com boost de EXP; bestiário e mapa completo são o grosso da lista."
+          },
+          {
+            "appid": "1173800",
+            "title": "FINAL FANTASY IV",
+            "year": 2021,
+            "achievements": 30,
+            "hours": [
+              20,
+              25
+            ],
+            "difficulty": 2,
+            "priceBRL": 42,
+            "note": "Linear e sem grind pesado; a Lunar Subterrane concentra os inimigos raros."
+          },
+          {
+            "appid": "1173810",
+            "title": "FINAL FANTASY V",
+            "year": 2021,
+            "achievements": 39,
+            "hours": [
+              30,
+              40
+            ],
+            "difficulty": 2,
+            "priceBRL": 42,
+            "note": "Dominar todos os jobs é a conquista mais longa, e o boost de ABP resolve. Omega e Shinryu testam a build."
+          },
+          {
+            "appid": "1173820",
+            "title": "FINAL FANTASY VI",
+            "year": 2022,
+            "achievements": 37,
+            "hours": [
+              40,
+              50
+            ],
+            "difficulty": 3,
+            "priceBRL": 42,
+            "note": "Bestiário com inimigos perdíveis antes do colapso do mundo: siga um guia na primeira metade.",
+            "flags": [
+              "missable"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "remakes-3d",
+        "title": "Remakes 3D e o epílogo de IV",
+        "summary": "Versões alternativas de III e IV com listas próprias. Logo depois dos Pixel Remaster, a história ainda está fresca, e The After Years continua direto do IV.",
+        "entries": [
+          {
+            "appid": "239120",
+            "title": "Final Fantasy III (3D Remake)",
+            "year": 2014,
+            "achievements": 18,
+            "hours": [
+              40,
+              50
+            ],
+            "difficulty": 3,
+            "priceBRL": 14.99,
+            "note": "Poucas conquistas, mas o equipamento Onion e os job levels altos pedem farm dedicado."
+          },
+          {
+            "appid": "312750",
+            "title": "Final Fantasy IV (3D Remake)",
+            "year": 2014,
+            "achievements": 58,
+            "hours": [
+              50,
+              60
+            ],
+            "difficulty": 3,
+            "priceBRL": 14.99,
+            "note": "Parte da lista exige New Game+: planeje os augments da primeira run pensando na segunda.",
+            "flags": [
+              "missable"
+            ]
+          },
+          {
+            "appid": "346830",
+            "title": "FINAL FANTASY IV: THE AFTER YEARS",
+            "year": 2015,
+            "achievements": 50,
+            "hours": [
+              40,
+              60
+            ],
+            "difficulty": 3,
+            "priceBRL": 18.74,
+            "note": "Capítulos por personagem e o desafio pós-jogo; bestiário e bandos completos são o grind."
+          }
+        ]
+      },
+      {
+        "id": "ps1",
+        "title": "Clássicos de PS1 com boosters",
+        "summary": "As versões Steam trazem velocidade 3x, encontros desligáveis e boosters de status. VII e VIII têm duas listas cada: jogue as duas versões em sequência.",
+        "entries": [
+          {
+            "appid": "3837340",
+            "title": "FINAL FANTASY VII",
+            "year": 2013,
+            "achievements": 31,
+            "hours": [
+              40,
+              50
+            ],
+            "difficulty": 3,
+            "priceBRL": 7.99,
+            "note": "Ruby e Emerald Weapon, chocobo dourado e Master Materia. Os boosters cortam o grind de AP."
+          },
+          {
+            "appid": "39140",
+            "title": "FINAL FANTASY VII (2013)",
+            "year": 2013,
+            "achievements": 36,
+            "hours": [
+              25,
+              35
+            ],
+            "difficulty": 2,
+            "priceBRL": null,
+            "note": "Versão antiga, fora de venda mas na sua conta. Lista separada; com o booster de personagem, a segunda run vira passeio.",
+            "flags": [
+              "legacy"
+            ]
+          },
+          {
+            "appid": "1026680",
+            "title": "FINAL FANTASY VIII - REMASTERED",
+            "year": 2019,
+            "achievements": 34,
+            "hours": [
+              45,
+              60
+            ],
+            "difficulty": 3,
+            "priceBRL": 24,
+            "note": "Triple Triad completo e GFs perdíveis são o risco; velocidade 3x e encontros desligados salvam o farm.",
+            "flags": [
+              "missable"
+            ]
+          },
+          {
+            "appid": "39150",
+            "title": "FINAL FANTASY VIII",
+            "year": 2013,
+            "achievements": 45,
+            "hours": [
+              40,
+              55
+            ],
+            "difficulty": 3,
+            "priceBRL": 7.99,
+            "note": "Mesma jornada, lista maior. Logo depois do Remastered, as regras de carta por região ainda estão frescas.",
+            "flags": [
+              "missable"
+            ]
+          },
+          {
+            "appid": "377840",
+            "title": "FINAL FANTASY IX",
+            "year": 2016,
+            "achievements": 85,
+            "hours": [
+              60,
+              100
+            ],
+            "difficulty": 4,
+            "priceBRL": 11.84,
+            "note": "Excalibur II exige fechar em menos de 12h de relógio do jogo, e o modo 3x acelera o relógio junto. Planeje uma run dedicada.",
+            "flags": [
+              "missable"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "compilation-vii",
+        "title": "Compilação de FF VII",
+        "summary": "Ordem da história: Crisis Core prepara o peso emocional de Remake e Rebirth. As três listas pedem dificuldade máxima, então o domínio do combate se acumula.",
+        "entries": [
+          {
+            "appid": "1608070",
+            "title": "CRISIS CORE –FINAL FANTASY VII– REUNION",
+            "year": 2022,
+            "achievements": 51,
+            "hours": [
+              60,
+              80
+            ],
+            "difficulty": 3,
+            "priceBRL": 76.96,
+            "note": "As 300 missões são o grosso da lista; o Hard fica tranquilo com materia fundida."
+          },
+          {
+            "appid": "1462040",
+            "title": "FINAL FANTASY VII REMAKE INTERGRADE",
+            "year": 2022,
+            "achievements": 63,
+            "hours": [
+              80,
+              100
+            ],
+            "difficulty": 4,
+            "priceBRL": 43.72,
+            "note": "Hard Mode com seleção de capítulo, Combat Simulator e o INTERmission da Yuffie na mesma lista."
+          },
+          {
+            "appid": "2909400",
+            "title": "FINAL FANTASY VII REBIRTH",
+            "year": 2025,
+            "achievements": 61,
+            "hours": [
+              130,
+              170
+            ],
+            "difficulty": 5,
+            "priceBRL": 65.97,
+            "note": "A mais longa da saga: Queen's Blood, corridas de chocobo, minigames e os desafios Brutal e Legendary."
+          }
+        ]
+      },
+      {
+        "id": "ps2",
+        "title": "Era PS2",
+        "summary": "Os dois jogos com mais grind clássico. As versões Steam têm modo de velocidade, que corta pela metade o farm de Celestiais e de Yiazmat.",
+        "entries": [
+          {
+            "appid": "359870",
+            "title": "FINAL FANTASY X/X-2 HD Remaster",
+            "year": 2016,
+            "achievements": 69,
+            "hours": [
+              150,
+              200
+            ],
+            "difficulty": 5,
+            "priceBRL": 22.39,
+            "note": "Duas platinas numa lista: Celestiais, 200 raios e blitzball no X; 100% de história e Last Mission no X-2, com perdíveis.",
+            "flags": [
+              "missable"
+            ]
+          },
+          {
+            "appid": "595520",
+            "title": "FINAL FANTASY XII THE ZODIAC AGE",
+            "year": 2018,
+            "achievements": 41,
+            "hours": [
+              90,
+              110
+            ],
+            "difficulty": 4,
+            "priceBRL": 49.79,
+            "note": "Trial Mode de 100 fases, todas as caças e Yiazmat. O modo 4x é seu melhor amigo."
+          }
+        ]
+      },
+      {
+        "id": "fabula",
+        "title": "Fabula Nova Crystallis",
+        "summary": "Trilogia XIII na ordem da história, depois Type-0 e XV, que dividem a mesma mitologia. Nos três XIII, a lista vive no pós-jogo.",
+        "entries": [
+          {
+            "appid": "292120",
+            "title": "FINAL FANTASY XIII",
+            "year": 2014,
+            "achievements": 35,
+            "hours": [
+              80,
+              100
+            ],
+            "difficulty": 4,
+            "priceBRL": 11.99,
+            "note": "As 64 missões com 5 estrelas e o Treasure Hunter: farm de Adamantoise atrás de trapezoedros."
+          },
+          {
+            "appid": "292140",
+            "title": "FINAL FANTASY XIII-2",
+            "year": 2014,
+            "achievements": 31,
+            "hours": [
+              50,
+              70
+            ],
+            "difficulty": 3,
+            "priceBRL": 14.99,
+            "note": "Os 160 fragmentos e todos os finais paradoxais; a seleção de época facilita a limpeza."
+          },
+          {
+            "appid": "345350",
+            "title": "LIGHTNING RETURNS: FINAL FANTASY XIII",
+            "year": 2015,
+            "achievements": 42,
+            "hours": [
+              60,
+              80
+            ],
+            "difficulty": 4,
+            "priceBRL": 14.99,
+            "note": "Exige New Game+ e domínio do relógio do mundo; o Hard só abre na segunda run."
+          },
+          {
+            "appid": "340170",
+            "title": "FINAL FANTASY TYPE-0 HD",
+            "year": 2015,
+            "achievements": 49,
+            "hours": [
+              80,
+              100
+            ],
+            "difficulty": 4,
+            "priceBRL": 16.79,
+            "note": "Várias runs, 14 personagens e o Agito Mode. O NG+ mantém os níveis, então a segunda run voa."
+          },
+          {
+            "appid": "637650",
+            "title": "FINAL FANTASY XV WINDOWS EDITION",
+            "year": 2018,
+            "achievements": 97,
+            "hours": [
+              100,
+              130
+            ],
+            "difficulty": 4,
+            "priceBRL": 37.5,
+            "note": "A maior lista da saga: pesca, culinária, Pitioss, Adamantoise e os Episodes inclusos."
+          }
+        ]
+      },
+      {
+        "id": "modern",
+        "title": "Era moderna e derivados",
+        "summary": "Lançamentos recentes e spin-offs com listas independentes. Tactics já está em andamento; o resto entra conforme o apetite.",
+        "entries": [
+          {
+            "appid": "1004640",
+            "title": "FINAL FANTASY TACTICS - The Ivalice Chronicles",
+            "year": 2025,
+            "achievements": 50,
+            "hours": [
+              60,
+              90
+            ],
+            "difficulty": 4,
+            "priceBRL": 131.94,
+            "note": "Tática densa com colecionáveis de longo prazo; continue de onde parou."
+          },
+          {
+            "appid": "2515020",
+            "title": "FINAL FANTASY XVI",
+            "year": 2024,
+            "achievements": 69,
+            "hours": [
+              90,
+              110
+            ],
+            "difficulty": 4,
+            "priceBRL": 87.96,
+            "note": "Final Fantasy Mode (NG+) obrigatório, rank S nos Chronolith Trials e no Arcade Mode."
+          },
+          {
+            "appid": "1358700",
+            "title": "STRANGER OF PARADISE FINAL FANTASY ORIGIN",
+            "year": 2023,
+            "achievements": 83,
+            "hours": [
+              80,
+              100
+            ],
+            "difficulty": 4,
+            "priceBRL": 59.97,
+            "note": "A dificuldade Chaos e o loot de endgame dominam a lista; Nioh com cristais."
+          },
+          {
+            "appid": "552700",
+            "title": "WORLD OF FINAL FANTASY",
+            "year": 2017,
+            "achievements": 49,
+            "hours": [
+              60,
+              80
+            ],
+            "difficulty": 3,
+            "priceBRL": 29.6,
+            "note": "Coleção de Mirages em clima de Pokémon: leve, mas cheia de colecionáveis."
+          },
+          {
+            "appid": "1642620",
+            "title": "COLLECTION of SaGa FINAL FANTASY LEGEND",
+            "year": 2021,
+            "achievements": 10,
+            "hours": [
+              15,
+              25
+            ],
+            "difficulty": 2,
+            "priceBRL": 45,
+            "note": "Três jogos de Game Boy e só 10 conquistas. Leva o nome FF no Ocidente, mas é SaGa."
+          }
+        ]
+      },
+      {
+        "id": "online",
+        "title": "Por último: online",
+        "summary": "Conquistas presas a partidas contra outras pessoas. Trate como opcional.",
+        "entries": [
+          {
+            "appid": "921590",
+            "title": "DISSIDIA FINAL FANTASY NT Free Edition",
+            "year": 2019,
+            "achievements": 56,
+            "hours": [
+              100,
+              150
+            ],
+            "difficulty": 5,
+            "priceBRL": 0,
+            "note": "Gratuito, mas as conquistas ranqueadas dependem de uma comunidade pequena e de muito volume.",
+            "flags": [
+              "online"
+            ]
+          }
+        ]
+      }
+    ],
+    "outOfScope": [
+      {
+        "appid": "39210",
+        "title": "FINAL FANTASY XIV Online",
+        "reason": "MMO sem conquistas na Steam: não existe platina para registrar."
+      },
+      {
+        "appid": "3259780",
+        "title": "FINAL FANTASY RESONANCE",
+        "reason": "Lança em 22/10/2026; a lista de conquistas sai junto."
+      },
+      {
+        "appid": "4354570",
+        "title": "FINAL FANTASY VII REVELATION",
+        "reason": "Previsto para 08/04/2027 e fecha a trilogia do Remake."
+      }
+    ]
+  }
+}
