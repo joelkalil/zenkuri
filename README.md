@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <strong>Seu guia de estratégia para zerar 100% — Steam, PlayStation e RetroAchievements.</strong>
+  <strong>Your strategy guide to 100% completion — Steam, PlayStation and RetroAchievements.</strong>
 </p>
 
 <p align="center">
@@ -24,145 +24,221 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hoje.png" alt="Tela Hoje: jogo fixado, próximos troféus mais fáceis e fase atual do plano" width="100%">
+  <img src="docs/screenshots/hoje.png" alt="Today screen: pinned game, next easiest trophies and the current plan phase" width="100%">
 </p>
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/hall.png" alt="Hall da Platina: parede de carimbos com as conclusões datadas"><br><sub>Hall da Platina</sub></td>
-    <td width="50%"><img src="docs/screenshots/jogo.png" alt="Página de um jogo com checklist de troféus, ficha, notas e guia"><br><sub>Jogo: checklist, notas e guia</sub></td>
+    <td width="50%"><img src="docs/screenshots/hall.png" alt="Platinum Hall: wall of stamps with dated completions"><br><sub>Platinum Hall</sub></td>
+    <td width="50%"><img src="docs/screenshots/jogo.png" alt="Game page with trophy checklist, info sheet, notes and guide"><br><sub>Game: checklist, notes and guide</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/plano.png" alt="Plano: linha do ano dividida em fases"><br><sub>Plano do ano</sub></td>
-    <td width="50%"><img src="docs/screenshots/biblioteca-papel.png" alt="Biblioteca no tema claro Papel"><br><sub>Tema Papel</sub></td>
+    <td width="50%"><img src="docs/screenshots/plano.png" alt="Plan: year timeline split into phases"><br><sub>Year plan</sub></td>
+    <td width="50%"><img src="docs/screenshots/biblioteca-papel.png" alt="Library in the light Papel (Paper) theme"><br><sub>Papel (Paper) theme</sub></td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><img src="docs/screenshots/hoje-mobile.png" alt="Tela Hoje em um celular" width="260"><br><sub>Hoje no celular</sub></td>
+    <td colspan="2" align="center"><img src="docs/screenshots/hoje-mobile.png" alt="Today screen on a phone" width="260"><br><sub>Today on mobile</sub></td>
   </tr>
 </table>
 
-## 01 · O que é
+## 01 · What it is
 
-**Zenkuri** (全クリ) vem de 全クリア, gíria japonesa de gamer para "100% concluído". É um planejador pessoal de platinas e 100% que reúne **Steam**, **PlayStation Network** e **RetroAchievements** em um só lugar, para decidir o que jogar a seguir, acompanhar o que já foi zerado e guardar o contexto de cada jogo (notas, guia, esforço).
+**Zenkuri** (全クリ) comes from 全クリア (zen-kuri-a), Japanese gamer slang for "100% cleared". It is a personal planner for platinums and 100% completions that brings **Steam**, **PlayStation Network** and **RetroAchievements** together in one place, so you can decide what to play next, track what you have already cleared and keep the context of each game (notes, guide, effort).
 
-Foi pensado para uso privado, entre trabalho, estudos e sessões curtas de jogo: cada tela existe para reduzir o esforço de escolher a próxima conquista. Veja [`PRODUCT.md`](PRODUCT.md).
+It is designed for private use, between work, studies and short play sessions: every screen exists to reduce the effort of choosing the next achievement. See [`PRODUCT.md`](PRODUCT.md).
 
-### Identidade
+### Identity
 
-Hanko + guia de estratégia: selo vermelhão com 全, neutros de tinta sumi e papel, diagramação editorial e conclusões registradas como carimbos datados.
+Hanko + strategy guide: a vermilion seal with 全, sumi-ink and paper neutrals, editorial layout, and completions recorded as dated stamps.
 
-| Marca | Significado |
+| Mark | Meaning |
 | :---: | --- |
-| <img src="public/brand/mark.svg" alt="Selo vermelhão com o kanji 全" width="48"> | O selo (hanko) com 全, "completo". Assinatura do projeto. |
-| <img src="public/brand/stamp-platina.svg" alt="Carimbo de platina" width="64"> | Carimbo de **platina** conquistada. |
-| <img src="public/brand/stamp-100.svg" alt="Carimbo de 100%" width="64"> | Carimbo de **100%** concluído. |
+| <img src="public/brand/mark.svg" alt="Vermilion seal with the kanji 全" width="48"> | The seal (hanko) with 全, "complete". The project's signature. |
+| <img src="public/brand/stamp-platina.svg" alt="Platinum stamp" width="64"> | **Platinum** earned stamp. |
+| <img src="public/brand/stamp-100.svg" alt="100% stamp" width="64"> | **100%** completed stamp. |
 
-## 02 · Recursos
+### Languages
 
-| Página | O que faz |
+The app UI supports Portuguese (pt-BR) and English. All repository documentation is written in English. Community packs are authored in a single language, declared in the pack itself.
+
+The UI labels quoted in this document use the English name first, followed by the current pt-BR label in parentheses on first mention, for example "Finish now (Fechar agora)".
+
+## 02 · Features
+
+| Page | What it does |
 | --- | --- |
-| **Hoje** | O que jogar agora: jogo fixado, próximos 3 troféus mais fáceis, fase do plano, "quase lá" e conquistas recentes. |
-| **Plano** | Linha do ano organizada em fases. |
-| **Biblioteca** | Visões em lista, grade e coleções; filtros guardados na URL; rolagem infinita. |
-| **Sagas** | Jogos agrupados por saga. |
-| **Jogo** | Checklist de troféus, ficha, notas, link de guia e estimativa de esforço. |
-| **Conquistas** | **Hall da Platina** (parede de carimbos), **Rankings** e **Almanaque**. |
+| **Today (Hoje)** | What to play now: pinned game, next 3 easiest trophies, plan phase, "almost there" and recent achievements. |
+| **Plan (Plano)** | Year timeline organized in phases, manual, edited at `/plano`. |
+| **Library (Biblioteca)** | List, grid and collection views (manual, **Franchises (Franquias)** and **Companies (Empresas)**); filters kept in the URL; infinite scroll. |
+| **Sagas** | Saga guides published by the community (read-only). |
+| **Community (Comunidade)** | Curated sagas and rankings, published as JSON packs in the repository (see [04](#04--community)). |
+| **Game (Jogo)** | Trophy checklist, info sheet, personal notes, guide link and effort estimate. |
+| **Achievements (Conquistas)** | **Platinum Hall (Hall da Platina)** (wall of stamps), **Rankings** (automatic and curated) and **Almanac (Almanaque)**. |
+| **Tutorials (Tutoriais)** | In-app page (`/tutoriais`) explaining how to get the Steam Web API key and SteamID, the PSN NPSSO, and the RetroAchievements username and API key. |
 
-Também inclui:
+It also includes:
 
-- Níveis por conquistas.
-- Temas **Zenkuri** (escuro) e **Papel** (claro).
-- Cache local de artes com catálogo de origem (veja [06](#06--artes-e-cache-local)).
+- Levels based on achievements.
+- **Zenkuri** (dark) and **Papel** ("Paper", light) themes.
+- Local artwork cache with a source catalog (see [08](#08--artwork-and-local-cache)).
 
-## 03 · Começando
+## 03 · Your data vs. community
 
-Requisitos: Node.js e npm. O projeto foi desenvolvido com Node 26 e npm 11; o `package.json` não define `engines`.
+Zenkuri separates what is only yours from what is shared.
+
+| | Your data | Community |
+| --- | --- | --- |
+| **Where it lives** | Local SQLite database in `data/` | Versioned JSON packs in `community/` |
+| **Who edits it** | You, in the app | Anyone, via pull request |
+| **In the app** | Editable | Read-only |
+| **Content** | Synced libraries (Steam, PSN, RetroAchievements), manual collections, automatic collections by franchise or company, plan, game notes and automatic rankings | Curated sagas and rankings |
+
+**Your data** never leaves your machine. `data/zenkuri.sqlite` (and `-wal`/`-shm`), `data/media/` and `data/personal/` are git-ignored; `data/imgs/` is versioned (platform icons).
+
+- **Automatic collections** by franchise or company are derived from store metadata (developer, publisher, franchise). To fill in that metadata for games you have already synced: `npm run meta:backfill`.
+- **Plan** is manual: you build and edit it at `/plano`. Nothing is AI-generated.
+- **Game notes** are personal and live on each game's page.
+- **Automatic rankings** (**Finish now (Fechar agora)**, **Quick wins (Rápidos)**, **Long hauls (Projetos longos)** and **Demanding (Exigentes)**) are computed from your own library, with deterministic rules and no LLM.
+
+## 04 · Community
+
+Curated sagas and rankings live in `community/<space>/` as versioned JSON files (`zenkuri.space/v1` and `zenkuri.publication/v1`). Today there is one space, `zenkuri`, with the Final Fantasy and Resident Evil sagas and the **Essentials (Essenciais)** ranking.
+
+- When the server starts, the packs are imported into the local database, idempotently (by content hash). Deleting a file from the repository removes the publication from the database on the next startup.
+- In the app, the content is read-only and shows up at `/comunidade`, with authorship shown as `@handle`.
+- To publish: create or edit the file, run `npm run community:validate` and open a PR. Bump `version` on every change. Step-by-step instructions and a full example are in [`CONTRIBUTING.md`](CONTRIBUTING.md); the field reference is in [`community/README.md`](community/README.md).
+
+In the future, a public database and bucket will replace the repository as the transport.
+
+## 05 · Getting started
+
+Requirements: Node.js and npm. `package.json` requires Node >=22.13 (`engines`); `.nvmrc` pins Node 24, which CI also uses (`nvm use` picks it up).
 
 ```bash
 git clone https://github.com/joelkalil/zenkuri.git
 cd zenkuri
 npm install
-cp .env.example .env   # preencha as credenciais (seção 04)
+cp .env.example .env   # fill in the credentials (section 06)
 npm run dev
 ```
 
-- Web (Vite): <http://localhost:5173>
-- API (Express): <http://localhost:4343>
+1. Open <http://localhost:5173> (web, Vite). The API (Express) starts at <http://localhost:4343>.
+2. On the login screen, use **Create account (Criar conta)**. Each account has its own data.
+3. Connect the platforms by entering public identifiers only (SteamID64 or profile URL, PSN Online ID, RetroAchievements username) and sync.
+4. Optional: `npm run meta:backfill` (franchise and company collections) and `npm run media:backfill` (pending artwork; requires the server to be running).
 
-> O npm 11+ pode bloquear scripts de instalação. O `package.json` já traz um bloco `allowScripts` aprovando `better-sqlite3`, `esbuild` e `fsevents`; o `better-sqlite3` precisa dele para compilar o binding nativo do SQLite.
+**Install scripts (better-sqlite3).** `package.json` has an `allowScripts` block approving `better-sqlite3`, `esbuild` and `fsevents`. `better-sqlite3` needs its install script to build (or download) the native SQLite binding. On npm versions that block dependency scripts, the block's approval should be enough. If the server fails with a missing binding error (`Could not locate the bindings file`), run:
 
-**Login.** O app tem autenticação própria, com telas de login e configuração inicial. Ao migrar um banco antigo (de usuário único), o histórico é movido para um usuário legado, definido por `ZENKURI_LEGACY_USER` e `ZENKURI_LEGACY_PASSWORD`. Defina esses valores no `.env` antes da migração e troque a senha após o primeiro acesso (detalhes em `server/db.ts`).
+```bash
+npm rebuild better-sqlite3
+node -e "const D=require('better-sqlite3');new D(':memory:').prepare('select 1').get();console.log('OK')"
+```
 
-## 04 · Configuração
+CI does exactly this. You need a C/C++ toolchain (Xcode Command Line Tools on macOS, `build-essential` and Python on Linux) if no prebuilt binary exists for your Node version.
 
-Copie `.env.example` para `.env`. **Nunca faça commit do `.env`** (ele já está no `.gitignore`). As credenciais são de uma conta de serviço, nunca de usuários do app.
+**Login.** The app has its own authentication. When migrating an old (single-user) database, the history is moved to a legacy user, defined by `ZENKURI_LEGACY_USER` and `ZENKURI_LEGACY_PASSWORD`. This does not apply to fresh installs. Change the password after the first login (details in `server/db.ts`).
 
-| Variável | Obrigatória | Descrição |
+## 06 · Configuration
+
+Copy `.env.example` to `.env`. **Never commit `.env`** (it is already in `.gitignore`). The credentials belong to a server service account (Zenkuri reads only public profile data), never to app users. Whoever runs it locally uses their own keys.
+
+| Variable | Required | Description |
 | --- | :---: | --- |
-| `ZENKURI_STEAM_API_KEY` | sim | Chave da Steam Web API. |
-| `ZENKURI_PSN_NPSSO` | sim | Token `npsso` da PSN (veja abaixo). |
-| `ZENKURI_RA_USERNAME` | sim | Usuário do RetroAchievements. |
-| `ZENKURI_RA_API_KEY` | sim | Chave da API do RetroAchievements. |
-| `ZENKURI_API_PORT` | não | Porta da API (padrão `4343`). |
-| `ZENKURI_DB_PATH` | não | Caminho alternativo do banco SQLite. |
-| `ZENKURI_LEGACY_USER` / `ZENKURI_LEGACY_PASSWORD` | não | Usuário legado usado na migração de bancos antigos. |
+| `ZENKURI_STEAM_API_KEY` | for Steam | Steam Web API key. |
+| `ZENKURI_PSN_NPSSO` | for PSN | PSN `npsso` token (see below). |
+| `ZENKURI_RA_USERNAME` | for RA | RetroAchievements username. |
+| `ZENKURI_RA_API_KEY` | for RA | RetroAchievements API key. |
+| `ZENKURI_API_PORT` | no | API port (default `4343`). |
+| `ZENKURI_DB_PATH` | no | Alternative path for the SQLite database (default `data/zenkuri.sqlite`). |
+| `ZENKURI_MEDIA_PATH` | no | Alternative folder for the artwork cache (default `data/media`). |
+| `ZENKURI_COMMUNITY_DIR` | no | Alternative folder for community packs (default `community/`). |
+| `ZENKURI_LEGACY_USER` / `ZENKURI_LEGACY_PASSWORD` | no | Legacy user used when migrating old databases. |
 
-**Como obter o `npsso`:** entre em [playstation.com](https://www.playstation.com) com a conta, depois abra <https://ca.account.sony.com/api/v1/ssocookie> e copie o valor de `npsso`. Ele expira periodicamente; quando a sincronização da PSN falhar, gere outro.
+The optional variables are commented out in `.env.example`; uncomment only the ones you will change (an empty variable does not fall back to the default).
 
-Os dados ficam em `data/zenkuri.sqlite` (ignorado pelo git).
+You only need to configure the platforms you will sync; without the key, syncing that platform fails with a message naming the missing variable.
 
-## 05 · Scripts
+**How to get each credential** (the in-app **Tutorials (Tutoriais)** page at `/tutoriais` covers the same steps)
 
-| Comando | O que faz |
+- **Steam Web API key:** <https://steamcommunity.com/dev/apikey> (requires a Steam account; enter any domain). The profile to sync must have game details set to public.
+- **PSN `npsso`:** sign in at [playstation.com](https://www.playstation.com) with the account, then open <https://ca.account.sony.com/api/v1/ssocookie> and copy the `npsso` value. It expires periodically; when PSN sync fails, generate a new one and restart the server.
+- **RetroAchievements:** the username is your profile's; the key (Web API Key) is at <https://retroachievements.org/settings>, under **Keys**.
+
+Data is stored in `data/zenkuri.sqlite` (git-ignored).
+
+## 07 · Scripts
+
+| Command | What it does |
 | --- | --- |
-| `npm run dev` | API e web juntos. |
-| `npm run dev:web` | Só o frontend (Vite, `:5173`). |
-| `npm run dev:api` | Só a API (`tsx watch`, `:4343`). |
-| `npm run build` | Checagem de tipos (`tsc -b`) e build do Vite. |
-| `npm run preview` | Serve o build de produção localmente. |
+| `npm run dev` | API and web together. |
+| `npm run dev:web` | Frontend only (Vite, `:5173`). |
+| `npm run dev:api` | API only (`tsx watch`, `:4343`). |
+| `npm run build` | Type check (`tsc -b`) and Vite build. |
+| `npm run preview` | Serves the production build locally. |
 | `npm run lint` | ESLint. |
-| `npm run test:level` | Testes da matemática de níveis. |
-| `npm run media:backfill` | Completa artes pendentes no cache (aceita `-- --dry-run`). |
+| `npm test` | Runs every test script below, then `community:validate`. |
+| `npm run test:level` | Level math tests. |
+| `npm run test:collections` | Collection tests (manual and automatic). |
+| `npm run test:community` | Community pack tests (validation and import). |
+| `npm run test:rankings` | Automatic ranking tests. |
+| `npm run test:server` | Server environment and error-code tests. |
+| `npm run test:i18n` | Message key parity and localization tests. |
+| `npm run community:validate` | Validates all packs in `community/`, without touching any database. Exits with code 1 on error. |
+| `npm run meta:backfill` | Fills in store metadata (developer, publisher, franchise) for Steam and RetroAchievements games; the basis of automatic collections. Idempotent. |
+| `npm run media:backfill` | Completes pending artwork in the cache (accepts `-- --dry-run`; the server must be running). |
+| `npm run personal:import` | Imports plan and personal notes from a JSON file into an account (`-- --notes-only` imports just the notes, e.g. after syncing games that were skipped) (see [`CONTRIBUTING.md`](CONTRIBUTING.md#legacy-personal-data)). |
 
-## 06 · Artes e cache local
+## 08 · Artwork and local cache
 
-As imagens são espelhadas em `data/media/` (ignorado pelo git), em pastas por tipo: `covers`, `portraits`, `heroes`, `icons` e `achievements`. O arquivo `data/media/catalog.json` registra a origem e a procedência de cada imagem.
+Images are mirrored in `data/media/` (git-ignored), in folders by type: `covers`, `portraits`, `heroes`, `icons` and `achievements`. The `data/media/catalog.json` file records the source and provenance of each image.
 
-- **Steam:** para apps mais novos, há fallback para os assets da loja.
-- **PSN:** a arte oficial é buscada durante a sincronização (apenas PS4/PS5).
-- **Manual:** coloque uma imagem com o mesmo nome-base na pasta do slot. Ela passa a valer e nunca é sobrescrita.
-- **Backfill:** `npm run media:backfill` pede ao servidor em execução cada arte pendente (placeholders e slots da PSN que podem ser melhorados). Use `npm run media:backfill -- --dry-run` para só listar.
+- **Steam:** for newer apps, there is a fallback to the store assets.
+- **PSN:** official artwork is fetched during sync (PS4/PS5 only).
+- **Manual:** put an image with the same base name in the slot's folder. It takes effect and is never overwritten.
+- **Backfill:** `npm run media:backfill` asks the running server for each pending image (placeholders and PSN slots that can be improved). Use `npm run media:backfill -- --dry-run` to only list them.
 
-## 07 · Estrutura
+## 09 · Structure
 
 ```
 zenkuri/
 ├── src/                 # frontend (React + Vite)
-│   ├── pages/           # Hoje, Plano, Biblioteca, Jogo, Hall, Rankings, Almanaque, Sagas, Login...
+│   ├── pages/           # Today, Plan, Library, Game, Hall, Rankings, Almanac, Sagas, Login...
 │   ├── components/      # TopNav, TabBar, Stamp, LibraryCard, plan/...
-│   ├── context/         # autenticação, tema, dados da Steam
-│   ├── hooks/           # rolagem infinita, media query, próximo mais fácil...
-│   ├── lib/             # cliente da API, cache, plataformas, datas do plano
-│   ├── data/            # planos, rankings e sagas curados
-│   └── styles/          # estilos da identidade
-├── server/              # API Express 5 + better-sqlite3
-│   ├── providers/       # Steam, PSN e RetroAchievements
-│   ├── scripts/         # media:backfill
-│   └── ...              # banco, auth, níveis, mídia e catálogo
-├── public/brand/        # wordmark, selo e carimbos
-├── docs/screenshots/    # capturas usadas neste README
-├── data/                # banco SQLite e cache de mídia (ignorado)
+│   ├── context/         # authentication, theme, Steam data
+│   ├── hooks/           # infinite scroll, media query, next easiest...
+│   ├── lib/             # API client, cache, platforms, plan dates
+│   ├── types/           # shared types (community, plan...)
+│   └── styles/          # identity styles
+├── server/              # Express 5 API + better-sqlite3
+│   ├── providers/       # Steam, PSN and RetroAchievements
+│   ├── community/       # validation (schema.ts), pack reading and import
+│   ├── personal/        # personal file format and import (plan + notes)
+│   ├── plan/            # manual plan
+│   ├── rankings/        # automatic rankings
+│   ├── collections/     # manual and automatic collections
+│   ├── scripts/         # community:validate, personal:import, backfills
+│   └── ...              # database, auth, levels, media and catalog
+├── community/           # community packs (versioned JSON)
+│   └── <space>/         # space.json, sagas/<slug>.json, rankings/<slug>.json
+├── public/brand/        # wordmark, seal and stamps
+├── docs/screenshots/    # screenshots used in this README
+├── data/                # SQLite database, media cache and personal data (ignored); imgs/ is versioned
+├── CONTRIBUTING.md
 ├── DESIGN.md
 └── PRODUCT.md
 ```
 
-**Stack:** React 19, Vite 8, TypeScript, Tailwind v4 e react-router 7 no frontend; Express 5, better-sqlite3 e tsx na API; integrações via `psn-api`, `@retroachievements/api` e Steam Web API. Fontes: Zen Kaku Gothic New, Inter e JetBrains Mono.
+**Stack:** React 19, Vite 8, TypeScript, Tailwind v4 and react-router 7 on the frontend; Express 5, better-sqlite3 and tsx on the API; integrations via `psn-api`, `@retroachievements/api` and the Steam Web API. Fonts: Zen Kaku Gothic New, Inter and JetBrains Mono.
 
-## 08 · Design
+## 10 · Contributing
 
-- [`DESIGN.md`](DESIGN.md): sistema visual (cores, tipografia, componentes).
-- [`PRODUCT.md`](PRODUCT.md): propósito, usuários, personalidade e princípios.
+Friends and collaborators are welcome: run it locally, open issues with feedback and send PRs. The [`CONTRIBUTING.md`](CONTRIBUTING.md) guide covers the development environment, branch and commit conventions, tests, how to publish a saga or ranking to the community, and the PR checklist.
+
+## 11 · Design
+
+- [`DESIGN.md`](DESIGN.md): visual system (colors, typography, components).
+- [`PRODUCT.md`](PRODUCT.md): purpose, users, personality and principles.
 
 ---
 
-<sub>Projeto pessoal, sem licença de uso definida.</sub>
+<sub>Personal project, no usage license defined.</sub>

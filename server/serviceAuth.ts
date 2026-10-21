@@ -5,26 +5,27 @@ import {
   exchangeNpssoForAccessCode,
   exchangeRefreshTokenForAuthTokens,
 } from 'psn-api';
+import { envString } from './env';
+import { ApiError } from './errors';
 
 /*
-  Credenciais de serviço
-  ──────────────────────
-  O Zenkuri consulta apenas dados públicos dos perfis, no modelo PSNProfiles:
-  o servidor mantém UMA credencial por plataforma (.env) e os usuários
-  informam somente identificadores públicos (SteamID, online ID, username).
-  Nenhuma credencial de usuário é armazenada.
+  Service credentials
+  ───────────────────
+  Zenkuri only reads public profile data, PSNProfiles-style: the server keeps
+  ONE credential per platform (.env) and users only provide public identifiers
+  (SteamID, online ID, username). No user credential is ever stored.
 */
 
 export function steamServiceKey(): string {
-  const key = String(process.env.ZENKURI_STEAM_API_KEY ?? '').trim();
-  if (!key) throw new Error('ZENKURI_STEAM_API_KEY não configurada no servidor.');
+  const key = envString('ZENKURI_STEAM_API_KEY', '');
+  if (!key) throw new ApiError('sync.steam_service_not_configured', 503);
   return key;
 }
 
 export function raServiceAuth() {
-  const username = String(process.env.ZENKURI_RA_USERNAME ?? '').trim();
-  const webApiKey = String(process.env.ZENKURI_RA_API_KEY ?? '').trim();
-  if (!username || !webApiKey) throw new Error('ZENKURI_RA_USERNAME / ZENKURI_RA_API_KEY não configuradas no servidor.');
+  const username = envString('ZENKURI_RA_USERNAME', '');
+  const webApiKey = envString('ZENKURI_RA_API_KEY', '');
+  if (!username || !webApiKey) throw new ApiError('sync.ra_service_not_configured', 503);
   return buildAuthorization({ username, webApiKey });
 }
 
@@ -36,19 +37,19 @@ interface PsnTokenState {
   refreshExpiresAt?: number;
 }
 
-// Tokens derivados do NPSSO vivem apenas na memória do processo. Reiniciar o
-// servidor limpa o cache; nenhum segredo da conta de serviço vai para o SQLite.
+// Tokens derived from the NPSSO live only in process memory. Restarting the
+// server clears the cache; no service-account secret is written to SQLite.
 let psnTokenState: PsnTokenState = {};
 let psnAuthInFlight: Promise<{ accessToken: string }> | null = null;
 
 /**
- * Autenticação PSN da conta de serviço. Os tokens trocados a partir do NPSSO
- * ficam somente em memória, amarrados ao hash do NPSSO. Trocar o NPSSO no
- * .env e reiniciar o servidor invalida o cache automaticamente.
+ * PSN authentication for the service account. Tokens exchanged from the NPSSO
+ * stay in memory only, tied to the NPSSO hash. Changing the NPSSO in .env and
+ * restarting the server invalidates the cache automatically.
  */
 export async function psnServiceAuth(): Promise<{ accessToken: string }> {
-  const npsso = String(process.env.ZENKURI_PSN_NPSSO ?? '').trim();
-  if (!npsso) throw new Error('ZENKURI_PSN_NPSSO não configurado no servidor.');
+  const npsso = envString('ZENKURI_PSN_NPSSO', '');
+  if (!npsso) throw new ApiError('sync.psn_service_not_configured', 503);
 
   const npssoHash = createHash('sha256').update(npsso).digest('hex');
   const now = Date.now();
@@ -79,8 +80,8 @@ export async function psnServiceAuth(): Promise<{ accessToken: string }> {
         };
         return { accessToken: tokens.accessToken };
       } catch {
-        // Um refresh pode ser revogado antes do prazo. Refazemos a troca pelo
-        // NPSSO configurado sem persistir o token que falhou.
+        // A refresh token can be revoked early. Redo the exchange from the
+        // configured NPSSO without persisting the token that failed.
         psnTokenState = {};
       }
     }
@@ -90,7 +91,7 @@ export async function psnServiceAuth(): Promise<{ accessToken: string }> {
       const accessCode = await exchangeNpssoForAccessCode(npsso);
       tokens = await exchangeAccessCodeForAuthTokens(accessCode);
     } catch {
-      throw new Error('A credencial de serviço da PSN expirou. Atualize ZENKURI_PSN_NPSSO no .env e reinicie o servidor.');
+      throw new ApiError('sync.psn_credential_expired', 503);
     }
     const exchangedAt = Date.now();
     psnTokenState = {

@@ -48,7 +48,7 @@ export function GameCover({ game, className = '', imgClassName = '', portrait = 
     );
   }
 
-  /* Sem arte: placeholder tipográfico plano (nome em display sobre papel-2, 全 ao fundo). */
+  /* No art: flat typographic placeholder (name in display type on paper-2, 全 in the background). */
   return (
     <div
       role="img"

@@ -1,4 +1,4 @@
-/* Hoje: linha editorial, 01 Agora, plano, prateleira e tabela de recentes. */
+/* Today: editorial line, 01 Now, plan, shelf and recent games table. */
 @layer components {
   .hoje { max-width: 1280px; gap: 2rem; }
   .hoje-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1.5rem; padding-top: 0.75rem; border-top: 2px solid var(--color-gray-100); }
@@ -11,7 +11,7 @@
   .platform-filter::-webkit-scrollbar { display: none; }
   .platform-filter > button img { width: 14px; height: 14px; object-fit: contain; }
 
-  /* 01 · Agora: arte | jogo | próximos 3 */
+  /* 01 · Now: art | game | next 3 */
   .now { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr) minmax(0, 4fr); gap: 1.5rem 2rem; align-items: start; }
   .now-art { position: relative; aspect-ratio: 16 / 9; max-height: min(300px, 35vh); width: 100%; overflow: hidden; border-radius: var(--radius-cover); background: var(--color-gray-850); }
   .now-art > img, .now-art > div { width: 100%; height: 100%; object-fit: cover; }
@@ -45,17 +45,18 @@
   .next3-empty { padding-top: 0.75rem; font-size: 0.8125rem; color: var(--color-gray-500); }
   .next3-empty a { color: var(--color-violet-400); }
 
-  /* 02 · Plano */
+  /* 02 · Plan */
   .plan-lines { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 0; font-size: 0.875rem; }
   .plan-lines dt, .plan-lines dd { padding-block: 0.625rem; border-bottom: 1px solid var(--color-gray-800); }
   .plan-lines dt { color: var(--color-gray-500); }
   .plan-lines dd { color: var(--color-gray-100); min-width: 0; }
   .plan-lines .dim { color: var(--color-gray-400); }
+  .plan-lines .dim > a { color: var(--color-violet-400); text-decoration: underline; text-underline-offset: 2px; }
   .plan-queue { display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem; list-style: none; margin: 0; padding: 0; }
   .plan-queue a { color: inherit; text-decoration: none; }
   .plan-queue a:hover { color: var(--color-violet-400); }
 
-  /* 04 · Recentes: tabela densa */
+  /* 04 · Recent: dense table */
   .ledger { width: 100%; }
   .ledger-head, .ledger-row { display: grid; grid-template-columns: minmax(0, 1fr) 7rem 8rem 9rem; align-items: center; gap: 1rem; }
   .ledger-head { padding-bottom: 0.5rem; border-bottom: 1px solid var(--color-gray-800); }
@@ -72,7 +73,7 @@
   .ledger-prog .v { width: 3rem; text-align: right; font-family: var(--font-mono); font-size: 0.8125rem; font-variant-numeric: tabular-nums; color: var(--color-gray-100); }
   .ledger .r { text-align: right; justify-content: flex-end; }
 
-  /* Detalhe da plataforma / raridades */
+  /* Platform detail / rarities */
   .fiche { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 2rem; }
   .fiche-item { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; padding-block: 0.625rem; border-bottom: 1px solid var(--color-gray-800); font-size: 0.875rem; }
   .fiche-item dt { display: flex; align-items: center; gap: 0.5rem; color: var(--color-gray-400); }

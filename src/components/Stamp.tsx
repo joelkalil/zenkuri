@@ -1,32 +1,32 @@
 import type { CSSProperties } from 'react';
+import { useI18n } from '../i18n';
 
 /*
- * Estampa de conclusão (hanko). O arquivo SVG de public/brand é só a moldura:
- * entra como máscara para herdar a cor do tema (platina = vermilhão, o próprio
- * hanko; 100% = verde jade) e a data é composta em mono na zona livre
- * (x 28..100 de 128; y 57..85 na platina, 60..88 no 100%).
+ * Completion stamp (hanko). The SVG file in public/brand is only the frame:
+ * it is used as a mask to inherit the theme color (platinum = vermilion, the
+ * hanko itself; 100% = jade green) and the date is set in mono in the free zone
+ * (x 28..100 of 128; y 57..85 on platinum, 60..88 on 100%).
  */
 type StampKind = 'platina' | '100';
 type StampSize = 24 | 48 | 96;
 
 interface StampProps {
   kind: StampKind;
-  /** ISO (2026-10-20) ou qualquer string aceita por Date; ausente = sem data */
+  /** ISO (2026-10-20) or any string accepted by Date; absent = no date */
   date?: string;
   size?: StampSize;
-  /** semente da rotação determinística (ex.: id do jogo) */
+  /** seed for the deterministic rotation (e.g. game id) */
   seed?: string | number;
   className?: string;
 }
 
 const KIND = {
-  platina: { frame: '/brand/stamp-platina.svg', color: 'var(--color-violet-500)', label: 'Platina', zoneTop: 57 },
-  '100': { frame: '/brand/stamp-100.svg', color: 'var(--zk-complete)', label: '100%', zoneTop: 60 },
+  platina: { frame: '/brand/stamp-platina.svg', color: 'var(--color-violet-500)', labelKey: 'platinum', zoneTop: 57 },
+  '100': { frame: '/brand/stamp-100.svg', color: 'var(--zk-complete)', labelKey: 'complete', zoneTop: 60 },
 } as const;
 
 const ZONE = { left: 28, width: 72, height: 28 } as const;
 const GRID = 128;
-const MONTHS_LONG = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'] as const;
 
 function hashSeed(seed: string | number): number {
   const text = String(seed);
@@ -35,7 +35,7 @@ function hashSeed(seed: string | number): number {
   return hash;
 }
 
-/** -4° a +4°, passo de 1°; estável por semente. */
+/** -4° to +4°, 1° steps; stable per seed. */
 export function stampRotation(seed: string | number): number {
   return (hashSeed(seed) % 9) - 4;
 }
@@ -51,15 +51,17 @@ function pad(value: number): string {
 }
 
 export function Stamp({ kind, date, size = 48, seed = 0, className = '' }: StampProps) {
+  const { t, formatDate } = useI18n();
   const spec = KIND[kind];
   const parsed = date ? parseDate(date) : null;
   const showDate = size !== 24 && parsed !== null;
   const text = parsed ? `${pad(parsed.getDate())}.${pad(parsed.getMonth() + 1)}.${size === 48 ? pad(parsed.getFullYear() % 100) : parsed.getFullYear()}` : '';
   const zoneWidthPx = (ZONE.width / GRID) * size;
   const fontSize = Math.min((ZONE.height / GRID) * size * 0.6, zoneWidthPx / (Math.max(text.length, 1) * 0.62));
+  const kindLabel = t(`game.stamp.${spec.labelKey}`);
   const label = parsed
-    ? `${spec.label} em ${parsed.getDate()} de ${MONTHS_LONG[parsed.getMonth()]} de ${parsed.getFullYear()}`
-    : spec.label;
+    ? t('game.stamp.on', { label: kindLabel, date: formatDate(parsed, { day: 'numeric', month: 'long', year: 'numeric' }) })
+    : kindLabel;
 
   const frameStyle: CSSProperties = {
     backgroundColor: spec.color,

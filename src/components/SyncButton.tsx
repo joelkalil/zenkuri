@@ -1,31 +1,23 @@
 import { RefreshCw } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
-
-function relativeTime(ts: number | null): string {
-  if (!ts) return 'nunca';
-  const min = Math.floor((Date.now() - ts) / 60_000);
-  if (min < 1) return 'agora';
-  if (min < 60) return `há ${min} min`;
-  const hours = Math.floor(min / 60);
-  if (hours < 24) return `há ${hours} h`;
-  return `há ${Math.floor(hours / 24)} d`;
-}
+import { useI18n } from '../i18n';
 
 /**
- * Sincronização na topbar: o texto mostra o estado (ocioso, sincronizando,
- * erro) e o clique sincroniza agora. Abaixo de 1100 px só o ícone é visível;
- * o texto continua disponível para leitores de tela.
+ * Topbar sync control: the text shows the state (idle, syncing, error) and a
+ * click syncs now. Below 1100px only the icon is visible; the text stays
+ * available to screen readers.
  */
 export function SyncButton() {
   const { sync, scanning, lastSyncAt, error } = useSteam();
+  const { t, formatRelative } = useI18n();
   const state = scanning ? 'syncing' : error ? 'error' : 'idle';
   const label = scanning
-    ? 'Sincronizando…'
+    ? t('shell.sync.syncing')
     : error
-      ? 'Falha ao sincronizar'
+      ? t('shell.sync.failed')
       : lastSyncAt
-        ? `Sincronizado ${relativeTime(lastSyncAt)}`
-        : 'Sincronizar agora';
+        ? t('shell.sync.syncedAgo', { when: formatRelative(lastSyncAt) })
+        : t('shell.sync.syncNow');
 
   return (
     <button
@@ -34,7 +26,7 @@ export function SyncButton() {
       data-state={state}
       onClick={sync}
       disabled={scanning}
-      title={error ? `Falha ao sincronizar: ${error}` : 'Sincronizar agora'}
+      title={error ? t('shell.sync.failedWithReason', { error }) : t('shell.sync.syncNow')}
     >
       {state === 'error' && <span className="sync-dot" aria-hidden="true" />}
       <RefreshCw size={14} aria-hidden="true" className={scanning ? 'animate-spin motion-reduce:animate-none' : ''} />

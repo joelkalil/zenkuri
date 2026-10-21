@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useErrorMessage } from '../i18n/useErrorMessage';
 import { fetchAchievements } from '../lib/api';
 import type { AchievementWithStatus } from '../types/steam';
 
@@ -12,6 +13,7 @@ export interface GameDetails {
 }
 
 export function useGameDetails(appid: number | null) {
+  const describe = useErrorMessage();
   const [data, setData] = useState<GameDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export function useGameDetails(appid: number | null) {
         });
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load achievements');
+        if (!cancelled) setError(describe(err, 'game.loadFailed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -46,7 +48,7 @@ export function useGameDetails(appid: number | null) {
     return () => {
       cancelled = true;
     };
-  }, [appid]);
+  }, [appid, describe]);
 
   return { data, loading, error };
 }

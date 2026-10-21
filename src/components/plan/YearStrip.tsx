@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PlanMilestone, PlanPhase, PlanVacation } from '../../data/plan';
-import { PLAN_END, PLAN_START, daysBetween, formatDay, isoDay, monthShort, parseDay } from '../../lib/planDates';
+import { useI18n } from '../../i18n';
+import type { PlanMilestone, PlanPhase, PlanVacation } from '../../types/plan';
+import { daysBetween, formatDay, isoDay, monthShort, monthSpan, parseDay, planRange } from '../../lib/planDates';
 import '../../styles/plano.css';
 
 export interface PhaseSummary {
   done: number;
   total: number;
-  /** horas planejadas na fase */
+  /** hours planned in the phase */
   hours: number;
 }
 
@@ -41,23 +42,26 @@ function useWidth() {
 }
 
 /**
- * O ano do plano. Barras mostram só o código da fase (F1–F6); título, datas e
- * progresso ficam na tabela-legenda logo abaixo. "Hoje" é uma linha vertical
- * com o rótulo na linha do eixo; marcos têm linha própria, escalonados.
+ * The plan year. Bars show only the phase code (F1-F6); title, dates and
+ * progress live in the legend table right below. "Today" is a vertical line
+ * labelled on the axis row; milestones get their own staggered rows.
  */
 export function YearStrip({ phases, milestones, vacations, summaries, today, currentId, selectedId, onSelect }: YearStripProps) {
+  const { t } = useI18n();
   const [chartRef, width] = useWidth();
   const [hoverId, setHoverId] = useState<string | null>(null);
 
-  const start = parseDay(PLAN_START);
-  const total = daysBetween(start, parseDay(PLAN_END)) + 1;
+  const range = planRange(phases, vacations, milestones.map((milestone) => milestone.date));
+  const start = parseDay(range.start);
+  const end = parseDay(range.end);
+  const total = daysBetween(start, end) + 1;
   const pos = (iso: string) => (daysBetween(start, parseDay(iso)) / total) * 100;
   const todayPos = (daysBetween(start, today) / total) * 100;
   const showToday = todayPos >= 0 && todayPos <= 100;
   const todayIso = isoDay(today);
   const px = (percent: number) => (percent / 100) * width;
 
-  const months = Array.from({ length: 13 }, (_, index) => {
+  const months = Array.from({ length: monthSpan(start, end) }, (_, index) => {
     const date = new Date(start.getFullYear(), start.getMonth() + index, 1);
     const left = Math.max(0, (daysBetween(start, date) / total) * 100);
     const jan = date.getMonth() === 0;
@@ -65,15 +69,15 @@ export function YearStrip({ phases, milestones, vacations, summaries, today, cur
     return { key: `${date.getFullYear()}-${date.getMonth()}`, label, left, important: jan || index === 0, odd: index % 2 === 1 };
   })
     .filter((month) => month.left < 96)
-    // Sem espaço, só os meses pares (e janeiro/primeiro mês).
+    // Without room, only the even months (and January/the first month).
     .filter((month) => width >= 900 || month.important || !month.odd);
 
   const dated = milestones
-    .filter((milestone) => milestone.date && milestone.date >= PLAN_START && milestone.date <= PLAN_END)
+    .filter((milestone) => milestone.date && milestone.date >= range.start && milestone.date <= range.end)
     .map((milestone) => ({ milestone, left: pos(milestone.date!) }))
     .sort((a, b) => a.left - b.left);
 
-  // Escalona os marcos em até 3 níveis quando os rótulos se encostariam.
+  // Staggers milestones across up to 3 levels when the labels would touch.
   const levelEnds: number[] = [];
   const placed = dated.map(({ milestone, left }) => {
     const text = `${milestone.title} ${formatDay(milestone.date!, today)}`;
@@ -90,9 +94,9 @@ export function YearStrip({ phases, milestones, vacations, summaries, today, cur
 
   const rows = phases.map((phase) => ({
     phase,
-    current: phase.id === currentId,
+    current: phase.slug === currentId,
     past: phase.end < todayIso,
-    summary: summaries[phase.id],
+    summary: summaries[phase.slug],
   }));
 
   return (
@@ -102,30 +106,30 @@ export function YearStrip({ phases, milestones, vacations, summaries, today, cur
           {months.map((month) => (
             <span key={month.key} className="ys-month" style={{ left: `${month.left}%` }}>{month.label}</span>
           ))}
-          {showToday && <span className="ys-todaylabel" style={px(todayPos) < 48 ? { left: 0, transform: 'none' } : { left: `${todayPos}%` }}>hoje · {formatDay(todayIso, today)}</span>}
+          {showToday && <span className="ys-todaylabel" style={px(todayPos) < 48 ? { left: 0, transform: 'none' } : { left: `${todayPos}%` }}>{t('plan.strip.today', { date: formatDay(todayIso, today) })}</span>}
         </div>
 
-        <div className="ys-bars" role="group" aria-label="Fases do plano">
+        <div className="ys-bars" role="group" aria-label={t('plan.strip.phasesAria')}>
           {phases.map((phase) => {
             const left = pos(phase.start);
             const widthPct = pos(phase.end) - left + 100 / total;
-            const selected = phase.id === selectedId;
+            const selected = phase.slug === selectedId;
             return (
               <button
-                key={phase.id}
+                key={phase.slug}
                 type="button"
-                onClick={() => onSelect(phase.id)}
-                onMouseEnter={() => setHoverId(phase.id)}
+                onClick={() => onSelect(phase.slug)}
+                onMouseEnter={() => setHoverId(phase.slug)}
                 onMouseLeave={() => setHoverId(null)}
                 aria-pressed={selected}
-                aria-label={`${phase.id}, ${phase.title}, ${formatDay(phase.start, today)} a ${formatDay(phase.end, today)}${phase.id === currentId ? ', fase atual' : ''}${phase.floating ? ', datas móveis' : ''}`}
-                title={`${phase.id} · ${phase.title}`}
+                aria-label={`${t('plan.strip.barAria', { slug: phase.slug, title: phase.title, start: formatDay(phase.start, today), end: formatDay(phase.end, today) })}${phase.slug === currentId ? `, ${t('plan.strip.current')}` : ''}${phase.floating ? `, ${t('plan.strip.floating')}` : ''}`}
+                title={`${phase.slug} · ${phase.title}`}
                 data-floating={phase.floating ? 'true' : undefined}
-                data-hover={hoverId === phase.id && !selected ? 'true' : undefined}
+                data-hover={hoverId === phase.slug && !selected ? 'true' : undefined}
                 className="ys-bar"
                 style={{ left: `${left}%`, width: `calc(${widthPct}% - 3px)` }}
               >
-                {phase.floating ? `~${phase.id}` : phase.id}
+                {phase.floating ? `~${phase.slug}` : phase.slug}
               </button>
             );
           })}
@@ -134,11 +138,11 @@ export function YearStrip({ phases, milestones, vacations, summaries, today, cur
         <div className="ys-vac" aria-hidden="true">
           {vacations.map((vacation) => (
             <span
-              key={vacation.id}
-              title={`Férias ${vacation.id}: ${vacation.purpose}`}
+              key={vacation.slug}
+              title={t('plan.strip.vacationTitle', { slug: vacation.slug, purpose: vacation.purpose })}
               style={{ left: `${pos(vacation.start)}%`, width: `${Math.max(0.6, pos(vacation.end) - pos(vacation.start))}%` }}
             >
-              <i>Férias</i>
+              <i>{t('plan.strip.vacation')}</i>
             </span>
           ))}
         </div>
@@ -160,34 +164,34 @@ export function YearStrip({ phases, milestones, vacations, summaries, today, cur
         {showToday && <span className="ys-todayline" style={{ left: `${todayPos}%` }} aria-hidden="true" />}
       </div>
 
-      <div className="ys-legend" role="group" aria-label="Legenda das fases">
+      <div className="ys-legend" role="group" aria-label={t('plan.strip.legendAria')}>
         <div className="col-head hidden gap-4 pb-2 md:grid" style={{ gridTemplateColumns: '2.75rem 10.5rem minmax(0,1fr) 4.5rem 4.5rem 4.5rem' }}>
-          <span>Fase</span><span>Período</span><span>Título</span><span>Estado</span><span className="text-right">Feitos</span><span className="text-right">Horas</span>
+          <span>{t('plan.strip.colPhase')}</span><span>{t('plan.strip.colPeriod')}</span><span>{t('plan.strip.colTitle')}</span><span>{t('plan.strip.colState')}</span><span className="text-right">{t('plan.strip.colDone')}</span><span className="text-right">{t('plan.strip.colHours')}</span>
         </div>
         {rows.map(({ phase, current, past, summary }) => {
-          const selected = phase.id === selectedId;
+          const selected = phase.slug === selectedId;
           const trackLeft = pos(phase.start);
           const trackWidth = pos(phase.end) - trackLeft + 100 / total;
           return (
             <button
-              key={phase.id}
+              key={phase.slug}
               type="button"
               className="ys-row"
               aria-pressed={selected}
-              onClick={() => onSelect(phase.id)}
-              onMouseEnter={() => setHoverId(phase.id)}
+              onClick={() => onSelect(phase.slug)}
+              onMouseEnter={() => setHoverId(phase.slug)}
               onMouseLeave={() => setHoverId(null)}
-              onFocus={() => setHoverId(phase.id)}
+              onFocus={() => setHoverId(phase.slug)}
               onBlur={() => setHoverId(null)}
-              data-hover={hoverId === phase.id ? 'true' : undefined}
+              data-hover={hoverId === phase.slug ? 'true' : undefined}
             >
-              <span className="ys-code">{phase.floating ? `~${phase.id}` : phase.id}</span>
+              <span className="ys-code">{phase.floating ? `~${phase.slug}` : phase.slug}</span>
               <span className="ys-dates">{formatDay(phase.start, today)} → {formatDay(phase.end, today)}</span>
               <span className="ys-title">
                 {phase.title}
-                {phase.floating && <span className="ml-2 text-xs text-gray-500">datas móveis</span>}
+                {phase.floating && <span className="ml-2 text-xs text-gray-500">{t('plan.strip.floating')}</span>}
               </span>
-              <span className="ys-state" data-on={current ? 'true' : undefined}>{current ? 'agora' : past ? 'encerrada' : ''}</span>
+              <span className="ys-state" data-on={current ? 'true' : undefined}>{current ? t('plan.strip.now') : past ? t('plan.strip.ended') : ''}</span>
               <span className="ys-num">{summary ? `${summary.done}/${summary.total}` : '—'}</span>
               <span className="ys-num">{summary ? `~${summary.hours} h` : '—'}</span>
               <span className="ys-track" aria-hidden="true">

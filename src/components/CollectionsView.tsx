@@ -6,6 +6,7 @@ import { LibraryCard } from './LibraryCard';
 import { LibraryGameRail } from './LibraryGameRail';
 import { AutoCollectionsSection } from './AutoCollectionsSection';
 import { useAutoCollections } from '../hooks/useAutoCollections';
+import { useI18n } from '../i18n';
 import type { Game, GameCollection } from '../types/steam';
 
 type Completion = { percent: number; unlocked: number; total: number };
@@ -30,6 +31,7 @@ interface ContextMenuState {
 }
 
 export function CollectionsView({ games, completionMap, collections, collectionOf, onCreate, onRename, onDelete, onAssign, showGameRail = true }: CollectionsViewProps) {
+  const { t, plural } = useI18n();
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
@@ -103,7 +105,7 @@ export function CollectionsView({ games, completionMap, collections, collectionO
           <section>
             <header className="mb-6 border-b border-gray-800 pb-4">
               <button onClick={() => setSelectedId(null)} className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-gray-500 transition-colors hover:text-gray-200">
-                <ArrowLeft className="h-4 w-4" /> Voltar para coleções
+                <ArrowLeft className="h-4 w-4" /> {t('collections.mine.back')}
               </button>
               <div className="flex flex-wrap items-center gap-3">
                 {editingId === selectedCollection.id ? (
@@ -111,15 +113,15 @@ export function CollectionsView({ games, completionMap, collections, collectionO
                     <input value={editName} autoFocus onChange={(event) => setEditName(event.target.value)}
                       onKeyDown={(event) => { if (event.key === 'Enter') submitRename(selectedCollection.id); if (event.key === 'Escape') setEditingId(null); }}
                       className="w-64 field !h-9 !text-lg font-semibold" />
-                    <button onClick={() => submitRename(selectedCollection.id)} aria-label="Salvar nome" className="icon-btn text-zk-complete"><Check className="h-4 w-4" /></button>
-                    <button onClick={() => setEditingId(null)} aria-label="Cancelar edição" className="icon-btn"><X className="h-4 w-4" /></button>
+                    <button onClick={() => submitRename(selectedCollection.id)} aria-label={t('collections.mine.saveName')} className="icon-btn text-zk-complete"><Check className="h-4 w-4" /></button>
+                    <button onClick={() => setEditingId(null)} aria-label={t('collections.mine.cancelEdit')} className="icon-btn"><X className="h-4 w-4" /></button>
                   </div>
                 ) : <h2 className="font-display text-2xl font-bold text-gray-100">{selectedCollection.name}</h2>}
-                <span className="text-sm text-gray-500">{selectedGames.length} {selectedGames.length === 1 ? 'jogo' : 'jogos'}</span>
+                <span className="text-sm text-gray-500">{plural('collections.gameCount', selectedGames.length)}</span>
                 <span className="flex-1" />
                 {editingId !== selectedCollection.id && <div className="flex items-center gap-1">
-                  <button onClick={() => { setEditingId(selectedCollection.id); setEditName(selectedCollection.name); }} aria-label="Renomear coleção" className="icon-btn"><Pencil className="h-4 w-4" /></button>
-                  <button onClick={() => { onDelete(selectedCollection.id); setSelectedId(null); }} aria-label="Excluir coleção" className="icon-btn hover:!text-zk-danger"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => { setEditingId(selectedCollection.id); setEditName(selectedCollection.name); }} aria-label={t('collections.mine.rename')} className="icon-btn"><Pencil className="h-4 w-4" /></button>
+                  <button onClick={() => { onDelete(selectedCollection.id); setSelectedId(null); }} aria-label={t('collections.mine.delete')} className="icon-btn hover:!text-zk-danger"><Trash2 className="h-4 w-4" /></button>
                 </div>}
               </div>
             </header>
@@ -128,19 +130,19 @@ export function CollectionsView({ games, completionMap, collections, collectionO
                 {selectedGames.map((game) => <div key={game.appid} onContextMenu={(event) => openContextMenu(event, game)}><LibraryCard game={game} completion={completionMap.get(game.appid)} /></div>)}
               </div>
             ) : (
-              <p className="py-12 text-sm text-gray-500">Nenhum jogo dos filtros atuais está nesta coleção.</p>
+              <p className="py-12 text-sm text-gray-500">{t('collections.mine.emptyFiltered')}</p>
             )}
           </section>
         ) : (
           <div className="space-y-4">
-            {collections.length === 0 && <p className="text-sm text-gray-500">Nenhuma coleção ainda. Crie a primeira abaixo ou clique com o botão direito em um jogo.</p>}
+            {collections.length === 0 && <p className="text-sm text-gray-500">{t('collections.mine.emptyList')}</p>}
             <div className="collections-grid">
               <form className="collection-new" onSubmit={(event) => { event.preventDefault(); submitCreate(); }}>
                 <span className="collection-new-mark mx-auto"><Plus className="h-5 w-5" aria-hidden="true" /></span>
-                <label className="text-center text-sm font-semibold" htmlFor="new-collection-name">Nova coleção</label>
+                <label className="text-center text-sm font-semibold" htmlFor="new-collection-name">{t('collections.mine.newTitle')}</label>
                 <div className="flex gap-2">
-                  <input id="new-collection-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Nome da coleção…" className="field min-w-0 flex-1" />
-                  <button type="submit" disabled={!newName.trim()} className="btn btn-primary h-9 px-3 disabled:opacity-40">Criar</button>
+                  <input id="new-collection-name" value={newName} onChange={(event) => setNewName(event.target.value)} placeholder={t('collections.mine.namePlaceholder')} className="field min-w-0 flex-1" />
+                  <button type="submit" disabled={!newName.trim()} className="btn btn-primary h-9 px-3 disabled:opacity-40">{t('collections.mine.create')}</button>
                 </div>
               </form>
               {collections.map((collection) => {
@@ -150,7 +152,7 @@ export function CollectionsView({ games, completionMap, collections, collectionO
                     <span className="flex w-full items-start gap-2">
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[0.9375rem] font-semibold text-gray-100">{collection.name}</span>
-                        <span className="mt-1 block text-xs text-gray-500">{members.length} {members.length === 1 ? 'jogo' : 'jogos'}{members.length > 0 ? ` · ${averagePercent(members)}% médio` : ''}</span>
+                        <span className="mt-1 block text-xs text-gray-500">{members.length > 0 ? t('collections.mine.summary', { games: plural('collections.gameCount', members.length), percent: averagePercent(members) }) : plural('collections.gameCount', members.length)}</span>
                       </span>
                       <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
                     </span>
@@ -168,9 +170,9 @@ export function CollectionsView({ games, completionMap, collections, collectionO
       </div>
 
       {contextMenu && (
-        <div role="menu" aria-label={`Coleção de ${contextMenu.game.name}`} onClick={(event) => event.stopPropagation()}
+        <div role="menu" aria-label={t('collections.menu.label', { name: contextMenu.game.name })} onClick={(event) => event.stopPropagation()}
           className="lib-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
-          <div className="lib-menu-head"><p className="truncate text-xs font-semibold text-gray-100">{contextMenu.game.name}</p><p className="micro mt-0.5">Adicionar à coleção</p></div>
+          <div className="lib-menu-head"><p className="truncate text-xs font-semibold text-gray-100">{contextMenu.game.name}</p><p className="micro mt-0.5">{t('collections.menu.add')}</p></div>
           <div className="max-h-72 overflow-y-auto py-1">
             {collections.map((collection) => {
               const current = collectionOf[String(contextMenu.game.appid)] === collection.id;
@@ -179,21 +181,21 @@ export function CollectionsView({ games, completionMap, collections, collectionO
               </button>;
             })}
           </div>
-          {collectionOf[String(contextMenu.game.appid)] && <button role="menuitem" className="danger" onClick={() => { onAssign(String(contextMenu.game.appid), null); setContextMenu(null); }}><X className="h-3.5 w-3.5" aria-hidden="true" /> Remover da coleção</button>}
+          {collectionOf[String(contextMenu.game.appid)] && <button role="menuitem" className="danger" onClick={() => { onAssign(String(contextMenu.game.appid), null); setContextMenu(null); }}><X className="h-3.5 w-3.5" aria-hidden="true" /> {t('collections.menu.remove')}</button>}
         </div>
       )}
     </div>
   );
 
   const sections: { key: CollectionsSection; label: string; count: number }[] = [
-    { key: 'mine', label: 'Minhas', count: collections.length },
-    { key: 'franchises', label: 'Franquias', count: auto.data.franchises.length },
-    { key: 'companies', label: 'Empresas', count: auto.data.companies.length },
+    { key: 'mine', label: t('collections.tabs.mine'), count: collections.length },
+    { key: 'franchises', label: t('collections.tabs.franchises'), count: auto.data.franchises.length },
+    { key: 'companies', label: t('collections.tabs.companies'), count: auto.data.companies.length },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="subtabs border-b border-gray-800" role="group" aria-label="Tipo de coleção">
+      <div className="subtabs border-b border-gray-800" role="group" aria-label={t('collections.tabs.label')}>
         {sections.map(({ key, label, count }) => (
           <button key={key} onClick={() => setSection(key)} className="subtab" aria-pressed={section === key}>
             {label}<span className="count">{count}</span>
@@ -202,11 +204,11 @@ export function CollectionsView({ games, completionMap, collections, collectionO
       </div>
       {section === 'mine' && manualView}
       {section === 'franchises' && (
-        <AutoCollectionsSection number="02" title="Franquias" kind="franchise" collections={auto.data.franchises}
+        <AutoCollectionsSection number="02" title={t('collections.tabs.franchises')} kind="franchise" collections={auto.data.franchises}
           games={games} completionMap={completionMap} loading={auto.loading} error={auto.error} />
       )}
       {section === 'companies' && (
-        <AutoCollectionsSection number="03" title="Empresas" kind="company" collections={auto.data.companies}
+        <AutoCollectionsSection number="03" title={t('collections.tabs.companies')} kind="company" collections={auto.data.companies}
           games={games} completionMap={completionMap} loading={auto.loading} error={auto.error} />
       )}
     </div>

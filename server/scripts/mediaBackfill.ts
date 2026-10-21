@@ -1,5 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { envInt } from '../env';
 import { MEDIA_ROOT } from '../mediaPaths';
 import { readCatalogFile, slotKey, type Catalog } from '../mediaCatalog';
 import { IMAGE_EXTS, isPlaceholderFile } from '../mediaFiles';
@@ -27,7 +28,7 @@ interface Candidate {
 }
 
 const dryRun = process.argv.includes('--dry-run');
-const apiBase = `http://localhost:${process.env.ZENKURI_API_PORT ?? 4343}`;
+const apiBase = `http://localhost:${envInt('ZENKURI_API_PORT', 4343)}`;
 
 function readCatalog(): Catalog | null {
   try {

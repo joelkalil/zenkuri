@@ -1,4 +1,4 @@
-/* Jogo: cabeçalho compacto com arte de fundo, checklist em tabela e ficha fixa. */
+/* Game: compact header with background art, table checklist and fixed sheet. */
 @layer components {
   .jogo { max-width: 1280px; gap: 1rem; --backdrop-opacity: 0.2; }
   [data-theme="zenkuri-claro"] .jogo { --backdrop-opacity: 0.13; }
@@ -9,7 +9,7 @@
   .crumb:hover { color: var(--color-violet-400); }
 
   .jogo-head { position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: 72px minmax(0, 1fr) auto auto; grid-template-areas: 'cover main stamp numbers' 'cover actions stamp numbers'; gap: 0.5rem 1.25rem; align-items: start; padding: 1rem; border-radius: var(--radius-panel); background: var(--color-gray-900); }
-  /* arte como fundo: só a faixa do cabeçalho, baixa opacidade, sem gradiente */
+  /* art as background: header strip only, low opacity, no gradient */
   .jogo-backdrop { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; opacity: var(--backdrop-opacity); }
   .jogo-cover { grid-area: cover; width: 72px; aspect-ratio: 2 / 3; overflow: hidden; border-radius: var(--radius-cover); background: var(--color-gray-850); }
   .jogo-main { grid-area: main; min-width: 0; }
@@ -58,11 +58,11 @@
   .trophy-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 2px; background: var(--color-violet-500); color: var(--zk-accent-ink); }
   .trophy-open { width: 18px; height: 18px; border: 1.5px solid var(--color-gray-600); border-radius: 50%; }
 
-  /* Próximos 3 na página do jogo reaproveita a linha do Hoje, com imagem */
+  /* Next 3 on the game page reuses the Today row, with an image */
   .jogo-next { list-style: none; margin: 0; padding: 0; }
   .jogo-next .trophy-row { grid-template-columns: 2rem 40px minmax(0, 1fr) 5.5rem; }
 
-  /* Ficha: coluna fixa à direita, sem caixa */
+  /* Sheet: fixed column on the right, no box */
   .ficha { position: sticky; top: 1rem; }
   .ficha-body { display: flex; flex-direction: column; gap: 1.25rem; }
   .ficha-title { padding-bottom: 0.5rem; margin-bottom: 0.25rem; border-bottom: 1px solid var(--color-gray-800); }

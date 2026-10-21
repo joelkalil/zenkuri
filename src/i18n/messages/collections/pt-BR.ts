@@ -1,0 +1,48 @@
+// Messages for the collections area (pt-BR is the source of truth for key types).
+export const collectionsPtBR = {
+  tabs: {
+    label: 'Tipo de coleção',
+    mine: 'Minhas',
+    franchises: 'Franquias',
+    companies: 'Empresas',
+  },
+  gameCount: { one: '{count} jogo', other: '{count} jogos' },
+  collectionCount: { one: '{count} coleção', other: '{count} coleções' },
+  mine: {
+    back: 'Voltar para coleções',
+    saveName: 'Salvar nome',
+    cancelEdit: 'Cancelar edição',
+    rename: 'Renomear coleção',
+    delete: 'Excluir coleção',
+    emptyFiltered: 'Nenhum jogo dos filtros atuais está nesta coleção.',
+    emptyList: 'Nenhuma coleção ainda. Crie a primeira abaixo ou clique com o botão direito em um jogo.',
+    newTitle: 'Nova coleção',
+    namePlaceholder: 'Nome da coleção…',
+    create: 'Criar',
+    summary: '{games} · {percent}% médio',
+  },
+  menu: {
+    label: 'Coleção de {name}',
+    add: 'Adicionar à coleção',
+    remove: 'Remover da coleção',
+  },
+  auto: {
+    backTo: 'Voltar para {title}',
+    roles: { dev: 'dev', pub: 'pub', both: 'dev·pub' },
+    roleTitles: { dev: 'Desenvolvedora', pub: 'Publicadora', both: 'Desenvolvedora e publicadora' },
+    loading: 'Carregando coleções…',
+    emptyTitle: 'Nenhuma coleção encontrada.',
+    emptyNone: 'Uma coleção aparece quando pelo menos 2 jogos da biblioteca compartilham a mesma franquia ou empresa. Sincronize a Steam para buscar os metadados.',
+    emptyFiltered: 'Nenhuma coleção tem jogos dentro dos filtros atuais.',
+    colName: 'Nome',
+    colGames: 'Jogos',
+    loadFailed: 'Falha ao carregar as coleções automáticas',
+  },
+  rail: {
+    label: 'Todos os jogos',
+    hint: 'Todos os jogos · clique direito para coleção',
+    filterLabel: 'Filtrar jogos',
+    filterPlaceholder: 'Filtrar jogos…',
+    collectionOf: 'Coleção: {name}',
+  },
+};

@@ -1,12 +1,12 @@
 /*
-  Regras das coleções automáticas
-  ───────────────────────────────
-  Tudo aqui é dado + normalização pura. As regras vivem em código (não no banco):
-  mudar uma regra não exige refazer nenhuma consulta às lojas, porque
-  `game_store_meta` guarda os nomes crus exatamente como o provedor devolveu.
+  Automatic collection rules
+  ──────────────────────────
+  Everything here is data + pure normalization. The rules live in code (not in
+  the database): changing a rule does not require redoing any store query,
+  because `game_store_meta` keeps the raw names exactly as the provider returned them.
 */
 
-import { SAGAS } from '../../src/data/sagas';
+import type { SagaPayload } from '../../src/types/community';
 
 export type CollectionKind = 'franchise' | 'company';
 
@@ -14,7 +14,7 @@ const CORPORATE_SUFFIX = /(?:^|[\s,])(?:co\.?,?\s*ltd\.?|ltd\.?|inc\.?|llc|gmbh|
 const TRAILING_PARENTHETICAL = /\s*\([^()]*\)\s*$/;
 const TRAILING_LEFTOVERS = /[\s,]+$/;
 
-/** Remove ®™©, qualquer parêntese final (ex.: "(Mac/Linux)") e sufixos corporativos finais; preserva caixa e acentos. */
+/** Removes ®™©, any trailing parenthetical (e.g. "(Mac/Linux)") and trailing corporate suffixes; preserves case and accents. */
 export function stripDecorations(raw: string): string {
   let value = raw.replace(/[®™©]/g, '').trim();
   for (let guard = 0; guard < 8; guard += 1) {
@@ -30,7 +30,7 @@ export function stripDecorations(raw: string): string {
 }
 
 function foldText(value: string): string {
-  // ®™© antes do NFKD: a decomposição de compatibilidade transforma ™ em "tm".
+  // ®™© before NFKD: the compatibility decomposition turns ™ into "tm".
   return value
     .replace(/[®™©]/g, '')
     .normalize('NFKD')
@@ -39,13 +39,13 @@ function foldText(value: string): string {
     .toLowerCase();
 }
 
-/** Chave canônica: só letras/dígitos, sem acentos, sufixos corporativos nem pontuação. */
+/** Canonical key: letters/digits only, no accents, corporate suffixes or punctuation. */
 export function normalizeKey(raw: string): string {
   const stripped = stripDecorations(foldText(raw));
   return stripped.replace(/[^\p{L}\p{N}]/gu, '');
 }
 
-/** Como normalizeKey, mas preserva fronteiras de palavra (espaço simples) para casar prefixos. */
+/** Like normalizeKey, but keeps word boundaries (single space) to match prefixes. */
 function spacedKey(raw: string): string {
   return stripDecorations(foldText(raw)).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
@@ -58,7 +58,7 @@ function keySet(names: readonly string[]): ReadonlySet<string> {
   return new Set(names.map(normalizeKey));
 }
 
-/** Nomes de exibição fixos (por chave). Aliases também definem o nome canônico. */
+/** Fixed display names (by key). Aliases also define the canonical name. */
 const COMPANY_DISPLAY_OVERRIDES = [
   'Square Enix', 'Capcom', 'Bandai Namco Entertainment', 'CD Projekt Red', 'FromSoftware',
   'SEGA', 'IO Interactive', 'Koei Tecmo', 'Spike Chunsoft', 'Level-5',
@@ -69,7 +69,7 @@ const FRANCHISE_DISPLAY_OVERRIDES = [
   'Grand Theft Auto', 'The Elder Scrolls',
 ] as const;
 
-/** Aplicados depois da normalização: chave de origem → nome canônico. */
+/** Applied after normalization: source key → canonical name. */
 const COMPANY_ALIASES = [
   ['2K Australia', '2K'], ['2K Boston', '2K'], ['2K Marin', '2K'],
   ['2K China', '2K'], ['2K Games', '2K'], ['2K Czech', '2K'],
@@ -88,13 +88,13 @@ const FRANCHISE_ALIASES = [
   ['NIER', 'NieR'],
 ] as const;
 
-/** Estúdios de port/remaster: o crédito é descartado. */
+/** Port/remaster studios: the credit is discarded. */
 const COMPANY_BLOCKLIST = [
   'Feral Interactive', 'Aspyr', 'Nixxes', 'QLOC', 'Virtuos', 'Blind Squirrel',
   '1C-SoftClub',
 ] as const;
 
-/** Páginas de loja de publisher que a Steam rotula como franquia. */
+/** Publisher store pages that Steam labels as a franchise. */
 const FRANCHISE_BLOCKLIST = [
   'EA Play', 'EA Originals', 'EA Sports', 'PlayStation Studios', 'PlayStation Publishing LLC',
   'WB Games', '505 Games Official', 'FRANCHISE', 'Arc Games', 'Raw Fury Games',
@@ -115,7 +115,7 @@ const companyBlocked = keySet(COMPANY_BLOCKLIST);
 const companyBlockedSpaced = COMPANY_BLOCKLIST.map(spacedKey);
 const franchiseBlocked = keySet(FRANCHISE_BLOCKLIST);
 
-/** Bloqueio de empresa: chave exata ou começando com um nome bloqueado + espaço ("Aspyr Media"). */
+/** Company blocking: exact key or starting with a blocked name + space ("Aspyr Media"). */
 function isCompanyBlocked(raw: string): boolean {
   if (companyBlocked.has(normalizeKey(raw))) return true;
   const spaced = spacedKey(raw);
@@ -124,13 +124,13 @@ function isCompanyBlocked(raw: string): boolean {
 
 export interface ResolvedName {
   key: string;
-  /** Presente quando há override/alias; senão o display vem do spelling mais frequente. */
+  /** Present when there is an override/alias; otherwise the display comes from the most frequent spelling. */
   display?: string;
-  /** Spelling cru sem sufixos, usado para votar o nome de exibição. */
+  /** Raw spelling without suffixes, used to vote on the display name. */
   spelling: string;
 }
 
-/** Resolve um nome cru (empresa ou franquia) para chave + display, ou null se bloqueado/vazio. */
+/** Resolves a raw name (company or franchise) to key + display, or null if blocked/empty. */
 export function resolveName(kind: CollectionKind, raw: string): ResolvedName | null {
   const sourceKey = normalizeKey(raw);
   if (sourceKey === '') return null;
@@ -149,7 +149,7 @@ export function resolveName(kind: CollectionKind, raw: string): ResolvedName | n
   };
 }
 
-/** Títulos que não contam para coleções (demos, trilhas, subsets de RA…). */
+/** Titles that do not count toward collections (demos, soundtracks, RA subsets…). */
 const EXCLUDED_TITLE = /\b(demo|playtest|test server|soundtrack|dedicated server|sdk)\b/i;
 
 export function isExcludedTitle(title: string, platform: string): boolean {
@@ -159,7 +159,7 @@ export function isExcludedTitle(title: string, platform: string): boolean {
 
 interface TitleRule {
   franchise: string;
-  /** Aplicado ao título sem ®™, sem acentos, em minúsculas. */
+  /** Applied to the title without ®™, without accents, lowercased. */
   pattern: RegExp;
 }
 
@@ -201,16 +201,29 @@ export const TITLE_RULES: readonly TitleRule[] = [
   prefix('Pokémon', /^pokemon\b/),
 ];
 
-/** Franquias inferidas pelo título (nomes crus; passam por resolveName). */
+/** Franchises inferred from the title (raw names; they go through resolveName). */
 export function franchisesFromTitle(title: string): string[] {
   const folded = foldText(title).trim();
   return TITLE_RULES.filter((rule) => rule.pattern.test(folded)).map((rule) => rule.franchise);
 }
 
-/** appid da Steam → nome da saga curada em src/data/sagas.ts. */
-export const SAGA_FRANCHISE_BY_APPID: ReadonlyMap<string, string> = new Map(
-  SAGAS.flatMap((saga) => [
-    ...saga.phases.flatMap((phase) => phase.entries.map((entry) => [entry.appid, saga.name] as const)),
-    ...saga.outOfScope.map((entry) => [entry.appid, saga.name] as const),
-  ]),
-);
+/** A published saga reduced to what seeds collections: franchise name + Steam appids. */
+export interface SagaSeed {
+  name: string;
+  appids: readonly string[];
+}
+
+export function sagaSeedOf(saga: Pick<SagaPayload, 'name' | 'phases' | 'outOfScope'>): SagaSeed {
+  return {
+    name: saga.name,
+    appids: [
+      ...saga.phases.flatMap((phase) => phase.entries.map((entry) => entry.appid)),
+      ...saga.outOfScope.map((entry) => entry.appid),
+    ],
+  };
+}
+
+/** Steam appid → name of the saga published in the community. */
+export function indexSagaSeeds(seeds: readonly SagaSeed[]): ReadonlyMap<string, string> {
+  return new Map(seeds.flatMap((seed) => seed.appids.map((appid) => [appid, seed.name] as const)));
+}

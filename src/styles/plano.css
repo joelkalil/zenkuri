@@ -1,4 +1,4 @@
-/* Plano: linha do ano (eixo, barras F1–F6, férias, marcos) e legenda em tabela. */
+/* Plan: year strip (axis, F1-F6 bars, vacations, milestones) and the legend table. */
 @layer components {
   .ys { position: relative; }
   .ys-chart { position: relative; padding-bottom: 0.25rem; }
@@ -53,7 +53,7 @@
     .ys-row[aria-pressed="true"] .ys-track > i { background: var(--color-violet-500); }
   }
 
-  /* Cabeçalho de seção que quebra linha no celular: número fixo, ação abaixo do título. */
+  /* Section header that wraps on mobile: fixed number, action below the title. */
   .sh-wrap .section-num { flex-shrink: 0; white-space: nowrap; }
   @media (max-width: 767px) {
     .sh-wrap { flex-wrap: wrap; }

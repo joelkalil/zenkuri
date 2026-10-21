@@ -1,4 +1,4 @@
-/* Almanaque: mapa de calor com o acento, lista de conclusões por mês e impressão em papel. */
+/* Almanac: heatmap in the accent color, completions listed by month, and paper printing. */
 @layer components {
   .hm-cell { position: absolute; border-radius: 2px; background: var(--color-gray-800); }
   .hm-cell[data-level="1"], .hm-swatch[data-level="1"] { background: color-mix(in oklab, var(--color-violet-500) 28%, var(--color-gray-800)); }
@@ -28,7 +28,7 @@
     .al-row > .al-plat, .al-row > .al-cover { display: none; }
   }
 
-  /* Papel puro e tinta preta: reescreve a escala de cinzas com a do tema claro. */
+  /* Pure paper and black ink: rewrites the gray scale with the light theme one. */
   @media print {
     .almanac {
       --color-gray-50: #0f0e0c; --color-gray-100: #1c1a17; --color-gray-200: #2e2a25; --color-gray-300: #433e37;
@@ -42,7 +42,7 @@
     .al-row { break-inside: avoid; }
   }
 
-  /* Cabeçalho de seção que quebra linha no celular: número fixo, ação abaixo do título. */
+  /* Section head that wraps on mobile: fixed number, action below the title. */
   .sh-wrap .section-num { flex-shrink: 0; white-space: nowrap; }
   @media (max-width: 767px) {
     .sh-wrap { flex-wrap: wrap; }

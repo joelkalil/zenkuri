@@ -2,10 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 export type ThemeMode = 'zenkuri' | 'zenkuri-claro';
 
-export const THEMES: { id: ThemeMode; label: string; description: string }[] = [
-  { id: 'zenkuri', label: 'Zenkuri', description: 'Sumi quente e vermilhão' },
-  { id: 'zenkuri-claro', label: 'Papel', description: 'Papel claro e vermilhão' },
-];
+/** Available themes; their display names live in `common.themes` (see `THEME_KEYS`). */
+export const THEMES: { id: ThemeMode }[] = [{ id: 'zenkuri' }, { id: 'zenkuri-claro' }];
 
 interface ThemeContextValue {
   theme: ThemeMode;
@@ -15,10 +13,10 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-/* Versão 3 = identidade Zenkuri (hanko + guia de estratégia, out/2026). Na
-   primeira carga: preferência "light" vira zenkuri-claro; qualquer outro valor
-   salvo que não exista mais vira zenkuri. Depois disso a escolha do seletor de
-   Aparência é respeitada normalmente. */
+/* Version 3 = Zenkuri identity (hanko + strategy guide, Oct 2026). On the
+   first load: a "light" preference becomes zenkuri-claro; any other saved value
+   that no longer exists becomes zenkuri. After that the Appearance picker's
+   choice is respected as usual. */
 const THEME_VERSION_KEY = 'zenkuri-theme-version';
 const THEME_VERSION = '3';
 const DEFAULT_THEME: ThemeMode = 'zenkuri';

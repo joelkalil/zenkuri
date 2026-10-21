@@ -6,7 +6,7 @@ interface SwitchProps {
   disabled?: boolean;
 }
 
-/** Interruptor de ajustes: trilho com contorno, polegar chapado. */
+/** Settings switch: outlined track, flat thumb. */
 export function Switch({ checked, onChange, label, description, disabled }: SwitchProps) {
   const toggle = (
     <button

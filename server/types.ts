@@ -42,7 +42,7 @@ export interface ApiAchievement {
   unlocktime: number;
   points?: number;
   type?: string;
-  /** % global de jogadores com a conquista (0–100), null quando a plataforma não informa */
+  /** global % of players with the achievement (0–100), null when the platform does not report it */
   rarity?: number | null;
 }
 
@@ -54,9 +54,9 @@ export interface PlanningRecord {
   effort: Record<string, string>;
   schedule: Record<string, string>;
   guides: Record<string, string>;
-  /** coleções manuais (franquias/séries) do usuário */
+  /** the user's manual collections (franchises/series) */
   collections: { id: number; name: string }[];
-  /** game_id -> id da coleção à qual o jogo pertence */
+  /** game_id -> id of the collection the game belongs to */
   collectionOf: Record<string, number>;
 }
 

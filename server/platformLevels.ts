@@ -2,17 +2,20 @@ import { getUserSummary } from '@retroachievements/api';
 import { getUserTrophyProfileSummary } from 'psn-api';
 import type { Platform } from './types';
 import { getCredential } from './db';
+import type { ApiErrorCode } from './errorCodes';
+import { ApiError } from './errors';
+import { SteamAuthError } from './providers/steam';
 import { psnServiceAuth, raServiceAuth, steamServiceKey } from './serviceAuth';
 import type { PlatformLinkData } from './verification';
 
 /*
-  Nível nativo de cada plataforma
-  ───────────────────────────────
-  O nível Zenkuri é calculado localmente (level.ts). Estes são os números que
-  cada plataforma mostra no próprio perfil: nível Steam, nível de troféus da
-  PSN e pontos/rank do RetroAchievements. Consultados ao vivo com a credencial
-  de serviço, guardados só em memória por alguns minutos e nunca persistidos.
-  Cada plataforma falha sozinha: um NPSSO vencido não derruba a Steam.
+  Native level of each platform
+  ─────────────────────────────
+  The Zenkuri level is computed locally (level.ts). These are the numbers each
+  platform shows on its own profile: Steam level, PSN trophy level and
+  RetroAchievements points/rank. Queried live with the service credential,
+  kept in memory for a few minutes only and never persisted.
+  Each platform fails on its own: an expired NPSSO does not take Steam down.
 */
 
 export type PlatformLevel =
@@ -20,7 +23,7 @@ export type PlatformLevel =
   | { platform: 'psn'; status: 'ok'; level: number; progressPercent: number; tier: number; grade: 'Bronze' | 'Prata' | 'Ouro' | 'Platina'; trophies: { platinum: number; gold: number; silver: number; bronze: number } }
   | { platform: 'retroachievements'; status: 'ok'; points: number; softcorePoints: number; truePoints: number; rank: number | null; totalRanked: number | null }
   | { platform: Platform; status: 'unlinked' }
-  | { platform: Platform; status: 'error'; message: string };
+  | { platform: Platform; status: 'error'; message: string; code?: ApiErrorCode };
 
 const TTL_MS = 10 * 60_000;
 const cache = new Map<number, { at: number; value: PlatformLevel[] }>();
@@ -31,7 +34,7 @@ function linkFor(userId: number, platform: Platform): PlatformLinkData | null {
 }
 
 function message(err: unknown) {
-  return err instanceof Error ? err.message : 'Falha ao consultar a plataforma.';
+  return err instanceof Error ? err.message : 'Failed to query the platform.';
 }
 
 async function steamLevel(userId: number): Promise<PlatformLevel> {
@@ -43,7 +46,7 @@ async function steamLevel(userId: number): Promise<PlatformLevel> {
   url.searchParams.set('key', steamServiceKey());
   url.searchParams.set('steamid', steamid);
   const res = await fetch(url);
-  if (res.status === 401 || res.status === 403) throw new Error('A chave de API da Steam foi recusada.');
+  if (res.status === 401 || res.status === 403) throw new SteamAuthError();
   if (!res.ok) throw new Error(`Steam API error ${res.status}`);
   const json = await res.json() as {
     response?: {
@@ -54,7 +57,7 @@ async function steamLevel(userId: number): Promise<PlatformLevel> {
     };
   };
   const r = json.response;
-  if (!r || r.player_level === undefined) throw new Error('Perfil Steam privado: o nível não está visível.');
+  if (!r || r.player_level === undefined) throw new ApiError('sync.steam_profile_private', 400);
 
   const xp = r.player_xp ?? 0;
   const base = r.player_xp_needed_current_level ?? xp;
@@ -115,7 +118,7 @@ async function settle(platform: Platform, run: () => Promise<PlatformLevel>): Pr
   try {
     return await run();
   } catch (err) {
-    return { platform, status: 'error', message: message(err) };
+    return { platform, status: 'error', message: message(err), code: err instanceof ApiError ? err.code : undefined };
   }
 }
 
@@ -128,7 +131,7 @@ export async function getPlatformLevels(userId: number, { fresh = false } = {}):
     settle('psn', () => psnLevel(userId)),
     settle('retroachievements', () => raLevel(userId)),
   ]);
-  // Erros não entram no cache: a próxima visita tenta de novo.
+  // Errors are not cached: the next visit tries again.
   if (value.every((item) => item.status !== 'error')) cache.set(userId, { at: Date.now(), value });
   return value;
 }

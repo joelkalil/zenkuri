@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import type { GroupId } from './nav';
 import { NAV_GROUPS } from './nav';
+import { useI18n } from '../i18n';
 import { ProfileMenu } from './ProfileMenu';
 
 interface TabBarProps {
@@ -9,11 +10,14 @@ interface TabBarProps {
 }
 
 /**
- * Barra de abas inferior (≤768 px): Hoje, Biblioteca, Conquistas e Perfil. O
- * Perfil abre uma folha com o mesmo conteúdo do menu de perfil do desktop.
+ * Bottom tab bar (up to 768px): the 4 groups (Today, Library, Achievements,
+ * Community) and Profile. Labels come from `nav.short.*`, which are kept short
+ * enough for five tabs in 390px. Profile opens a sheet with the same content
+ * as the desktop profile menu.
  */
 export function TabBar({ activeGroup }: TabBarProps) {
   const location = useLocation();
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -52,10 +56,10 @@ export function TabBar({ activeGroup }: TabBarProps) {
 
   return (
     <>
-      <nav className="tabbar no-print" aria-label="Navegação principal">
+      <nav className="tabbar no-print" aria-label={t('nav.aria.main')}>
         {NAV_GROUPS.map((group) => (
           <Link key={group.id} to={group.to} className="tabbar-item" aria-current={group.id === activeGroup ? 'page' : undefined}>
-            {group.label}
+            {t(group.shortKey)}
           </Link>
         ))}
         <button
@@ -67,13 +71,13 @@ export function TabBar({ activeGroup }: TabBarProps) {
           aria-controls="profile-sheet"
           onClick={() => setOpen(!open)}
         >
-          Perfil
+          {t('nav.short.profile')}
         </button>
       </nav>
       {open && (
         <>
           <div className="sheet-backdrop" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div ref={sheetRef} id="profile-sheet" role="dialog" aria-modal="true" aria-label="Perfil" className="popover profile-panel is-sheet">
+          <div ref={sheetRef} id="profile-sheet" role="dialog" aria-modal="true" aria-label={t('shell.profile.title')} className="popover profile-panel is-sheet">
             <ProfileMenu onNavigate={() => setOpen(false)} />
           </div>
         </>

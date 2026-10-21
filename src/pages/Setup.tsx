@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import {
   linkPlatformAccount,
@@ -7,45 +8,21 @@ import {
 import type { Platform } from '../types/steam';
 import { PLATFORM_META } from '../lib/platforms';
 import { Logo } from '../components/Logo';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
+import { useI18n } from '../i18n';
+import { useErrorMessage } from '../i18n/useErrorMessage';
 import '../styles/login.css';
 
 interface SetupProps {
   onComplete: () => void;
 }
 
-const PLATFORMS: {
-  id: Platform;
-  label: string;
-  blurb: string;
-  recommended?: boolean;
-  inputLabel: string;
-  placeholder: string;
-}[] = [
-  {
-    id: 'steam',
-    label: 'Steam',
-    blurb: 'Importe suas conquistas da Steam.',
-    recommended: true,
-    inputLabel: 'SteamID64 ou URL do perfil',
-    placeholder: 'ex. 76561198000000000 ou steamcommunity.com/id/voce',
-  },
-  {
-    id: 'psn',
-    label: 'PlayStation',
-    blurb: 'Importe seus troféus da PlayStation Network.',
-    inputLabel: 'Online ID (usuário PSN)',
-    placeholder: 'ex. seu_online_id',
-  },
-  {
-    id: 'retroachievements',
-    label: 'RetroAchievements',
-    blurb: 'Importe suas conquistas retrô.',
-    inputLabel: 'Nome de usuário',
-    placeholder: 'Usuário do RetroAchievements',
-  },
-];
+const PLATFORMS: Platform[] = ['steam', 'psn', 'retroachievements'];
+const RECOMMENDED: Platform = 'steam';
 
 export default function Setup({ onComplete }: SetupProps) {
+  const { t } = useI18n();
+  const describe = useErrorMessage();
   const [connected, setConnected] = useState<Platform[]>([]);
   const [modal, setModal] = useState<Platform | null>(null);
   const [identifier, setIdentifier] = useState('');
@@ -53,10 +30,6 @@ export default function Setup({ onComplete }: SetupProps) {
   const [busy, setBusy] = useState(false);
 
   const canContinue = connected.length > 0;
-  const activeMeta = useMemo(
-    () => (modal ? PLATFORMS.find((item) => item.id === modal) ?? null : null),
-    [modal],
-  );
 
   function openModal(platform: Platform) {
     setError('');
@@ -72,7 +45,7 @@ export default function Setup({ onComplete }: SetupProps) {
 
   async function handleLink() {
     if (!modal) return;
-    if (!identifier.trim()) return setError('Informe o identificador do seu perfil.');
+    if (!identifier.trim()) return setError(t('setup.errors.identifierRequired'));
     setBusy(true);
     setError('');
     try {
@@ -81,7 +54,7 @@ export default function Setup({ onComplete }: SetupProps) {
       setConnected((current) => (current.includes(modal) ? current : [...current, modal]));
       setModal(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao vincular a conta.');
+      setError(describe(err, 'setup.errors.linkFailed'));
     } finally {
       setBusy(false);
     }
@@ -103,19 +76,23 @@ export default function Setup({ onComplete }: SetupProps) {
       <div className="auth-card auth-wide">
         <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
           <Logo size={36} />
-          <p className="num text-sm text-gray-400" aria-live="polite">
-            <span className="text-gray-100">{connected.length}</span> de {PLATFORMS.length} conectadas
-          </p>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <LanguageSwitcher />
+            <p className="num text-sm text-gray-400" aria-live="polite">
+              <span className="text-gray-100">{connected.length}</span> {t('setup.progressSuffix', { total: PLATFORMS.length })}
+            </p>
+          </div>
         </div>
 
-        <h1 className="mt-8 font-display text-3xl font-bold text-gray-50">Bem-vindo ao Zenkuri</h1>
+        <h1 className="mt-8 font-display text-3xl font-bold text-gray-50">{t('setup.title')}</h1>
         <p className="lede mt-2 max-w-2xl">
-          Conecte pelo menos uma plataforma para começar. Informe apenas o identificador público do seu perfil:
-          nenhuma senha, token ou API key é necessária.
+          {t('setup.lede')}
         </p>
 
         <div className="mt-8">
-          {PLATFORMS.map(({ id, label, blurb, recommended }, index) => {
+          {PLATFORMS.map((id, index) => {
+            const label = PLATFORM_META[id].label;
+            const recommended = id === RECOMMENDED;
             const isConnected = connected.includes(id);
             const isSkipped = skipped.includes(id);
             return (
@@ -126,16 +103,16 @@ export default function Setup({ onComplete }: SetupProps) {
                   <div className="min-w-0">
                     <h2 className="su-title">
                       {label}
-                      {recommended && !isConnected && <span className="badge ml-2 align-middle" data-tone="accent">Recomendado</span>}
+                      {recommended && !isConnected && <span className="badge ml-2 align-middle" data-tone="accent">{t('setup.recommended')}</span>}
                     </h2>
-                    <p className="text-sm text-gray-500">{blurb}</p>
+                    <p className="text-sm text-gray-500">{t(`setup.platforms.${id}.blurb`)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {isConnected ? <span className="su-state" data-on="true">Conectado</span> : isSkipped ? <span className="su-state">Pulado</span> : null}
+                  {isConnected ? <span className="su-state" data-on="true">{t('setup.connected')}</span> : isSkipped ? <span className="su-state">{t('setup.skipped')}</span> : null}
                   {!isConnected && !isSkipped && (
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSkipped((current) => [...current, id])}>
-                      Pular<span className="sr-only"> {label}</span>
+                      {t('setup.skip')}<span className="sr-only"> {label}</span>
                     </button>
                   )}
                   <button
@@ -143,7 +120,7 @@ export default function Setup({ onComplete }: SetupProps) {
                     onClick={() => openModal(id)}
                     className={`btn btn-sm ${isConnected ? 'btn-secondary' : recommended ? 'btn-primary' : 'btn-secondary'}`}
                   >
-                    {isConnected ? 'Reconectar' : 'Conectar'}<span className="sr-only"> {label}</span>
+                    {isConnected ? t('setup.reconnect') : t('setup.connect')}<span className="sr-only"> {label}</span>
                   </button>
                 </div>
               </div>
@@ -152,21 +129,21 @@ export default function Setup({ onComplete }: SetupProps) {
         </div>
 
         <div className="mt-8 flex items-center justify-between gap-4">
-          <a href="https://github.com/joelkalil" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500 transition-colors hover:text-gray-200">
-            Precisa de ajuda?
-          </a>
+          <Link to="/tutoriais" className="text-sm text-gray-500 transition-colors hover:text-gray-200">
+            {t('setup.help')}
+          </Link>
           <button
             type="button"
             onClick={onComplete}
             disabled={!canContinue}
             className="btn btn-primary btn-lg"
           >
-            Continuar
+            {t('setup.continue')}
           </button>
         </div>
       </div>
 
-      {modal && activeMeta && (
+      {modal && (
         <div className="su-dialog-backdrop" onClick={closeModal}>
           <div
             role="dialog" aria-modal="true" aria-labelledby="su-dialog-title"
@@ -177,11 +154,11 @@ export default function Setup({ onComplete }: SetupProps) {
               <div className="flex items-center gap-3">
                 <img src={PLATFORM_META[modal].logo} alt="" className="h-7 w-7 object-contain" />
                 <div>
-                  <h2 id="su-dialog-title" className="font-display text-lg font-bold text-gray-100">Conectar {activeMeta.label}</h2>
-                  <p className="text-xs text-gray-500">{activeMeta.blurb}</p>
+                  <h2 id="su-dialog-title" className="font-display text-lg font-bold text-gray-100">{t('setup.dialog.title', { platform: PLATFORM_META[modal].label })}</h2>
+                  <p className="text-xs text-gray-500">{t(`setup.platforms.${modal}.blurb`)}</p>
                 </div>
               </div>
-              <button type="button" onClick={closeModal} className="btn btn-ghost btn-sm">Fechar</button>
+              <button type="button" onClick={closeModal} className="btn btn-ghost btn-sm">{t('setup.dialog.close')}</button>
             </div>
 
             <form
@@ -189,18 +166,18 @@ export default function Setup({ onComplete }: SetupProps) {
               onSubmit={(event) => { event.preventDefault(); handleLink(); }}
             >
               <div>
-                <label htmlFor="su-identifier" className="auth-label">{activeMeta.inputLabel}</label>
+                <label htmlFor="su-identifier" className="auth-label">{t(`setup.platforms.${modal}.inputLabel`)}</label>
                 <input
                   id="su-identifier"
                   type="text"
                   autoFocus
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder={activeMeta.placeholder}
+                  placeholder={t(`setup.platforms.${modal}.placeholder`)}
                   className="field"
                 />
                 <p className="mt-1.5 text-xs text-gray-500">
-                  Só lemos dados públicos do perfil, nada de senhas ou tokens.
+                  {t('setup.dialog.publicOnly')}
                 </p>
               </div>
 
@@ -210,10 +187,10 @@ export default function Setup({ onComplete }: SetupProps) {
                 {busy ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    Localizando perfil…
+                    {t('setup.dialog.busy')}
                   </>
                 ) : (
-                  'Vincular perfil'
+                  t('setup.dialog.submit')
                 )}
               </button>
             </form>

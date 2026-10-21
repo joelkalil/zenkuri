@@ -1,0 +1,56 @@
+export const sagaPtBR = {
+  chooseSaga: 'Escolher saga',
+  eyebrow: { one: 'Saga · {count} jogo', other: 'Saga · {count} jogos' },
+  priceChecked: 'preços consultados em {date}',
+  summary: {
+    platinated: '{done} de {total} platinados · {owned} na biblioteca',
+    inProgress: '({count} em andamento)',
+    remaining: '~{hours} restantes',
+    cost: '{cost} para completar a coleção ({games}, preço cheio em {date})',
+    missingGames: { one: '{count} jogo', other: '{count} jogos' },
+  },
+  hours: { single: '{hours} h', range: '{min}–{max} h' },
+  continue: 'Continuar: {title}',
+  upNext: 'Próximo: {title}',
+  progressLabel: 'Platinas da saga',
+  method: 'Como a ordem foi montada',
+  queue: {
+    next: 'Próximo da fila: {entry}.',
+    nextMissing: 'Próximo da fila: {entry}, ainda não está na sua conta.',
+  },
+  phase: {
+    title: 'Fase {number}: {title}',
+    progress: 'Progresso da fase {number}',
+  },
+  entry: {
+    next: 'Próximo',
+    achievements: { one: 'conquista', other: 'conquistas' },
+    progress: 'Progresso de {title}',
+    owned: 'Na biblioteca',
+    inProgress: 'Em andamento',
+    notOwned: 'Não adquirido',
+    viewOnSteam: 'Ver na Steam',
+  },
+  price: { delisted: 'Fora de venda', free: 'Gratuito' },
+  difficulty: {
+    title: 'Dificuldade da platina: {label}',
+    text: 'Dificuldade {label}',
+    levels: { calm: 'tranquila', light: 'leve', medium: 'média', demanding: 'exigente', brutal: 'brutal' },
+  },
+  flags: {
+    online: 'Depende de online',
+    missable: 'Tem perdíveis',
+    legacy: 'Fora de venda',
+  },
+  outOfScope: {
+    title: 'Na Steam, fora da sua conta',
+    subtitle: 'Existem na loja, mas hoje não dá para platinar.',
+  },
+  error: { title: 'Não foi possível carregar as sagas', retry: 'Tentar de novo' },
+  empty: {
+    title: 'Nenhuma saga publicada',
+    body: 'As sagas vêm dos packs em `community/`, no repositório.',
+    link: 'Ver a comunidade',
+  },
+  errors: { load: 'Falha ao carregar as sagas' },
+};

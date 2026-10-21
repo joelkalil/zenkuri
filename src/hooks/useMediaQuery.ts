@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-/** Acompanha uma media query (ex.: "(min-width: 1100px)"). */
+/** Tracks a media query (e.g. "(min-width: 1100px)"). */
 export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (notify) => {

@@ -10,6 +10,7 @@ import {
   updateUserPassword,
   type UserRecord,
 } from './db';
+import { ApiError, sendError } from './errors';
 
 export interface PublicUser {
   id: number;
@@ -34,13 +35,13 @@ const USERNAME_PATTERN = /^[a-z0-9_.-]{3,24}$/i;
 export function registerUser(username: string, password: string, displayName?: string): { user: PublicUser; token: string } {
   const name = String(username ?? '').trim();
   if (!USERNAME_PATTERN.test(name)) {
-    throw new Error('O nome de usuário deve ter de 3 a 24 caracteres (letras, números, ponto, hífen ou underline).');
+    throw new ApiError('auth.invalid_username', 400);
   }
   if (String(password ?? '').length < 6) {
-    throw new Error('A senha deve ter pelo menos 6 caracteres.');
+    throw new ApiError('auth.password_too_short', 400);
   }
   if (getUserByUsername(name)) {
-    throw new Error('Este nome de usuário já está em uso.');
+    throw new ApiError('auth.username_taken', 409);
   }
   const user = createUser(name, String(displayName ?? '').trim() || name, hashPassword(password));
   return { user: toPublicUser(user), token: createSession(user.id) };
@@ -49,7 +50,7 @@ export function registerUser(username: string, password: string, displayName?: s
 export function loginUser(username: string, password: string): { user: PublicUser; token: string } {
   const user = getUserByUsername(String(username ?? '').trim());
   if (!user || !verifyPassword(String(password ?? ''), user.passwordHash)) {
-    throw new Error('Usuário ou senha inválidos.');
+    throw new ApiError('auth.invalid_credentials', 401);
   }
   return { user: toPublicUser(user), token: createSession(user.id) };
 }
@@ -60,10 +61,10 @@ export function logoutToken(token: string | null) {
 
 export function changePassword(user: UserRecord, currentPassword: string, newPassword: string) {
   if (!verifyPassword(String(currentPassword ?? ''), user.passwordHash)) {
-    throw new Error('A senha atual está incorreta.');
+    throw new ApiError('auth.current_password_incorrect', 400);
   }
   if (String(newPassword ?? '').length < 6) {
-    throw new Error('A nova senha deve ter pelo menos 6 caracteres.');
+    throw new ApiError('auth.password_too_short', 400);
   }
   updateUserPassword(user.id, hashPassword(newPassword));
 }
@@ -88,7 +89,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const token = extractToken(req);
   const user = token ? getSessionUser(token) : null;
   if (!user) {
-    res.status(401).json({ error: 'Não autenticado.' });
+    sendError(res, 401, 'auth.unauthenticated');
     return;
   }
   req.userId = user.id;

@@ -5,6 +5,7 @@ import {
   upsertAchievement,
   upsertGame,
 } from '../db';
+import { ApiError } from '../errors';
 import { steamServiceKey } from '../serviceAuth';
 import { requireVerifiedLink } from '../verification';
 
@@ -33,7 +34,7 @@ interface SteamSchemaAchievement {
 }
 
 function steamConfig(userId: number) {
-  // Key de serviço (.env) + SteamID público vinculado ao usuário.
+  // Service key (.env) + the public SteamID linked to the user.
   const link = requireVerifiedLink(userId, 'steam');
   const steamid = String(link.steamid ?? '');
   if (!steamid) throw new Error('Steam is not configured.');
@@ -41,12 +42,18 @@ function steamConfig(userId: number) {
 }
 
 /**
- * Lançado quando a Steam recusa a API key (401/403). Trocar a senha da conta
- * Steam costuma invalidar a key de serviço — precisa ser distinguível de um
- * erro qualquer pra não ser engolido pelos `.catch()` de fallback abaixo, e
- * pra virar uma mensagem acionável na UI em vez de um "Steam API error 401".
+ * Thrown when Steam rejects the API key (401/403). Changing the Steam account
+ * password usually invalidates the service key, so this must be distinguishable
+ * from any other error: it must not be swallowed by the fallback `.catch()`
+ * handlers below, and it must surface as an actionable message in the UI
+ * instead of a bare "Steam API error 401".
  */
-export class SteamAuthError extends Error {}
+export class SteamAuthError extends ApiError {
+  constructor() {
+    super('sync.steam_key_rejected', 502);
+    this.name = 'SteamAuthError';
+  }
+}
 
 function rethrowIfAuthError(err: unknown): void {
   if (err instanceof SteamAuthError) throw err;
@@ -59,10 +66,7 @@ async function steamFetch<T>(path: string, params: Record<string, string | numbe
   }
   const res = await fetch(url);
   if (res.status === 401 || res.status === 403) {
-    throw new SteamAuthError(
-      'A chave de API da Steam está inválida ou expirou (comum após trocar a senha da Steam). '
-      + 'Gere uma nova em steamcommunity.com/dev/apikey e atualize ZENKURI_STEAM_API_KEY no servidor.',
-    );
+    throw new SteamAuthError();
   }
   if (!res.ok) throw new Error(`Steam API error ${res.status}`);
   return await res.json() as T;
@@ -96,8 +100,8 @@ export async function syncSteamLibrary(userId: number) {
     });
   }
 
-  // Remove jogos que não pertencem mais a esta conta Steam (ex.: SteamID trocado).
-  // Só poda quando a API retornou jogos, evitando limpar tudo num perfil privado.
+  // Removes games that no longer belong to this Steam account (e.g. SteamID changed).
+  // Only prunes when the API returned games, to avoid wiping everything on a private profile.
   pruneUserGames(userId, 'steam', seen);
 
   return games.length;
@@ -110,9 +114,9 @@ export async function syncSteamAchievementsForGame(userId: number, gameId: numbe
   const appid = Number(game.external_id);
 
   const [schemaJson, playerJson, globalJson] = await Promise.all([
-    // Schema e conquistas do jogador são a fonte de verdade do progresso: uma
-    // key inválida aqui precisa abortar (rethrow), não virar silenciosamente
-    // "0 conquistas" — foi exatamente isso que mascarou a key revogada.
+    // The schema and the player's achievements are the source of truth for
+    // progress: an invalid key here must abort (rethrow), not silently turn
+    // into "0 achievements" — that is exactly what masked the revoked key.
     steamFetch<{ game?: { availableGameStats?: { achievements?: SteamSchemaAchievement[] } } }>('ISteamUserStats/GetSchemaForGame/v2/', {
       key,
       appid,
@@ -122,8 +126,8 @@ export async function syncSteamAchievementsForGame(userId: number, gameId: numbe
       steamid,
       appid,
     }).catch((err) => { rethrowIfAuthError(err); return { playerstats: { achievements: [] } }; }),
-    // Percentuais globais são só decoração de raridade — seguem tolerantes a
-    // qualquer falha, inclusive de key, pra nunca travar o sync por causa deles.
+    // Global percentages are just rarity decoration, so they tolerate any
+    // failure, including a bad key, and never block the sync.
     steamFetch<{ achievementpercentages?: { achievements?: { name: string; percent: number | string }[] } }>('ISteamUserStats/GetGlobalAchievementPercentagesForApp/v2/', {
       gameid: appid,
     }).catch(() => ({ achievementpercentages: { achievements: [] } })),

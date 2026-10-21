@@ -3,9 +3,10 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { randomBytes, scryptSync } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import type { ApiAchievement, ApiGame, CompletionHistoryItem, Platform, PlanningRecord, StoredCredential } from './types';
+import { envString } from './env';
 import { achievementMediaUrl, coverMediaUrl, heroMediaUrl, iconMediaUrl, portraitMediaUrl } from './mediaPaths';
 
-const dbPath = process.env.ZENKURI_DB_PATH ?? join(process.cwd(), 'data', 'zenkuri.sqlite');
+const dbPath = envString('ZENKURI_DB_PATH', join(process.cwd(), 'data', 'zenkuri.sqlite'));
 mkdirSync(dirname(dbPath), { recursive: true });
 
 export const db = new Database(dbPath);
@@ -13,13 +14,13 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 /*
-  Schema v2 — multiusuário
-  ────────────────────────
-  Catálogo compartilhado: game_groups, games, achievements descrevem os jogos
-  e seus sets de conquistas, independentes de quem sincronizou.
-  Dados por usuário: user_games (posse + tempo de jogo + progresso agregado),
-  user_achievements (status de desbloqueio), planning, user_platform_accounts
-  (credenciais Steam/PSN/RA) e sync_runs referenciam users(id).
+  Schema v2 — multi-user
+  ──────────────────────
+  Shared catalog: game_groups, games and achievements describe the games and
+  their achievement sets, independent of who synced them.
+  Per-user data: user_games (ownership + playtime + aggregated progress),
+  user_achievements (unlock status), planning, user_platform_accounts
+  (Steam/PSN/RA links) and sync_runs reference users(id).
 */
 db.exec(`
   create table if not exists users (
@@ -159,10 +160,10 @@ export function hashPassword(password: string) {
 }
 
 /*
-  Migração v1 → v2: o banco single-user tinha credentials, achievement_status
-  e planning sem dono. Todo o histórico é movido para um usuário legado
-  (ZENKURI_LEGACY_USER / ZENKURI_LEGACY_PASSWORD, padrão joel / zenkuri —
-  troque a senha após o primeiro login).
+  Migration v1 → v2: the single-user database had credentials, achievement_status
+  and planning with no owner. All the history is moved to a legacy user
+  (ZENKURI_LEGACY_USER / ZENKURI_LEGACY_PASSWORD, default joel / zenkuri —
+  change the password after the first login).
 */
 function migrateToMultiUser() {
   const version = Number(db.pragma('user_version', { simple: true }));
@@ -175,13 +176,13 @@ function migrateToMultiUser() {
     try {
       copyFileSync(dbPath, `${dbPath}.pre-v2.bak`);
     } catch {
-      // backup é best-effort; a migração roda em transação de qualquer forma
+      // the backup is best-effort; the migration runs in a transaction anyway
     }
   }
 
   const tx = db.transaction(() => {
-    // As views v1 referenciam achievement_status; precisam sair antes de
-    // qualquer drop/rename para o SQLite não tentar revalidá-las.
+    // The v1 views reference achievement_status; they must go before any
+    // drop/rename so SQLite does not try to revalidate them.
     db.prepare('drop view if exists game_common_view').run();
     db.prepare('drop view if exists psn_trophy_view').run();
     db.prepare('drop view if exists retroachievements_view').run();
@@ -189,8 +190,8 @@ function migrateToMultiUser() {
     let legacyUserId: number | null = null;
 
     if (hasLegacyData) {
-      const username = process.env.ZENKURI_LEGACY_USER ?? 'joel';
-      const password = process.env.ZENKURI_LEGACY_PASSWORD ?? 'zenkuri';
+      const username = envString('ZENKURI_LEGACY_USER', 'joel');
+      const password = envString('ZENKURI_LEGACY_PASSWORD', 'zenkuri');
       const existing = db.prepare('select id from users where username = ?').get(username) as { id: number } | undefined;
       if (existing) {
         legacyUserId = existing.id;
@@ -200,7 +201,7 @@ function migrateToMultiUser() {
           values (?, ?, ?, ?)
         `).run(username, username.charAt(0).toUpperCase() + username.slice(1), hashPassword(password), now());
         legacyUserId = Number(inserted.lastInsertRowid);
-        console.warn(`[zenkuri] Dados existentes migrados para o usuário "${username}" (senha inicial "${password}" — troque no perfil).`);
+        console.warn(`[zenkuri] Existing data migrated to user "${username}" (initial password "${password}" — change it in the profile).`);
       }
     }
 
@@ -267,9 +268,9 @@ function migrateToMultiUser() {
 migrateToMultiUser();
 
 /*
-  Migração v2 → v3: user_platform_accounts guarda apenas identificadores
-  públicos. Remove API keys, NPSSO e tokens que possam ter vindo do schema
-  single-user, além do antigo cache persistente de tokens PSN.
+  Migration v2 → v3: user_platform_accounts only stores public identifiers.
+  Removes API keys, NPSSO and tokens that may have come from the single-user
+  schema, plus the old persistent PSN token cache.
 */
 function migrateServiceSecretsOutOfDatabase() {
   const version = Number(db.pragma('user_version', { simple: true }));
@@ -317,8 +318,8 @@ function migrateServiceSecretsOutOfDatabase() {
 migrateServiceSecretsOutOfDatabase();
 
 /*
-  Coleções manuais por usuário (franquias/séries): tabela própria + coluna
-  collection_id em planning apontando para a coleção do jogo.
+  Manual collections per user (franchises/series): its own table + a
+  collection_id column in planning pointing to the game's collection.
 */
 db.exec(`
   create table if not exists collections (
@@ -329,9 +330,9 @@ db.exec(`
 `);
 
 /*
-  Metadados de loja (coleções automáticas): nomes crus de dev/pub/franquia como o
-  provedor devolveu. `games` é global, então a tabela não tem user_id. As regras
-  de normalização vivem em server/collections/rules.ts e são aplicadas na leitura.
+  Store metadata (automatic collections): raw dev/pub/franchise names as the
+  provider returned them. `games` is global, so the table has no user_id. The
+  normalization rules live in server/collections/rules.ts and are applied on read.
 */
 db.exec(`
   create table if not exists game_store_meta (
@@ -344,6 +345,148 @@ db.exec(`
     error text
   );
 `);
+
+/*
+  Personal user data: the game plan (manual, no generator) and per-game notes.
+  One plan per user (unique index on user_id). Entries live in a single table,
+  separated by `section`: 'phase' (inside a phase), 'recurring' (every week),
+  'after' / 'accept' / 'if_time' (games outside the plan; the reason goes in `note`).
+  `platform` + `external_id` tie the entry to the library without requiring the
+  game to be synced; games outside the library use `external_json`.
+*/
+db.exec(`
+  create table if not exists plans (
+    id integer primary key autoincrement,
+    user_id integer not null references users(id) on delete cascade,
+    title text not null,
+    principle text not null default '',
+    weekly_hours real not null default 0,
+    baseline_avg real,
+    target_avg real,
+    created_at text not null,
+    updated_at text not null
+  );
+  create unique index if not exists idx_plans_user on plans(user_id);
+
+  create table if not exists plan_phases (
+    id integer primary key autoincrement,
+    plan_id integer not null references plans(id) on delete cascade,
+    position integer not null,
+    slug text not null,
+    title text not null,
+    start_date text not null,
+    end_date text not null,
+    capacity_hours real not null default 0,
+    summary text not null default '',
+    floating integer not null default 0
+  );
+  create index if not exists idx_plan_phases_plan on plan_phases(plan_id, position);
+
+  create table if not exists plan_entries (
+    id integer primary key autoincrement,
+    plan_id integer not null references plans(id) on delete cascade,
+    phase_id integer references plan_phases(id) on delete cascade,
+    section text not null check (section in ('phase', 'recurring', 'after', 'accept', 'if_time')),
+    position integer not null,
+    title text not null,
+    platform text,
+    external_id text,
+    external_json text,
+    hours real,
+    kind text check (kind is null or kind in ('foco', 'platina', 'limpeza', 'colher')),
+    target integer,
+    note text not null default '',
+    flags_json text not null default '[]'
+  );
+  create index if not exists idx_plan_entries_plan on plan_entries(plan_id, section, phase_id, position);
+
+  create table if not exists plan_milestones (
+    id integer primary key autoincrement,
+    plan_id integer not null references plans(id) on delete cascade,
+    position integer not null,
+    title text not null,
+    date text,
+    label text not null,
+    note text not null default ''
+  );
+  create index if not exists idx_plan_milestones_plan on plan_milestones(plan_id, position);
+
+  create table if not exists plan_vacations (
+    id integer primary key autoincrement,
+    plan_id integer not null references plans(id) on delete cascade,
+    position integer not null,
+    slug text not null,
+    start_date text not null,
+    end_date text not null,
+    days integer not null,
+    purpose text not null,
+    note text not null default ''
+  );
+  create index if not exists idx_plan_vacations_plan on plan_vacations(plan_id, position);
+
+  create table if not exists plan_risks (
+    id integer primary key autoincrement,
+    plan_id integer not null references plans(id) on delete cascade,
+    position integer not null,
+    risk text not null,
+    action text not null default ''
+  );
+  create index if not exists idx_plan_risks_plan on plan_risks(plan_id, position);
+
+  create table if not exists game_notes (
+    user_id integer not null references users(id) on delete cascade,
+    game_id integer not null references games(id) on delete cascade,
+    estimate text,
+    note text not null default '',
+    updated_at text not null,
+    primary key (user_id, game_id)
+  );
+`);
+
+/*
+  Community: spaces and publications (sagas, rankings) are global content, the
+  same for every user. Today they come from JSON packs in community/ (source =
+  'pack', origin = file path); later they can come from a public database/bucket
+  by swapping only the transport: `payload_json` and `content_hash` do not depend
+  on where the content was read from.
+*/
+db.exec(`
+  create table if not exists spaces (
+    id integer primary key autoincrement,
+    slug text not null unique,
+    name text not null,
+    description text not null default '',
+    source text not null default 'pack',
+    updated_at text not null
+  );
+
+  create table if not exists publications (
+    id integer primary key autoincrement,
+    space_id integer not null references spaces(id) on delete cascade,
+    kind text not null check (kind in ('saga', 'ranking')),
+    slug text not null,
+    title text not null,
+    summary text not null default '',
+    author_handle text not null,
+    author_name text not null,
+    version integer not null,
+    published_at text not null,
+    payload_json text not null,
+    source text not null default 'pack',
+    origin text not null default '',
+    content_hash text not null,
+    imported_at text not null,
+    unique(space_id, kind, slug)
+  );
+`);
+
+// Packs are authored in a single language (BCP-47 subset: 'pt-BR' | 'en').
+// Additive columns: databases created before the field existed default to pt-BR.
+for (const table of ['spaces', 'publications'] as const) {
+  if (!hasColumn(table, 'language')) {
+    db.prepare(`alter table ${table} add column language text not null default 'pt-BR'`).run();
+  }
+}
 
 if (!hasColumn('planning', 'collection_id')) {
   db.prepare('alter table planning add column collection_id integer').run();
@@ -388,7 +531,7 @@ function upsertGameGroup(title: string) {
     .get(normalizedTitle) as { id: number; displayTitle: string; normalizedTitle: string };
 }
 
-// ─── Usuários e sessões ─────────────────────────────────────────────────────
+// ─── Users and sessions ─────────────────────────────────────────────────────
 
 export interface UserRecord {
   id: number;
@@ -434,7 +577,7 @@ export function updateUserProfile(userId: number, displayName: string) {
   db.prepare('update users set display_name = ? where id = ?').run(displayName, userId);
 }
 
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 90; // 90 dias
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 90; // 90 days
 
 export function createSession(userId: number): string {
   const token = randomBytes(32).toString('hex');
@@ -458,7 +601,7 @@ export function deleteSession(token: string) {
   db.prepare('delete from sessions where token = ?').run(token);
 }
 
-// ─── Contas de plataforma (por usuário) ─────────────────────────────────────
+// ─── Platform accounts (per user) ─────────────────────────────────────
 
 export function getCredential(userId: number, platform: Platform): StoredCredential | null {
   const row = db.prepare('select * from user_platform_accounts where user_id = ? and platform = ?')
@@ -488,9 +631,9 @@ export function listConfiguredPlatforms(userId: number) {
     }));
 }
 
-// ─── Estado do serviço (tokens da conta de serviço, etc.) ───────────────────
+// ─── Service state (service-account tokens, etc.) ───────────────────
 
-// ─── Catálogo + posse ───────────────────────────────────────────────────────
+// ─── Catalog + ownership ───────────────────────────────────────────────────────
 
 export function upsertGame(userId: number, input: {
   platform: Platform;
@@ -684,7 +827,7 @@ export function listGames(userId: number, platform?: Platform): ApiGame[] {
 
   return rows.map((row) => {
     const progress = progressStmt.get(userId, row.id) as { total: number; unlocked: number | null };
-    // Progresso do usuário sobrepõe o metadata de catálogo (earnedTrophies, numAwarded…)
+    // User progress overrides the catalog metadata (earnedTrophies, numAwarded…)
     const metadata = {
       ...parseJson<Record<string, any>>(row.metadata_json, {}),
       ...parseJson<Record<string, any>>(row.progress_json, {}),
@@ -743,15 +886,15 @@ export function getGameById(id: number) {
 }
 
 /*
-  Reconciliação de posse: uma sync de biblioteca só faz upsert dos jogos que a
-  conta ainda tem. Esta função remove o que o usuário deixou de possuir naquela
-  plataforma (ex.: SteamID trocado por outro), destacando user_games, o status
-  de conquistas e o planning daqueles jogos. O catálogo compartilhado (games /
-  achievements) permanece intacto para os demais usuários.
+  Ownership reconciliation: a library sync only upserts the games the account
+  still has. This function removes what the user no longer owns on that
+  platform (e.g. SteamID swapped for another), detaching user_games, the
+  achievement status and the planning rows of those games. The shared catalog
+  (games / achievements) stays intact for the other users.
 
-  `seenExternalIds` deve conter os external_id retornados pela sync atual. Se
-  vier vazio (perfil privado, falha transitória da API), nada é removido — a
-  chamadora deve pular a poda nesse caso para não apagar a biblioteca inteira.
+  `seenExternalIds` must contain the external_ids returned by the current sync.
+  If it is empty (private profile, transient API failure), nothing is removed —
+  the caller must skip pruning in that case so the whole library is not wiped.
 */
 export function pruneUserGames(userId: number, platform: Platform, seenExternalIds: Iterable<string>): number {
   const seen = new Set<string>();
@@ -791,9 +934,9 @@ export function userOwnsGame(userId: number, gameId: number) {
 }
 
 /**
- * Percentual global de jogadores que possuem a conquista (0–100), quando a
- * plataforma fornece: PSN traz trophyEarnedRate no status, Steam grava
- * globalPercent no metadata (sync), RA deriva de numAwarded / players do set.
+ * Global percentage of players who own the achievement (0–100), when the
+ * platform provides it: PSN brings trophyEarnedRate in the status, Steam stores
+ * globalPercent in the metadata (sync), RA derives it from numAwarded / players of the set.
  */
 export function extractRarity(
   platform: Platform,
@@ -865,7 +1008,7 @@ export interface UnlockItem {
   icon: string;
 }
 
-/** Anos (UTC) com pelo menos um desbloqueio registrado, mais recente primeiro. */
+/** Years (UTC) with at least one recorded unlock, most recent first. */
 export function listUnlockYears(userId: number): number[] {
   return (db.prepare(`
     select distinct strftime('%Y', unlock_time, 'unixepoch') as year
@@ -875,7 +1018,7 @@ export function listUnlockYears(userId: number): number[] {
   `).all(userId) as { year: string }[]).map((row) => Number(row.year));
 }
 
-/** Todos os desbloqueios de um ano, ordem cronológica, com raridade quando disponível. */
+/** All unlocks of a year, in chronological order, with rarity when available. */
 export function listUnlocks(userId: number, year: number): UnlockItem[] {
   const rows = db.prepare(`
     select
@@ -909,7 +1052,7 @@ export function listUnlocks(userId: number, year: number): UnlockItem[] {
   }));
 }
 
-/** Conquistas desbloqueadas mais raras da coleção inteira (raridade crescente). */
+/** The rarest unlocked achievements of the whole collection (ascending rarity). */
 export function listRarestUnlocked(userId: number, limit = 3): UnlockItem[] {
   const rows = db.prepare(`
     select
@@ -991,7 +1134,7 @@ export function listCompletionHistory(userId: number, limit = 8): { platinums: C
   };
 }
 
-// ─── Planning (por usuário) ─────────────────────────────────────────────────
+// ─── Planning (per user) ─────────────────────────────────────────────────
 
 export function readPlanning(userId: number): PlanningRecord {
   const rows = db.prepare('select * from planning where user_id = ?').all(userId) as any[];
@@ -1048,7 +1191,7 @@ export function patchPlanning(userId: number, gameId: number, patch: Partial<{
   return readPlanning(userId);
 }
 
-// ─── Coleções (franquias manuais, por usuário) ─────────────────────────────
+// ─── Collections (manual franchises, per user) ─────────────────────────────
 
 export function createCollection(userId: number, name: string, gameIds: string[] = []) {
   const tx = db.transaction(() => {
@@ -1121,7 +1264,7 @@ export function importPlanning(userId: number, record: Partial<PlanningRecord>) 
   return readPlanning(userId);
 }
 
-// ─── Sync runs (por usuário) ────────────────────────────────────────────────
+// ─── Sync runs (per user) ────────────────────────────────────────────────
 
 export function listSyncRuns(userId: number, limit = 12) {
   return (db.prepare('select id, platform, started_at, finished_at, status, message from sync_runs where user_id = ? order by id desc limit ?')
@@ -1158,7 +1301,7 @@ export function finishSyncRun(id: number, status: 'success' | 'error', message?:
     .run(now(), status, message ?? '', id);
 }
 
-// ─── Metadados de loja (coleções automáticas) ───────────────────────────────
+// ─── Store metadata (automatic collections) ───────────────────────────────
 
 export interface GameStoreMetaInput {
   gameId: number;
@@ -1166,7 +1309,7 @@ export interface GameStoreMetaInput {
   developers: string[];
   publishers: string[];
   franchises: string[];
-  /** null em sucesso; mensagem em falha (nova tentativa após o TTL). */
+  /** null on success; message on failure (retried after the TTL). */
   error?: string | null;
 }
 
@@ -1231,7 +1374,7 @@ export function getGameStoreMeta(gameIds: number[]): GameStoreMetaRow[] {
   return rows;
 }
 
-/** Jogos da plataforma sem linha de metadados, ou com erro anterior a `olderThan` (ISO). */
+/** Platform games with no metadata row, or with an error older than `olderThan` (ISO). */
 export function listGamesMissingStoreMeta(platform: Platform, olderThan: string) {
   return db.prepare(`
     select g.id, g.external_id as externalId, g.title
@@ -1243,7 +1386,7 @@ export function listGamesMissingStoreMeta(platform: Platform, olderThan: string)
   `).all(platform, olderThan) as { id: number; externalId: string; title: string }[];
 }
 
-/** Jogos do usuário no formato que o motor de coleções automáticas espera. */
+/** The user's games in the shape the automatic-collections engine expects. */
 export function listUserGamesForCollections(userId: number) {
   backfillGameGroups();
   return (db.prepare(`

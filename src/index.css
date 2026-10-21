@@ -1,9 +1,9 @@
 @import "tailwindcss";
 @import "./gallery.css";
 
-/* Zenkuri: gray-950 é o canvas (sumi/papel), gray-900 superfície, gray-800
-   filete e gray-100 texto, em ambos os temas. A escala violet-* carrega o
-   acento vermilhão. Tokens definidos em .artefacts/designs/2026-10-20-brand/brief.md */
+/* Zenkuri: gray-950 is the canvas (sumi/paper), gray-900 the surface, gray-800
+   the hairline rule and gray-100 the text, in both themes. The violet-* scale
+   carries the vermilion accent. Tokens defined in .artefacts/designs/2026-10-20-brand/brief.md */
 @theme {
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;

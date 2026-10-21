@@ -1,0 +1,64 @@
+/* Tutorials: numbered sections, steps and notes separated by rules. No cards, no glow. */
+@layer components {
+  .tut-page { max-width: 62rem; padding-bottom: 4rem; }
+  .tut-section { margin-top: 2.5rem; scroll-margin-top: 6rem; }
+  .tut-title { display: inline-flex; align-items: center; gap: 0.625rem; }
+  .tut-icon { width: 20px; height: 20px; flex-shrink: 0; object-fit: contain; }
+
+  .tut-overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 2.5rem; margin-top: 0.5rem; }
+  .tut-overview > div { padding-block: 1rem; border-top: 1px solid var(--color-gray-800); }
+  .tut-overview h3 { font-size: 0.9375rem; font-weight: 700; color: var(--color-gray-100); }
+  .tut-overview p { margin-top: 0.375rem; font-size: 0.875rem; line-height: 1.55; color: var(--color-gray-400); }
+
+  .tut-index-title { margin-top: 1.5rem; }
+  .tut-index { margin-top: 0.5rem; list-style: none; }
+  .tut-index a { display: flex; align-items: center; gap: 0.75rem; min-height: 44px; padding-block: 0.5rem; border-top: 1px solid var(--color-gray-800); color: var(--color-gray-100); font-weight: 600; text-decoration: none; transition: color var(--motion-fast); }
+  .tut-index li:last-child a { border-bottom: 1px solid var(--color-gray-800); }
+  .tut-index a:hover { color: var(--color-violet-400); }
+  .tut-index-num { width: 1.75rem; font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 400; color: var(--color-gray-500); }
+
+  .tut-block { margin-top: 1.75rem; }
+  .tut-purpose { margin-top: 0.5rem; max-width: 46rem; }
+
+  .tut-part-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; margin-top: 1rem; }
+  .tut-part-title { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--color-gray-100); }
+  .tut-part-scope { font-size: 0.75rem; color: var(--color-gray-500); }
+
+  .tut-steps { margin-top: 0.5rem; list-style: none; counter-reset: tut-step; }
+  .tut-steps > li { position: relative; counter-increment: tut-step; padding: 0.75rem 0 0.75rem 2.25rem; border-top: 1px solid var(--color-gray-800); font-size: 0.875rem; line-height: 1.6; color: var(--color-gray-300); overflow-wrap: anywhere; }
+  .tut-steps > li:last-child { border-bottom: 1px solid var(--color-gray-800); }
+  .tut-steps > li::before { content: counter(tut-step); position: absolute; left: 0; top: 0.75rem; width: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-gray-500); }
+
+  .tut-link, .tut-inline-link { color: var(--color-violet-400); text-decoration: underline; text-underline-offset: 2px; }
+  .tut-link { display: inline-flex; align-items: center; gap: 0.375rem; margin-top: 0.25rem; overflow-wrap: anywhere; }
+  .tut-link:hover, .tut-inline-link:hover { color: var(--color-gray-100); }
+
+  .tut-code { padding: 0.0625rem 0.375rem; border: 1px solid var(--color-gray-700); border-radius: 2px; background: var(--color-gray-850); color: var(--color-gray-100); font-family: var(--font-mono); font-size: 0.8125rem; overflow-wrap: anywhere; }
+
+  .tut-where { margin-top: 0.5rem; font-size: 0.875rem; }
+  .tut-where-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.6fr); gap: 0.25rem 1.5rem; padding-block: 0.75rem; border-top: 1px solid var(--color-gray-800); color: var(--color-gray-300); }
+  .tut-where-row:last-child { border-bottom: 1px solid var(--color-gray-800); }
+  .tut-where-head { padding-block: 0.375rem; }
+  .tut-where-value { font-weight: 600; color: var(--color-gray-100); }
+  .tut-where-target { display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-start; min-width: 0; }
+  .tut-target-detail { color: var(--color-gray-300); }
+
+  .tut-notes { margin-top: 0.5rem; list-style: none; display: grid; gap: 0.75rem; }
+  .tut-notes > li { padding-left: 0.875rem; border-left: 2px solid var(--color-gray-700); font-size: 0.875rem; line-height: 1.6; color: var(--color-gray-300); overflow-wrap: anywhere; }
+
+  .tut-errors { margin-top: 0.5rem; }
+  .tut-error { padding-block: 0.75rem; border-top: 1px solid var(--color-gray-800); font-size: 0.875rem; line-height: 1.6; }
+  .tut-error:last-child { border-bottom: 1px solid var(--color-gray-800); }
+  .tut-error dt, .tut-error dd { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0 0.75rem; overflow-wrap: anywhere; }
+  .tut-error dt { font-weight: 600; color: var(--color-gray-100); }
+  .tut-error dd { margin-top: 0.25rem; color: var(--color-gray-300); }
+  .tut-error-label { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-gray-500); line-height: 1.9; }
+
+  @media (max-width: 767px) {
+    .tut-overview { grid-template-columns: minmax(0, 1fr); }
+    .tut-where-head { display: none; }
+    .tut-where-row { grid-template-columns: minmax(0, 1fr); }
+    .tut-error dt, .tut-error dd { grid-template-columns: minmax(0, 1fr); }
+    .tut-steps > li { padding-left: 2rem; }
+  }
+}

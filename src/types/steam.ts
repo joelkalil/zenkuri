@@ -43,7 +43,7 @@ export interface AchievementWithStatus extends SchemaAchievement {
   unlocktime: number;
   points?: number;
   type?: string;
-  /** % global de jogadores com a conquista (0–100), null quando a plataforma não informa */
+  /** global % of players who have the achievement (0–100), null when the platform does not report it */
   rarity?: number | null;
 }
 
@@ -70,21 +70,21 @@ export type AutoCollectionKind = 'franchise' | 'company';
 export type AutoCollectionRole = 'dev' | 'pub' | 'both';
 
 export interface AutoCollectionMember {
-  /** id do jogo (mesmo valor de Game.appid) */
+  /** game id (same value as Game.appid) */
   gameId: number;
-  /** só em empresas: papel do estúdio no jogo */
+  /** companies only: the studio's role in the game */
   role?: AutoCollectionRole;
   source: 'store' | 'title';
 }
 
-/** Coleção derivada no servidor (franquia ou empresa); somente leitura. */
+/** Collection derived on the server (franchise or company); read-only. */
 export interface AutoCollection {
-  /** `franchise:<chave>` | `company:<chave>` */
+  /** `franchise:<key>` | `company:<key>` */
   id: string;
   kind: AutoCollectionKind;
   name: string;
   members: AutoCollectionMember[];
-  /** jogos distintos (Steam + PSN do mesmo jogo contam uma vez) */
+  /** distinct games (the same game on Steam + PSN counts once) */
   groupCount: number;
 }
 
@@ -101,8 +101,8 @@ export interface PatinaDb {
   effort: Record<string, EffortLevel>;
   schedule: Record<string, string>; // appid -> "YYYY-MM"
   guides: Record<string, string>;
-  /** coleções manuais (franquias/séries) criadas pelo usuário */
+  /** manual collections (franchises/series) created by the user */
   collections: GameCollection[];
-  /** appid -> id da coleção à qual o jogo pertence */
+  /** appid -> id of the collection the game belongs to */
   collectionOf: Record<string, number>;
 }

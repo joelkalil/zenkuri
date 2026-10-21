@@ -3,9 +3,9 @@ import { useGameDetails } from './useSteamApi';
 import type { AchievementWithStatus } from '../types/steam';
 
 /**
- * Próximos 3: as conquistas restantes mais fáceis. Raridade global manda
- * (mais jogadores têm = mais fácil); RA sem raridade cai para pontos; sem
- * nenhum dos dois não há como ordenar e a lista fica vazia.
+ * Next 3: the easiest remaining achievements. Global rarity decides
+ * (more players have it = easier); RA without rarity falls back to points;
+ * with neither there is no way to order them and the list is empty.
  */
 export function selectNextEasiest(achievements: AchievementWithStatus[], count = 3): AchievementWithStatus[] {
   const locked = achievements.filter((a) => !a.achieved);
@@ -18,7 +18,7 @@ export function selectNextEasiest(achievements: AchievementWithStatus[], count =
   return [...locked].sort((a, b) => ease(b) - ease(a)).slice(0, count);
 }
 
-/** Carrega as conquistas do jogo (mesma chamada da página do jogo) e devolve os próximos 3. */
+/** Loads the game's achievements (same call as the game page) and returns the next 3. */
 export function useNextEasiest(appid: number | null) {
   const { data, loading, error } = useGameDetails(appid);
   const next = useMemo(() => selectNextEasiest(data?.merged ?? []), [data]);

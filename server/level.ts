@@ -1,6 +1,6 @@
 /*
-  Agregação do nível por usuário: lê as conquistas desbloqueadas do banco e
-  aplica a régua de XP definida em `levelMath.ts` (que é pura e sem I/O).
+  Per-user level aggregation: reads the unlocked achievements from the database
+  and applies the XP scale defined in `levelMath.ts` (which is pure, no I/O).
 */
 
 import { db, extractRarity, parseJson } from './db';
@@ -16,7 +16,7 @@ import {
 
 export * from './levelMath';
 
-// ─── Agregação por usuário ──────────────────────────────────────────────────
+// ─── Per-user aggregation ───────────────────────────────────────────────────
 
 export interface LevelSlice {
   key: string;
@@ -29,7 +29,7 @@ export interface UserLevel extends LevelProgress {
   xp: number;
   counts: {
     achievements: number;
-    /** conquistas em faixas de raridade abaixo de 10% */
+    /** achievements in rarity tiers below 10% */
     rare: number;
     platinums: number;
     perfects: number;
@@ -47,7 +47,7 @@ const PLATFORM_LABEL: Record<Platform, string> = {
   retroachievements: 'RetroAchievements',
 };
 
-/** Contagem de jogos concluídos, com os mesmos critérios do Hall da Platina. */
+/** Count of completed games, using the same criteria as the Platinum Hall. */
 function countCompletions(userId: number): { platinums: number; perfects: number } {
   const platinums = db.prepare(`
     select count(distinct g.id) as total
@@ -76,7 +76,7 @@ function countCompletions(userId: number): { platinums: number; perfects: number
   return { platinums: platinums?.total ?? 0, perfects: perfects?.total ?? 0 };
 }
 
-/** Calcula XP, nível e composição do nível de um usuário. */
+/** Computes a user's XP, level and level breakdown. */
 export function computeUserLevel(userId: number): UserLevel {
   const rows = db.prepare(`
     select
@@ -163,12 +163,13 @@ export function computeUserLevel(userId: number): UserLevel {
   };
 }
 
-// ─── Cache em memória ───────────────────────────────────────────────────────
+// ─── In-memory cache ────────────────────────────────────────────────────────
 
 /*
-  O cálculo varre todas as conquistas do usuário. Como a Sidebar e o Painel
-  pedem o nível quase ao mesmo tempo, um TTL curto já elimina o trabalho
-  repetido; o sync invalida explicitamente para o ganho aparecer na hora.
+  The computation scans all of the user's achievements. Since the Sidebar and
+  the Dashboard request the level almost at the same time, a short TTL already
+  removes the repeated work; sync invalidates it explicitly so gains show up
+  immediately.
 */
 const CACHE_TTL_MS = 60_000;
 const cache = new Map<number, { value: UserLevel; at: number }>();

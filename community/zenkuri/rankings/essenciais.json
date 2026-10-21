@@ -1,0 +1,158 @@
+{
+  "schema": "zenkuri.publication/v1",
+  "language": "pt-BR",
+  "kind": "ranking",
+  "slug": "essenciais",
+  "title": "Essenciais",
+  "summary": "Não são necessariamente os mais fáceis. São os que mais merecem virar uma lembrança completa na conta.",
+  "author": {
+    "handle": "joel",
+    "name": "Joel"
+  },
+  "version": 2,
+  "publishedAt": "2026-10-01",
+  "payload": {
+    "entries": [
+      {
+        "platform": "steam",
+        "externalId": "1030300",
+        "title": "Hollow Knight: Silksong",
+        "note": "O 100% mais digno de encerrar o ano no Hall.",
+        "estimate": "25–50h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "1086940",
+        "title": "Baldur's Gate 3",
+        "note": "Uma platina que conta uma história só sua.",
+        "estimate": "80–140h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "292030",
+        "title": "The Witcher 3: Wild Hunt — Remastered",
+        "note": "Clássico absoluto para finalmente fechar a conta.",
+        "estimate": "70–120h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "1145360",
+        "title": "Hades",
+        "note": "O loop faz o grind parecer parte da diversão.",
+        "estimate": "70–100h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "814380",
+        "title": "Sekiro: Shadows Die Twice - GOTY Edition",
+        "note": "Difícil, justo e muito satisfatório de dominar.",
+        "estimate": "60–90h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "1809540",
+        "title": "Nine Sols",
+        "note": "Parry no centro de tudo: a melhor ponte entre Hollow Knight e Sekiro.",
+        "estimate": "30–40h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "1693980",
+        "title": "Dead Space",
+        "note": "Remake impecável; o Impossible e a run só com a Plasma Cutter são o desafio.",
+        "estimate": "30–40h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "1091500",
+        "title": "Cyberpunk 2077",
+        "note": "Night City merece a limpeza completa.",
+        "estimate": "70–100h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "2050650",
+        "title": "Resident Evil 4",
+        "note": "Campanhas repetidas, mas com execução deliciosa.",
+        "estimate": "70–100h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "1313140",
+        "title": "Cult of the Lamb",
+        "note": "Carisma suficiente para sustentar a limpeza completa.",
+        "estimate": "50–80h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "774361",
+        "title": "Blasphemous",
+        "note": "Desafiador, compacto e com identidade própria.",
+        "estimate": "35–55h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "1850570",
+        "title": "DEATH STRANDING DIRECTOR'S CUT",
+        "note": "Uma Kojimada com planilha, mas a viagem vale a pena.",
+        "estimate": "100–140h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "524220",
+        "title": "NieR:Automata",
+        "note": "A rota E está entre as memórias mais bonitas do meio.",
+        "estimate": "50–70h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "413150",
+        "title": "Stardew Valley",
+        "note": "Perfection é projeto de estação, não de semana.",
+        "estimate": "120–150h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "250900",
+        "title": "The Binding of Isaac: Rebirth",
+        "note": "641 conquistas: o Everest da conta, para a vida toda.",
+        "estimate": "500h+"
+      },
+      {
+        "platform": "steam",
+        "externalId": "787480",
+        "title": "Phoenix Wright: Ace Attorney Trilogy",
+        "note": "A trilogia inteira vira uma única lembrança completa.",
+        "estimate": "50–60h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "377160",
+        "title": "Fallout 4",
+        "note": "RPG confortável com DLCs incluídos na conta.",
+        "estimate": "100–140h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "435150",
+        "title": "Divinity: Original Sin 2 - Definitive Edition",
+        "note": "Um dos melhores RPGs já feitos; 97 conquistas à altura.",
+        "estimate": "150h+"
+      },
+      {
+        "platform": "steam",
+        "externalId": "1462040",
+        "title": "FINAL FANTASY VII REMAKE INTERGRADE",
+        "note": "O modo difícil transforma o remake em outro jogo.",
+        "estimate": "80–100h"
+      },
+      {
+        "platform": "steam",
+        "externalId": "460790",
+        "title": "Bayonetta",
+        "note": "Pure Platinums são a escola clássica da ação estilosa.",
+        "estimate": "40–60h"
+      }
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-/* Ajustes: menu lateral em texto, seções em régua com rótulo à esquerda e controle à direita (ficha). */
+/* Settings: side text menu, sections as rules with the label on the left and the control on the right (sheet). */
 @layer components {
   .aj-section { margin-bottom: 2.5rem; max-width: 56rem; }
   .aj-row { display: grid; grid-template-columns: 12.5rem minmax(0, 1fr); gap: 0.5rem 2rem; align-items: start; padding-block: 1rem; border-top: 1px solid var(--color-gray-800); }
@@ -29,7 +29,7 @@
     .aj-control > .field, .aj-control > .field-grow { max-width: none; }
   }
 
-  /* Cabeçalho de seção que quebra linha no celular: número fixo, ação abaixo do título. */
+  /* Section header that wraps on mobile: fixed number, action below the title. */
   .sh-wrap .section-num { flex-shrink: 0; white-space: nowrap; }
   @media (max-width: 767px) {
     .sh-wrap { flex-wrap: wrap; }

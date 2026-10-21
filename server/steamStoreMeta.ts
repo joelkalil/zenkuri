@@ -9,7 +9,7 @@ export interface SteamStoreMeta {
   developers: string[];
   publishers: string[];
   franchises: string[];
-  /** null quando a Steam devolveu o item com sucesso. */
+  /** null when Steam returned the item successfully. */
   error: string | null;
 }
 
@@ -33,7 +33,7 @@ function names(list: StoreItemName[] | undefined): string[] {
     .filter((name) => name !== '');
 }
 
-/** Converte `response.store_items[]` em linhas; itens com success != 1 viram vazio + erro. */
+/** Converts `response.store_items[]` into rows; items with success != 1 become empty + error. */
 export function parseSteamStoreItems(body: unknown): SteamStoreMeta[] {
   const items = (body as { response?: { store_items?: StoreItem[] } } | null)?.response?.store_items ?? [];
   const parsed: SteamStoreMeta[] = [];
@@ -56,8 +56,9 @@ export function parseSteamStoreItems(body: unknown): SteamStoreMeta[] {
 }
 
 /**
- * Busca dev/pub/franquias de até 50 appids numa chamada. Lança em falha de rede/HTTP
- * (transitória: quem chama não grava nada); appids ausentes na resposta ficam de fora.
+ * Fetches dev/pub/franchises for up to 50 appids in one call. Throws on a
+ * network/HTTP failure (transient: the caller stores nothing); appids missing
+ * from the response are left out.
  */
 export async function fetchSteamStoreMeta(appids: string[]): Promise<SteamStoreMeta[]> {
   if (appids.length === 0) return [];

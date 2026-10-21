@@ -6,7 +6,7 @@ import { fetchSteamStoreMeta, STEAM_META_BATCH_SIZE } from './steamStoreMeta';
 
 export const STORE_META_RETRY_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Erro constante gravado quando o getGame da RA falha; nunca o erro cru. */
+/** Constant error stored when RA's getGame fails; never the raw error. */
 const RA_FETCH_FAILED = 'ra fetch failed';
 
 export type StoreMetaPlatform = Extract<Platform, 'steam' | 'retroachievements'>;
@@ -14,9 +14,9 @@ export type StoreMetaPlatform = Extract<Platform, 'steam' | 'retroachievements'>
 export interface StoreMetaFillResult {
   attempted: number;
   stored: number;
-  /** linhas gravadas com `error` (item indisponível na loja). */
+  /** rows stored with `error` (item unavailable in the store). */
   recordedErrors: number;
-  /** lotes/jogos que falharam de forma transitória e nada gravaram. */
+  /** batches/games that failed transiently and stored nothing. */
   transientFailures: number;
 }
 
@@ -28,7 +28,7 @@ export function storeMetaRetryCutoff(): string {
   return new Date(Date.now() - STORE_META_RETRY_TTL_MS).toISOString();
 }
 
-/** RA devolve um único texto de developer/publisher; vazio vira lista vazia. */
+/** RA returns a single developer/publisher text; empty becomes an empty list. */
 export function raCredit(value: string | null | undefined): string[] {
   const trimmed = value?.trim() ?? '';
   return trimmed === '' ? [] : [trimmed];
@@ -67,7 +67,7 @@ async function fillRetroAchievements(result: StoreMetaFillResult, onProgress?: (
   let done = 0;
   for (const game of missing) {
     done += 1;
-    // O sync por jogo pode ter gravado a linha depois que esta lista foi montada.
+    // The per-game sync may have stored the row after this list was built.
     const current = getGameStoreMeta([game.id]).find((row) => row.source === 'retroachievements');
     if (current && current.error === null && current.fetchedAt >= startedAt) {
       result.attempted -= 1;
@@ -103,10 +103,10 @@ async function runFill(platform: StoreMetaPlatform, onProgress?: (message: strin
 }
 
 /**
- * Preenche metadados ausentes (e refaz erros com mais de 24h) da plataforma.
- * Uma execução por plataforma por vez; lança só se a credencial de serviço faltar.
- * Chamada durante uma execução marca "rerun": roda exatamente mais uma passada ao
- * terminar, para pegar jogos sincronizados depois que a lista da passada atual foi montada.
+ * Fills missing metadata (and redoes errors older than 24h) for the platform.
+ * One run per platform at a time; throws only if the service credential is missing.
+ * A call made during a run flags a "rerun": exactly one more pass runs when it
+ * finishes, to pick up games synced after the current pass built its list.
  */
 export function fillStoreMeta(platform: StoreMetaPlatform, onProgress?: (message: string) => void): Promise<StoreMetaFillResult> {
   const pending = inflight.get(platform);
@@ -128,7 +128,7 @@ export function fillStoreMeta(platform: StoreMetaPlatform, onProgress?: (message
   return task;
 }
 
-/** Disparo não bloqueante usado pelo sync: nunca propaga falha. */
+/** Non-blocking trigger used by sync: never propagates failures. */
 export function scheduleStoreMetaFill(platform: Platform): void {
   if (!isStoreMetaPlatform(platform)) return;
   fillStoreMeta(platform).catch((error: unknown) => {

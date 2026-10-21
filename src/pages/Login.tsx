@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Logo } from '../components/Logo';
+import { LanguageSwitcher } from '../components/LanguageSwitcher';
+import { useI18n } from '../i18n';
+import { useErrorMessage } from '../i18n/useErrorMessage';
 import '../styles/login.css';
 
 const inputClass = 'field';
@@ -11,6 +14,8 @@ type Mode = 'login' | 'register';
 
 export default function Login() {
   const { login, register } = useAuth();
+  const { t } = useI18n();
+  const describe = useErrorMessage();
   const [mode, setMode] = useState<Mode>('login');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -28,11 +33,11 @@ export default function Login() {
     event.preventDefault();
     setError('');
 
-    if (!username.trim()) return setError('Informe seu nome de usuário.');
-    if (!password) return setError('Informe sua senha.');
+    if (!username.trim()) return setError(t('auth.errors.usernameRequired'));
+    if (!password) return setError(t('auth.errors.passwordRequired'));
     if (mode === 'register') {
-      if (password.length < 6) return setError('A senha deve ter pelo menos 6 caracteres.');
-      if (password !== confirm) return setError('As senhas não conferem.');
+      if (password.length < 6) return setError(t('auth.errors.passwordTooShort'));
+      if (password !== confirm) return setError(t('auth.errors.passwordMismatch'));
     }
 
     setBusy(true);
@@ -43,7 +48,7 @@ export default function Login() {
         await register(username.trim(), password, displayName.trim() || undefined);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível autenticar.');
+      setError(describe(err, 'auth.errors.generic'));
     } finally {
       setBusy(false);
     }
@@ -53,19 +58,19 @@ export default function Login() {
     <div className="auth-screen">
       <div className="auth-card">
         <div className="auth-head">
-          <Logo size={44} tagline="全クリ — zerar tudo" />
+          <Logo size={44} tagline={t('shell.logo.tagline')} />
           <h1 className="mt-6 text-2xl font-bold text-gray-50">
-            {mode === 'login' ? 'Entrar' : 'Criar sua conta'}
+            {mode === 'login' ? t('auth.login.title') : t('auth.login.registerTitle')}
           </h1>
           <p className="auth-lede">
             {mode === 'login'
-              ? 'Seu guia de platinas: acompanhe conquistas e 100% em todas as plataformas.'
-              : 'Comece a registrar suas conquistas em um só lugar.'}
+              ? t('auth.login.lede')
+              : t('auth.login.registerLede')}
           </p>
         </div>
 
-        <div className="subtabs mt-6 justify-center border-b border-gray-800" role="tablist" aria-label="Entrar ou criar conta">
-          {([['login', 'Entrar'], ['register', 'Criar conta']] as const).map(([value, label]) => (
+        <div className="subtabs mt-6 justify-center border-b border-gray-800" role="tablist" aria-label={t('auth.login.modeLabel')}>
+          {([['login', t('auth.login.tabLogin')], ['register', t('auth.login.tabRegister')]] as const).map(([value, label]) => (
             <button key={value} type="button" role="tab" aria-selected={mode === value} onClick={() => switchMode(value)} className="subtab px-2">
               {label}
             </button>
@@ -74,33 +79,33 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
-            <label className={labelClass} htmlFor="auth-username">Usuário</label>
+            <label className={labelClass} htmlFor="auth-username">{t('auth.login.username')}</label>
             <input id="auth-username" type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-              placeholder="ex. joel" autoComplete="username" className={inputClass} />
+              placeholder={t('auth.login.usernamePlaceholder')} autoComplete="username" className={inputClass} />
           </div>
 
           {mode === 'register' && (
             <div>
               <label className={labelClass} htmlFor="auth-display">
-                Nome de exibição <span className="font-normal text-gray-500">(opcional)</span>
+                {t('auth.login.displayName')} <span className="font-normal text-gray-500">{t('auth.login.optional')}</span>
               </label>
               <input id="auth-display" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Como quer aparecer no app" className={inputClass} />
+                placeholder={t('auth.login.displayNamePlaceholder')} className={inputClass} />
             </div>
           )}
 
           <div>
-            <label className={labelClass} htmlFor="auth-password">Senha</label>
+            <label className={labelClass} htmlFor="auth-password">{t('auth.login.password')}</label>
             <input id="auth-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === 'register' ? 'Mínimo de 6 caracteres' : 'Sua senha'}
+              placeholder={mode === 'register' ? t('auth.login.passwordNewPlaceholder') : t('auth.login.passwordPlaceholder')}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'} className={inputClass} />
           </div>
 
           {mode === 'register' && (
             <div>
-              <label className={labelClass} htmlFor="auth-confirm">Confirmar senha</label>
+              <label className={labelClass} htmlFor="auth-confirm">{t('auth.login.confirm')}</label>
               <input id="auth-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Repita a senha" autoComplete="new-password" className={inputClass} />
+                placeholder={t('auth.login.confirmPlaceholder')} autoComplete="new-password" className={inputClass} />
             </div>
           )}
 
@@ -114,15 +119,18 @@ export default function Login() {
             {busy ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                {mode === 'login' ? 'Entrando…' : 'Criando conta…'}
+                {mode === 'login' ? t('auth.login.busyLogin') : t('auth.login.busyRegister')}
               </>
-            ) : mode === 'login' ? 'Entrar' : 'Criar conta'}
+            ) : mode === 'login' ? t('auth.login.submitLogin') : t('auth.login.submitRegister')}
           </button>
         </form>
 
         <p className="auth-foot">
-          Depois de entrar, conecte suas contas Steam, PSN e RetroAchievements.
+          {t('auth.login.footer')}
         </p>
+        <div className="mt-4 flex justify-center">
+          <LanguageSwitcher />
+        </div>
       </div>
     </div>
   );
