@@ -1,16 +1,17 @@
 import { useTheme } from '../context/ThemeContext';
 
 /*
-  Marca Zenkuri: selo hanko com 全. Sem wordmark mostra só o selo; com wordmark
-  usa a assinatura completa (selo + "Zenkuri"), que já inclui o selo. Os
-  arquivos variam por tema: escuro (#E5533A) e papel (#B93A23).
+  Zenkuri brand: hanko seal with 全. Without the wordmark it shows only the
+  seal; with it, the full signature (seal + "Zenkuri"), which already includes
+  the seal. Files vary by theme: dark (#E5533A) and paper (#B93A23).
+  The brand name is not translated, so there are no message keys here.
 */
 interface LogoProps {
-  /** altura da marca em px */
+  /** brand height in px */
   size?: number;
-  /** mostra a assinatura completa (selo + "Zenkuri") */
+  /** shows the full signature (seal + "Zenkuri") */
   withWordmark?: boolean;
-  /** linha pequena sob a assinatura */
+  /** small line under the signature (already translated by the caller) */
   tagline?: string;
   className?: string;
 }

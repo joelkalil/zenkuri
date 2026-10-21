@@ -1,11 +1,11 @@
+import { useI18n } from '../i18n';
+import { monthShortName } from '../i18n/format';
 import '../styles/almanaque.css';
-
-const MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 const CELL = 15; // px
 const GAP = 3; // px
 
-/** Escala de intensidade (0–4) com o acento: do filete ao vermelhão cheio. */
+/** Intensity scale (0-4) with the accent: from a hairline to full vermilion. */
 function levelOf(count: number): 0 | 1 | 2 | 3 | 4 {
   if (count === 0) return 0;
   if (count <= 2) return 1;
@@ -20,12 +20,13 @@ function dayKey(date: Date): string {
 
 interface UnlockHeatmapProps {
   year: number;
-  /** contagem de desbloqueios por dia, chave "YYYY-MM-DD" (UTC) */
+  /** unlock count per day, keyed "YYYY-MM-DD" (UTC) */
   counts: Map<string, number>;
 }
 
-/** Calendário anual de desbloqueios, uma coluna por semana (domingo no topo). */
+/** Yearly unlock calendar, one column per week (Sunday on top). */
 export function UnlockHeatmap({ year, counts }: UnlockHeatmapProps) {
+  const { t, plural, locale, formatDate } = useI18n();
   const start = new Date(Date.UTC(year, 0, 1));
   const end = new Date(Date.UTC(year + 1, 0, 1));
 
@@ -38,14 +39,14 @@ export function UnlockHeatmap({ year, counts }: UnlockHeatmapProps) {
       col,
       row,
       month: d.getUTCMonth(),
-      label: d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', timeZone: 'UTC' }),
+      label: formatDate(d.getTime(), { day: 'numeric', month: 'long', timeZone: 'UTC' }),
     });
     if (row === 6) col += 1;
   }
   const totalCols = col + 1;
 
-  const monthOffsets = MONTHS_PT.map((label, month) => ({
-    label,
+  const monthOffsets = Array.from({ length: 12 }, (_, month) => ({
+    label: monthShortName(locale, month),
     col: days.find((day) => day.month === month)?.col ?? 0,
   }));
 
@@ -57,13 +58,13 @@ export function UnlockHeatmap({ year, counts }: UnlockHeatmapProps) {
             <span key={label} className="hm-month" style={{ left: monthCol * (CELL + GAP) }}>{label}</span>
           ))}
         </div>
-        <div className="relative" style={{ height: 7 * (CELL + GAP) }} role="img" aria-label={`Desbloqueios por dia em ${year}`}>
+        <div className="relative" style={{ height: 7 * (CELL + GAP) }} role="img" aria-label={t('game.heatmap.label', { year })}>
           {days.map((day) => {
             const count = counts.get(day.key) ?? 0;
             return (
               <span
                 key={day.key}
-                title={`${day.label}: ${count} ${count === 1 ? 'conquista' : 'conquistas'}`}
+                title={plural('game.heatmap.cell', count, { date: day.label })}
                 className="hm-cell"
                 data-level={levelOf(count)}
                 style={{ width: CELL, height: CELL, left: day.col * (CELL + GAP), top: day.row * (CELL + GAP) }}
@@ -72,11 +73,11 @@ export function UnlockHeatmap({ year, counts }: UnlockHeatmapProps) {
           })}
         </div>
         <div className="mt-3 flex items-center justify-end gap-1.5 text-[11px] text-gray-500">
-          Menos
+          {t('game.heatmap.less')}
           {[0, 1, 2, 3, 4].map((level) => (
             <span key={level} className="hm-swatch" data-level={level} aria-hidden="true" />
           ))}
-          Mais
+          {t('game.heatmap.more')}
         </div>
       </div>
     </div>

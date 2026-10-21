@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import { GameCover } from '../GameCover';
 import { ProgressBar } from '../ProgressBar';
 import { SectionHead } from '../SectionHead';
@@ -47,6 +48,7 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
   onRemove: () => void;
   onSetMonth: (month: string) => void;
 }) {
+  const { t } = useI18n();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: String(game.appid) });
   const percent = completion?.percent ?? 0;
   const late = month !== '' && month < thisMonth && percent < 100;
@@ -72,15 +74,15 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
           <select
             value={month}
             onChange={(event) => onSetMonth(event.target.value)}
-            aria-label={`Mês para fechar ${game.name}`}
+            aria-label={t('plan.queue.monthAria', { name: game.name })}
             className={`h-7 w-[5.5rem] shrink-0 rounded border bg-transparent px-1.5 text-xs transition-colors hover:border-gray-500 focus:border-violet-400 focus:outline-none ${
               month === thisMonth ? 'border-violet-400 text-violet-400' : late ? 'border-zk-gold text-zk-gold' : 'border-gray-600 text-gray-400'
             }`}
           >
-            <option value="">Sem mês</option>
+            <option value="">{t('plan.queue.noMonth')}</option>
             {options.map((key) => <option key={key} value={key}>{monthKeyLabel(key)}</option>)}
           </select>
-          {late && <span className="sr-only">Atrasado: era para {monthKeyLong(month)}.</span>}
+          {late && <span className="sr-only">{t('plan.queue.late', { month: monthKeyLong(month) })}</span>}
         </div>
       </div>
       <div className="flex items-center">
@@ -88,7 +90,7 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
           type="button"
           {...attributes}
           {...listeners}
-          aria-label={`Mover ${game.name} na fila`}
+          aria-label={t('plan.queue.moveAria', { name: game.name })}
           className="grid h-9 w-8 cursor-grab touch-none place-items-center rounded text-gray-500 hover:bg-gray-850 hover:text-gray-200 active:cursor-grabbing"
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
@@ -96,8 +98,8 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
         <button
           type="button"
           onClick={onRemove}
-          aria-label={`Tirar ${game.name} da fila`}
-          title="Tirar da fila"
+          aria-label={t('plan.queue.removeAria', { name: game.name })}
+          title={t('plan.queue.removeTitle')}
           className="grid h-9 w-8 place-items-center rounded text-gray-500 transition-colors hover:bg-gray-850 hover:text-zk-danger [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100"
         >
           <X className="h-4 w-4" aria-hidden="true" />
@@ -108,10 +110,11 @@ function QueueRow({ game, index, completion, month, months, thisMonth, onRemove,
 }
 
 /**
- * A fila pessoal (o antigo Backlog): ordem de prioridade arrastável e o mês
- * em que cada jogo deve fechar. Vive ao lado do plano, não numa página à parte.
+ * The personal queue (the former Backlog): a draggable priority order and the
+ * month each game should be finished. It lives next to the plan, not on a page of its own.
  */
 export function Queue({ games, order, schedule, completionMap, today, onReorder, onRemove, onSetMonth }: QueueProps) {
+  const { t, plural, formatNumber } = useI18n();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -134,22 +137,22 @@ export function Queue({ games, order, schedule, completionMap, today, onReorder,
   }
 
   return (
-    <section aria-label="Minha fila">
-      <SectionHead className="sh-wrap" number="03" title="Minha fila" action={<Link to="/library" className="btn btn-secondary btn-sm">Adicionar jogo</Link>} />
+    <section aria-label={t('plan.queue.title')}>
+      <SectionHead className="sh-wrap" number="03" title={t('plan.queue.title')} action={<Link to="/library" className="btn btn-secondary btn-sm">{t('plan.queue.add')}</Link>} />
       <p className="lede">
         {games.length === 0
-          ? 'Ordem de prioridade e mês para fechar cada jogo.'
+          ? t('plan.queue.ledeEmpty')
           : <>
-              <span className="num text-gray-100">{games.length}</span> {games.length === 1 ? 'jogo' : 'jogos'}
-              {average !== null && <>, média de <span className="num text-gray-100">{average.toLocaleString('pt-BR')}%</span></>}
-              {thisMonthCount > 0 && <>; {thisMonthCount} para {monthKeyLong(thisMonth).split(' ')[0]}</>}
+              <span className="num text-gray-100">{games.length}</span> {plural('plan.queue.gameWord', games.length)}
+              {average !== null && <>{t('plan.queue.averagePrefix')}<span className="num text-gray-100">{formatNumber(average)}%</span></>}
+              {thisMonthCount > 0 && t('plan.queue.forMonth', { count: thisMonthCount, month: monthKeyLong(thisMonth).split(' ')[0] })}
             </>}
       </p>
 
       {games.length === 0 ? (
         <p className="mt-3 border-t border-gray-800 py-6 text-sm leading-relaxed text-gray-500">
-          A fila está vazia. Use o botão de fila nos jogos do plano ao lado, ou adicione pela
-          {' '}<Link to="/library" className="text-violet-400 hover:text-violet-300">Biblioteca</Link>.
+          {t('plan.queue.emptyBefore')}
+          {' '}<Link to="/library" className="text-violet-400 hover:text-violet-300">{t('plan.queue.libraryLink')}</Link>{t('plan.queue.emptyAfter')}
         </p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

@@ -1,21 +1,24 @@
 import { useMemo, useState } from 'react';
 import { Link, Navigate, NavLink, useParams } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
+import { Attribution } from '../components/community/Attribution';
 import { GameCover } from '../components/GameCover';
 import { SectionHead } from '../components/SectionHead';
 import { Stamp } from '../components/Stamp';
+import { StoreCover } from '../components/StoreCover';
 import { useSteam } from '../context/SteamContext';
+import { contentLang } from '../hooks/useCommunity';
+import { useSagas, type SagaWithMeta } from '../hooks/useSagas';
+import { RichText } from '../components/RichText';
+import { useI18n, useT } from '../i18n';
+import { withSlots } from '../i18n/withSlots';
+import { formatDayLong } from '../lib/planDates';
+import { steamStoreUrl } from '../lib/steamStore';
 import {
-  DIFFICULTY_LABEL,
-  FLAG_LABEL,
-  PRICE_CHECKED_AT,
-  SAGAS,
-  steamPortraitUrls,
-  steamStoreUrl,
   type Saga as SagaData,
   type SagaEntry,
   type SagaFlag,
-} from '../data/sagas';
+} from '../types/community';
 import type { Game } from '../types/steam';
 import '../styles/sagas.css';
 
@@ -28,7 +31,13 @@ interface ResolvedEntry extends SagaEntry {
   percent: number;
 }
 
-const brl = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const DIFFICULTY_KEY = {
+  1: 'calm',
+  2: 'light',
+  3: 'medium',
+  4: 'demanding',
+  5: 'brutal',
+} as const satisfies Record<SagaEntry['difficulty'], string>;
 
 const FLAG_TONE: Record<SagaFlag, 'gold' | undefined> = {
   online: undefined,
@@ -44,58 +53,43 @@ function statusOf(game: Game | null): { status: EntryStatus; percent: number } {
   return { status: 'owned', percent };
 }
 
-function formatHours([min, max]: [number, number]) {
-  const lo = Math.round(min);
-  const hi = Math.round(max);
-  return lo === hi ? `${lo} h` : `${lo}–${hi} h`;
+/** Hours range as text ("12 h" or "10–14 h"), already formatted for the active locale. */
+function useHoursFormat() {
+  const t = useT('saga');
+  const { formatNumber } = useI18n();
+  return ([min, max]: [number, number]) => {
+    const lo = Math.round(min);
+    const hi = Math.round(max);
+    return lo === hi
+      ? t('hours.single', { hours: formatNumber(lo) })
+      : t('hours.range', { min: formatNumber(lo), max: formatNumber(hi) });
+  };
 }
 
-function formatPrice(price: number | null) {
-  if (price === null) return 'Fora de venda';
-  if (price === 0) return 'Gratuito';
-  return brl.format(price);
-}
-
-/** Capa vertical direto do CDN da Steam para jogos que não estão na biblioteca. */
-function StoreCover({ appid, title, className }: { appid: string; title: string; className: string }) {
-  const srcs = useMemo(() => steamPortraitUrls(appid), [appid]);
-  const [index, setIndex] = useState(0);
-
-  if (index >= srcs.length) {
-    return (
-      <div className={`${className} grid place-items-center bg-gray-800 p-1 text-center font-display text-[9px] font-bold leading-tight text-gray-500`}>
-        {title}
-      </div>
-    );
-  }
-
-  return (
-    <img
-      key={srcs[index]}
-      src={srcs[index]}
-      alt=""
-      loading="lazy"
-      onError={() => setIndex((current) => current + 1)}
-      className={`${className} object-cover`}
-    />
-  );
+function useBrl() {
+  const { formatNumber } = useI18n();
+  return (value: number) => formatNumber(value, { style: 'currency', currency: 'BRL' });
 }
 
 function DifficultyMeter({ value }: { value: SagaEntry['difficulty'] }) {
+  const t = useT('saga');
+  const label = t(`difficulty.levels.${DIFFICULTY_KEY[value]}`);
   const tone = value >= 5 ? 'bg-zk-danger' : value >= 4 ? 'bg-zk-gold' : 'bg-gray-400';
   return (
-    <span className="inline-flex items-center gap-1.5" title={`Dificuldade da platina: ${DIFFICULTY_LABEL[value]}`}>
+    <span className="inline-flex items-center gap-1.5" title={t('difficulty.title', { label })}>
       <span className="flex gap-0.5" aria-hidden="true">
         {[1, 2, 3, 4, 5].map((step) => (
           <span key={step} className={`h-2.5 w-1 rounded-[1px] ${step <= value ? tone : 'bg-gray-800'}`} />
         ))}
       </span>
-      <span>Dificuldade {DIFFICULTY_LABEL[value].toLowerCase()}</span>
+      <span>{t('difficulty.text', { label })}</span>
     </span>
   );
 }
 
 function EntryStatusBlock({ entry }: { entry: ResolvedEntry }) {
+  const t = useT('saga');
+  const brl = useBrl();
   if (entry.status === 'done') {
     return (
       <span className="sg-status-done">
@@ -108,25 +102,31 @@ function EntryStatusBlock({ entry }: { entry: ResolvedEntry }) {
     return (
       <span className="block w-full">
         <span className="mb-1.5 flex items-center justify-between text-xs">
-          <span className="text-gray-500">{entry.status === 'owned' ? 'Na biblioteca' : 'Em andamento'}</span>
+          <span className="text-gray-500">{entry.status === 'owned' ? t('entry.owned') : t('entry.inProgress')}</span>
           <span className="num font-semibold text-gray-200">{entry.percent}%</span>
         </span>
-        <span className="sg-track" role="progressbar" aria-label={`Progresso de ${entry.title}`} aria-valuenow={entry.percent} aria-valuemin={0} aria-valuemax={100}>
+        <span className="sg-track" role="progressbar" aria-label={t('entry.progress', { title: entry.title })} aria-valuenow={entry.percent} aria-valuemin={0} aria-valuemax={100}>
           <span className="sg-fill" style={{ width: `${entry.percent}%` }} />
         </span>
       </span>
     );
   }
 
+  const price = entry.priceBRL;
+  const priceLabel = price === null ? t('price.delisted') : price === 0 ? t('price.free') : brl(price);
+
   return (
     <span className="flex flex-col items-end gap-0.5">
-      <span className="micro">Não adquirido</span>
-      <span className="num text-sm font-semibold text-gray-200">{formatPrice(entry.priceBRL)}</span>
+      <span className="micro">{t('entry.notOwned')}</span>
+      <span className="num text-sm font-semibold text-gray-200">{priceLabel}</span>
     </span>
   );
 }
 
-function EntryRow({ entry, isNext }: { entry: ResolvedEntry; isNext: boolean }) {
+function EntryRow({ entry, isNext, language }: { entry: ResolvedEntry; isNext: boolean; language?: string }) {
+  const t = useT('saga');
+  const { formatNumber } = useI18n();
+  const formatHours = useHoursFormat();
   const done = entry.status === 'done';
   const cover = entry.game
     ? <GameCover game={entry.game} portrait className="h-[5.25rem] w-14 rounded-sm bg-gray-800" imgClassName="object-cover" />
@@ -140,23 +140,23 @@ function EntryRow({ entry, isNext }: { entry: ResolvedEntry; isNext: boolean }) 
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {entry.game ? (
-            <Link to={`/game/${entry.game.appid}`} className={`${titleClass} after:absolute after:inset-0`}>{entry.title}</Link>
+            <Link lang={language} to={`/game/${entry.game.appid}`} className={`${titleClass} after:absolute after:inset-0`}>{entry.title}</Link>
           ) : (
-            <span className={titleClass}>{entry.title}</span>
+            <span lang={language} className={titleClass}>{entry.title}</span>
           )}
-          {isNext && <span className="badge" data-tone="accent">Próximo</span>}
+          {isNext && <span className="badge" data-tone="accent">{t('entry.next')}</span>}
         </span>
         <span className="sg-meta">
           <span className="num">{entry.year}</span>
-          <span><span className="num">{entry.achievements}</span> conquistas</span>
+          <span><span className="num">{formatNumber(entry.achievements)}</span> {t.plural('entry.achievements', entry.achievements)}</span>
           <span className="num">{formatHours(entry.hours)}</span>
           <DifficultyMeter value={entry.difficulty} />
         </span>
-        <span className="sg-note block">{entry.note}</span>
+        <span className="sg-note block" lang={language}>{entry.note}</span>
         {entry.flags && entry.flags.length > 0 && (
           <span className="mt-2 flex flex-wrap gap-1.5">
             {entry.flags.map((flag) => (
-              <span key={flag} className="badge" data-tone={FLAG_TONE[flag]}>{FLAG_LABEL[flag]}</span>
+              <span key={flag} className="badge" data-tone={FLAG_TONE[flag]}>{t(`flags.${flag}`)}</span>
             ))}
           </span>
         )}
@@ -167,10 +167,10 @@ function EntryRow({ entry, isNext }: { entry: ResolvedEntry; isNext: boolean }) 
           <a
             href={steamStoreUrl(entry.appid)}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs font-semibold text-violet-400 transition-colors hover:text-violet-300"
           >
-            Ver na Steam <ExternalLink className="h-3 w-3" aria-hidden="true" />
+            {t('entry.viewOnSteam')} <ExternalLink className="h-3 w-3" aria-hidden="true" />
           </a>
         )}
       </div>
@@ -178,7 +178,12 @@ function EntryRow({ entry, isNext }: { entry: ResolvedEntry; isNext: boolean }) 
   );
 }
 
-function SagaView({ saga }: { saga: SagaData }) {
+function SagaView({ saga, meta, sagas }: { saga: SagaData; meta: SagaWithMeta['meta']; sagas: SagaData[] }) {
+  const t = useT('saga');
+  const { formatNumber, locale } = useI18n();
+  const brl = useBrl();
+  const formatHours = useHoursFormat();
+  const language = contentLang(meta);
   const { games, loading } = useSteam();
 
   const steamGames = useMemo(() => {
@@ -190,7 +195,7 @@ function SagaView({ saga }: { saga: SagaData }) {
   }, [games]);
 
   const phases = useMemo(() => {
-    // Numeração contínua entre fases: o offset de cada fase é a soma das anteriores.
+    // Continuous numbering across phases: each phase offset is the sum of the previous ones.
     const offsets = saga.phases.map((_, index) =>
       saga.phases.slice(0, index).reduce((sum, phase) => sum + phase.entries.length, 0));
     return saga.phases.map((phase, phaseIndex) => ({
@@ -224,8 +229,8 @@ function SagaView({ saga }: { saga: SagaData }) {
   return (
     <div className="page">
       <div className="tabs-bar">
-        <nav className="subtabs" aria-label="Escolher saga">
-          {SAGAS.map((item) => (
+        <nav className="subtabs" aria-label={t('chooseSaga')}>
+          {sagas.map((item) => (
             <NavLink key={item.slug} to={`/sagas/${item.slug}`} className="subtab">{item.name}</NavLink>
           ))}
         </nav>
@@ -233,43 +238,58 @@ function SagaView({ saga }: { saga: SagaData }) {
 
       <section className="sg-banner" aria-labelledby="saga-title">
         {heroArt ? <img src={heroArt} alt="" onError={() => setArtFailed(true)} /> : <div className="sg-banner-fallback" />}
-        <div className="min-w-0">
-          <span className="sg-eyebrow">Saga · {all.length} jogos</span>
+        <div className="min-w-0" lang={language}>
+          <span className="sg-eyebrow">{t.plural('eyebrow', all.length)}</span>
           <h1 id="saga-title" className="mt-1">{saga.name}</h1>
           <p>{saga.tagline}</p>
         </div>
       </section>
 
+      <Attribution
+        className="-mt-3"
+        publication={meta}
+        extra={withSlots(t('priceChecked'), { date: <span className="num">{formatDayLong(saga.priceCheckedAt, locale)}</span> })}
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
         <p className="lede max-w-3xl">
-          <span className="num">{done.length}</span> de <span className="num">{all.length}</span> platinados · <span className="num">{owned.length}</span> na biblioteca
-          {inProgress.length > 0 && <> ({inProgress.length} em andamento)</>}
-          {' · '}~<span className="num">{Math.round(remaining[0])}–{Math.round(remaining[1])} h</span> restantes
-          {missing.length > 0 && <> · <span className="num">{brl.format(cost)}</span> para completar a coleção ({missing.length} {missing.length === 1 ? 'jogo' : 'jogos'}, preço cheio em {PRICE_CHECKED_AT.split('-').reverse().join('/')})</>}
+          {withSlots(t('summary.platinated'), {
+            done: <span className="num">{formatNumber(done.length)}</span>,
+            total: <span className="num">{formatNumber(all.length)}</span>,
+            owned: <span className="num">{formatNumber(owned.length)}</span>,
+          })}
+          {inProgress.length > 0 && <> {t('summary.inProgress', { count: formatNumber(inProgress.length) })}</>}
+          {' · '}{withSlots(t('summary.remaining'), { hours: <span className="num">{formatHours(remaining)}</span> })}
+          {missing.length > 0 && <> · {withSlots(t('summary.cost'), {
+            cost: <span className="num">{brl(cost)}</span>,
+            games: t.plural('summary.missingGames', missing.length),
+            date: formatDayLong(saga.priceCheckedAt, locale),
+          })}</>}
         </p>
         {next && (
           next.game ? (
-            <Link to={`/game/${next.game.appid}`} className="btn btn-primary">Continuar: {next.title}</Link>
+            <Link to={`/game/${next.game.appid}`} className="btn btn-primary">{t('continue', { title: next.title })}</Link>
           ) : (
-            <a href={steamStoreUrl(next.appid)} target="_blank" rel="noreferrer" className="btn btn-primary">
-              Próximo: {next.title} <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            <a href={steamStoreUrl(next.appid)} target="_blank" rel="noopener noreferrer" className="btn btn-primary">
+              {t('upNext', { title: next.title })} <ExternalLink className="h-4 w-4" aria-hidden="true" />
             </a>
           )
         )}
       </div>
 
-      <div className="sg-progress" role="progressbar" aria-label="Platinas da saga" aria-valuenow={percentDone} aria-valuemin={0} aria-valuemax={100}>
+      <div className="sg-progress" role="progressbar" aria-label={t('progressLabel')} aria-valuenow={percentDone} aria-valuemin={0} aria-valuemax={100}>
         <span className="sg-track"><span className="sg-fill" data-complete={percentDone === 100} style={{ width: `${percentDone}%` }} /></span>
         <span className="num text-sm font-semibold text-gray-100">{percentDone}%</span>
       </div>
 
-      <section aria-label="Como a ordem foi montada">
-        <p className="micro">Como a ordem foi montada</p>
-        <p className="lede mt-1 max-w-4xl">{saga.method}</p>
+      <section aria-label={t('method')}>
+        <p className="micro">{t('method')}</p>
+        <p className="lede mt-1 max-w-4xl" lang={language}>{saga.method}</p>
         {next && (
           <p className="mt-3 text-sm text-gray-300">
-            Próximo da fila: <span className="font-semibold text-violet-400"><span className="num">#{String(next.order).padStart(2, '0')}</span> {next.title}</span>
-            {next.status === 'missing' ? ', ainda não está na sua conta.' : '.'}
+            {withSlots(t(next.status === 'missing' ? 'queue.nextMissing' : 'queue.next'), {
+              entry: <span className="font-semibold text-violet-400"><span className="num">#{String(next.order).padStart(2, '0')}</span> <span lang={language}>{next.title}</span></span>,
+            })}
           </p>
         )}
       </section>
@@ -281,15 +301,15 @@ function SagaView({ saga }: { saga: SagaData }) {
           <section key={phase.id} aria-labelledby={`phase-${phase.id}`}>
             <SectionHead className="sh-wrap"
               number={String(index + 1).padStart(2, '0')}
-              title={<span id={`phase-${phase.id}`}>Fase {index + 1}: {phase.title}</span>}
+              title={<span id={`phase-${phase.id}`}>{withSlots(t('phase.title', { number: index + 1 }), { title: <span lang={language}>{phase.title}</span> })}</span>}
               action={
-                <span className="sg-progress w-44 sm:w-56" role="progressbar" aria-label={`Progresso da fase ${index + 1}`} aria-valuenow={phasePercent} aria-valuemin={0} aria-valuemax={100}>
+                <span className="sg-progress w-44 sm:w-56" role="progressbar" aria-label={t('phase.progress', { number: index + 1 })} aria-valuenow={phasePercent} aria-valuemin={0} aria-valuemax={100}>
                   <span className="sg-track"><span className="sg-fill" data-complete={phasePercent === 100} style={{ width: `${phasePercent}%` }} /></span>
                   <span className="num whitespace-nowrap text-xs text-gray-400">{phaseDone}/{phase.entries.length}</span>
                 </span>
               }
             />
-            <p className="lede -mt-1 mb-3 max-w-3xl">{phase.summary}</p>
+            <p className="lede -mt-1 mb-3 max-w-3xl" lang={language}>{phase.summary}</p>
             {loading ? (
               <div className="space-y-2">
                 {phase.entries.map((entry) => <div key={entry.appid} className="h-20 animate-pulse rounded-sm bg-gray-900" />)}
@@ -297,7 +317,7 @@ function SagaView({ saga }: { saga: SagaData }) {
             ) : (
               <ol>
                 {phase.entries.map((entry) => (
-                  <EntryRow key={entry.appid} entry={entry} isNext={next?.appid === entry.appid} />
+                  <EntryRow key={entry.appid} entry={entry} isNext={next?.appid === entry.appid} language={language} />
                 ))}
               </ol>
             )}
@@ -307,11 +327,11 @@ function SagaView({ saga }: { saga: SagaData }) {
 
       {saga.outOfScope.length > 0 && (
         <section aria-labelledby="saga-out">
-          <SectionHead className="sh-wrap" number={outNumber} title={<span id="saga-out">Na Steam, fora da sua conta</span>} sub="Existem na loja, mas hoje não dá para platinar." />
+          <SectionHead className="sh-wrap" number={outNumber} title={<span id="saga-out">{t('outOfScope.title')}</span>} sub={t('outOfScope.subtitle')} />
           <ul className="grid gap-x-10 sm:grid-cols-2">
             {saga.outOfScope.map((item) => (
-              <li key={item.appid} className="border-b border-gray-800 py-3 text-sm">
-                <a href={steamStoreUrl(item.appid)} target="_blank" rel="noreferrer" className="font-display font-bold text-gray-200 hover:text-violet-400">
+              <li key={item.appid} className="border-b border-gray-800 py-3 text-sm" lang={language}>
+                <a href={steamStoreUrl(item.appid)} target="_blank" rel="noopener noreferrer" className="font-display font-bold text-gray-200 hover:text-violet-400">
                   {item.title}
                 </a>
                 <span className="block text-xs text-gray-500">{item.reason}</span>
@@ -325,8 +345,42 @@ function SagaView({ saga }: { saga: SagaData }) {
 }
 
 export default function Saga() {
+  const t = useT('saga');
   const { slug } = useParams();
-  const saga = SAGAS.find((item) => item.slug === slug);
-  if (!saga) return <Navigate to={`/sagas/${SAGAS[0].slug}`} replace />;
-  return <SagaView key={saga.slug} saga={saga} />;
+  const { items, loading, error } = useSagas();
+
+  if (loading) {
+    return (
+      <div className="page" aria-busy="true">
+        <div className="h-28 animate-pulse rounded-sm bg-gray-850" />
+        <div className="h-4 w-2/3 animate-pulse rounded-sm bg-gray-850" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="page">
+        <div className="empty-state" role="alert">
+          <strong>{t('error.title')}</strong>
+          <span className="text-zk-danger">{error}</span>
+          <button type="button" className="btn btn-secondary" onClick={() => window.location.reload()}>{t('error.retry')}</button>
+        </div>
+      </div>
+    );
+  }
+  if (items.length === 0) {
+    return (
+      <div className="page">
+        <div className="empty-state">
+          <strong>{t('empty.title')}</strong>
+          <span><RichText text={t('empty.body')} codeClassName="" /></span>
+          <Link to="/comunidade" className="btn btn-primary">{t('empty.link')}</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const current = items.find((item) => item.saga.slug === slug);
+  if (!current) return <Navigate to={`/sagas/${items[0].saga.slug}`} replace />;
+  return <SagaView key={current.saga.slug} saga={current.saga} meta={current.meta} sagas={items.map((item) => item.saga)} />;
 }

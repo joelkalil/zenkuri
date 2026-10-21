@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react';
 import { Stamp } from './Stamp';
+import { useI18n } from '../i18n';
 import type { AchievementWithStatus, Platform } from '../types/steam';
 
 interface AchievementListProps {
@@ -7,19 +8,12 @@ interface AchievementListProps {
   platform?: Platform;
 }
 
-const percentFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
 
-function fmtDate(ts: number): string {
-  if (!ts) return '';
-  return new Date(ts * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+type TrophyType = 'platinum' | 'gold' | 'silver' | 'bronze';
+
+function isTrophyType(value: string | undefined): value is TrophyType {
+  return value === 'platinum' || value === 'gold' || value === 'silver' || value === 'bronze';
 }
-
-const TYPE_LABEL: Record<string, string> = {
-  platinum: 'Platina',
-  gold: 'Ouro',
-  silver: 'Prata',
-  bronze: 'Bronze',
-};
 
 const TYPE_ICON: Record<string, string> = {
   platinum: '/trophies/platinum.png',
@@ -35,22 +29,30 @@ const TYPE_COLOR: Record<string, string> = {
   bronze: 'text-zk-bronze',
 };
 
-/** Checklist em tabela densa: nº, imagem, nome + descrição, tipo/pontos, raridade, data e estado. */
-export function AchievementList({ achievements }: AchievementListProps) {
+/** Dense table checklist: number, image, name + description, type/points, rarity, date and state. */
+export function AchievementList({ achievements, platform }: AchievementListProps) {
+  const { t, formatDate, formatNumber } = useI18n();
+  const noun = platform === 'psn' ? 'trophies' : 'achievements';
+
+  function fmtDate(ts: number): string {
+    if (!ts) return '';
+    return formatDate(ts * 1000, { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+
   if (achievements.length === 0) {
-    return <p className="py-10 text-sm text-gray-500">Nenhum troféu encontrado para este filtro.</p>;
+    return <p className="py-10 text-sm text-gray-500">{t(`game.list.${noun}.empty`)}</p>;
   }
 
   return (
-    <div role="table" aria-label="Troféus do jogo" className="trophy-table">
+    <div role="table" aria-label={t(`game.list.${noun}.label`)} className="trophy-table">
       <div role="row" className="trophy-head col-head">
-        <span role="columnheader" className="r">#</span>
-        <span role="columnheader"><span className="sr-only">Imagem</span></span>
-        <span role="columnheader">Troféu</span>
-        <span role="columnheader" className="trophy-hide-sm">Tipo</span>
-        <span role="columnheader" className="r">Raridade</span>
-        <span role="columnheader" className="r trophy-hide-sm">Obtido em</span>
-        <span role="columnheader"><span className="sr-only">Estado</span></span>
+        <span role="columnheader" className="r">{t('game.list.rank')}</span>
+        <span role="columnheader"><span className="sr-only">{t('game.list.image')}</span></span>
+        <span role="columnheader">{t(`game.list.${noun}.name`)}</span>
+        <span role="columnheader" className="trophy-hide-sm">{t('game.list.type')}</span>
+        <span role="columnheader" className="r">{t('game.list.rarity')}</span>
+        <span role="columnheader" className="r trophy-hide-sm">{t('game.list.earnedAt')}</span>
+        <span role="columnheader"><span className="sr-only">{t('game.list.state')}</span></span>
       </div>
       {achievements.map((a, index) => {
         const earned = a.achieved;
@@ -70,27 +72,27 @@ export function AchievementList({ achievements }: AchievementListProps) {
             </span>
             <span role="cell" className="min-w-0">
               <span className="trophy-name">{a.displayName || a.name}</span>
-              <span className="trophy-desc">{a.hidden && !earned ? 'Troféu oculto' : a.description || 'Sem descrição'}</span>
+              <span className="trophy-desc">{a.hidden && !earned ? t(`game.list.${noun}.hidden`) : a.description || t('game.list.noDescription')}</span>
             </span>
             <span role="cell" className="trophy-hide-sm trophy-type">
-              {trophyIcon && type ? (
+              {trophyIcon && isTrophyType(type) ? (
                 <>
                   <img src={trophyIcon} alt="" />
-                  <span className={TYPE_COLOR[type] ?? 'text-gray-300'}>{TYPE_LABEL[type]}</span>
+                  <span className={TYPE_COLOR[type] ?? 'text-gray-300'}>{t(`game.trophyTypes.${type}`)}</span>
                 </>
               ) : typeof a.points === 'number' && a.points > 0 ? (
-                <span className="num">{a.points} pts</span>
+                <span className="num">{t('game.points', { count: a.points })}</span>
               ) : null}
             </span>
-            <span role="cell" className="num r">{hasRarity ? `${percentFormat.format(a.rarity as number)}%` : '—'}</span>
+            <span role="cell" className="num r">{hasRarity ? `${formatNumber(a.rarity as number, { maximumFractionDigits: 1 })}%` : '—'}</span>
             <span role="cell" className="num r trophy-hide-sm trophy-date">{earned && a.unlocktime > 0 ? fmtDate(a.unlocktime) : '—'}</span>
             <span role="cell" className="trophy-state">
               {earned ? (
                 type === 'platinum' && a.unlocktime > 0
                   ? <Stamp kind="platina" size={24} seed={a.name} />
-                  : <span className="trophy-mark" role="img" aria-label={`Obtido${a.unlocktime > 0 ? ` em ${fmtDate(a.unlocktime)}` : ''}`}><Check size={12} strokeWidth={3} aria-hidden="true" /></span>
+                  : <span className="trophy-mark" role="img" aria-label={a.unlocktime > 0 ? t(`game.list.${noun}.earnedOn`, { date: fmtDate(a.unlocktime) }) : t(`game.list.${noun}.earned`)}><Check size={12} strokeWidth={3} aria-hidden="true" /></span>
               ) : (
-                <span className="trophy-open" role="img" aria-label="Bloqueado" />
+                <span className="trophy-open" role="img" aria-label={t('game.list.locked')} />
               )}
             </span>
           </div>

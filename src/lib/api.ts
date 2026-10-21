@@ -1,4 +1,27 @@
+import type { CommunitySpace, Publication, PublicationKind, PublicationSummary } from '../types/community';
+import type {
+  GameNote,
+  GameNoteInput,
+  Plan,
+  PlanEntry,
+  PlanEntryInput,
+  PlanInput,
+  PlanMilestone,
+  PlanMilestoneInput,
+  PlanPhase,
+  PlanPhaseInput,
+  PlanRisk,
+  PlanRiskInput,
+  PlanSection,
+  PlanVacation,
+  PlanVacationInput,
+} from '../types/plan';
+import type { ApiErrorBody, ApiErrorCode } from '../../server/errorCodes';
+import type { RankingList } from '../../server/rankings/types';
+import { ApiError } from './apiError';
 import type { AchievementWithStatus, AutoCollections, Game, PatinaDb, Platform, UnlockItem } from '../types/steam';
+
+export { ApiError } from './apiError';
 
 const TOKEN_KEY = 'zenkuri-token';
 
@@ -13,20 +36,28 @@ export function setAuthToken(token: string | null) {
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken();
-  const res = await fetch(path, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch (cause) {
+    throw new ApiError('Could not reach the server', 0, 'network.unreachable', undefined, { cause });
+  }
   if (res.status === 401 && !path.startsWith('/api/auth/')) {
     setAuthToken(null);
     window.dispatchEvent(new Event('zenkuri-unauthorized'));
   }
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `API error ${res.status}`);
+  const json: unknown = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const body = (typeof json === 'object' && json !== null ? json : {}) as Partial<ApiErrorBody>;
+    throw new ApiError(body.error ?? `API error ${res.status}`, res.status, body.code, body.details);
+  }
   return json as T;
 }
 
@@ -68,11 +99,11 @@ export function authUpdateProfile(input: { displayName: string }) {
 
 export interface PublicCredential {
   platform: Platform;
-  /** identificador público vinculado (SteamID64, online ID da PSN ou username do RA) */
+  /** linked public identifier (SteamID64, PSN online ID or RA username) */
   identifier: string;
   verified: boolean;
   configured: boolean;
-  /** código de verificação, presente apenas enquanto o vínculo está pendente */
+  /** verification code, present only while the link is pending */
   code?: string;
   updatedAt: string;
 }
@@ -130,7 +161,7 @@ export interface UserLevel {
   breakdown: { platforms: LevelSlice[]; rarity: LevelSlice[]; bonusXp: number };
 }
 
-/** Nível da conta, calculado a partir de todas as conquistas desbloqueadas. */
+/** Account level, computed from every unlocked achievement. */
 export function fetchUserLevel() {
   return apiFetch<UserLevel>('/api/level');
 }
@@ -140,9 +171,9 @@ export type PlatformLevel =
   | { platform: 'psn'; status: 'ok'; level: number; progressPercent: number; tier: number; grade: 'Bronze' | 'Prata' | 'Ouro' | 'Platina'; trophies: { platinum: number; gold: number; silver: number; bronze: number } }
   | { platform: 'retroachievements'; status: 'ok'; points: number; softcorePoints: number; truePoints: number; rank: number | null; totalRanked: number | null }
   | { platform: Platform; status: 'unlinked' }
-  | { platform: Platform; status: 'error'; message: string };
+  | { platform: Platform; status: 'error'; message: string; code?: ApiErrorCode };
 
-/** Nível que cada plataforma mostra no próprio perfil, consultado ao vivo. */
+/** Level each platform shows on its own profile, queried live. */
 export function fetchPlatformLevels(fresh = false) {
   return apiFetch<{ items: PlatformLevel[] }>(`/api/level/platforms${fresh ? '?fresh=1' : ''}`).then((res) => res.items);
 }
@@ -163,7 +194,7 @@ export function importPlanning(record: Partial<PatinaDb>) {
   return apiFetch<PatinaDb>('/api/planning/import', { method: 'POST', body: JSON.stringify(record) });
 }
 
-/** Vincula uma conta de plataforma pelo identificador público e retorna o código de verificação. */
+/** Links a platform account by its public identifier and returns the verification code. */
 export function linkPlatformAccount(platform: Platform, identifier: string) {
   return apiFetch<{ ok: true; credential: PublicCredential }>(`/api/config/${platform}`, {
     method: 'POST',
@@ -171,7 +202,7 @@ export function linkPlatformAccount(platform: Platform, identifier: string) {
   });
 }
 
-/** Confere se o código de verificação já está na descrição do perfil. */
+/** Checks whether the verification code is already in the profile description. */
 export function verifyPlatformAccount(platform: Platform) {
   return apiFetch<{ ok: true; credential: PublicCredential }>(`/api/config/${platform}/verify`, { method: 'POST' });
 }
@@ -197,8 +228,10 @@ export interface PlatformSyncResult {
   achievementSets?: number;
   detailErrors?: number;
   lastDetailError?: string;
-  /** Mensagem amigável (ex.: key da Steam inválida) quando `ok` é false. */
+  /** English default message (e.g. rejected Steam key) when `ok` is false. */
   error?: string;
+  /** Stable code for `error`; render it through i18n instead of the message. */
+  code?: ApiErrorCode;
 }
 
 export function syncPlatform(platform: Platform) {
@@ -238,4 +271,141 @@ export function reorderBacklogApi(order: string[]) {
     method: 'POST',
     body: JSON.stringify({ order }),
   });
+}
+
+// ─── Personal plan ──────────────────────────────────────────────────────────
+
+const jsonBody = (value: unknown): RequestInit['body'] => JSON.stringify(value);
+
+export function fetchPlan() {
+  return apiFetch<Plan | null>('/api/plan');
+}
+
+export function createPlanApi(input: PlanInput = {}) {
+  return apiFetch<Plan>('/api/plan', { method: 'POST', body: jsonBody(input) });
+}
+
+export function updatePlanApi(patch: PlanInput) {
+  return apiFetch<Plan>('/api/plan', { method: 'PATCH', body: jsonBody(patch) });
+}
+
+export function createPlanPhaseApi(input: PlanPhaseInput) {
+  return apiFetch<Omit<PlanPhase, 'entries'>>('/api/plan/phases', { method: 'POST', body: jsonBody(input) });
+}
+
+export function updatePlanPhaseApi(id: number, patch: Partial<PlanPhaseInput>) {
+  return apiFetch<Omit<PlanPhase, 'entries'>>(`/api/plan/phases/${id}`, { method: 'PATCH', body: jsonBody(patch) });
+}
+
+export function deletePlanPhaseApi(id: number) {
+  return apiFetch<{ ok: true }>(`/api/plan/phases/${id}`, { method: 'DELETE' });
+}
+
+export function reorderPlanPhasesApi(ids: number[]) {
+  return apiFetch<Plan>('/api/plan/phases/reorder', { method: 'POST', body: jsonBody({ ids }) });
+}
+
+export function createPlanEntryApi(input: PlanEntryInput) {
+  return apiFetch<PlanEntry>('/api/plan/entries', { method: 'POST', body: jsonBody(input) });
+}
+
+export type PlanEntryPatchInput = Partial<Omit<PlanEntryInput, 'section'>>;
+
+export function updatePlanEntryApi(id: number, patch: PlanEntryPatchInput) {
+  return apiFetch<PlanEntry>(`/api/plan/entries/${id}`, { method: 'PATCH', body: jsonBody(patch) });
+}
+
+export function deletePlanEntryApi(id: number) {
+  return apiFetch<{ ok: true }>(`/api/plan/entries/${id}`, { method: 'DELETE' });
+}
+
+/** Reorders within a phase (`phaseId`) or a loose section. */
+export function reorderPlanEntriesApi(scope: { section: PlanSection; phaseId?: number }, ids: number[]) {
+  return apiFetch<Plan>('/api/plan/entries/reorder', { method: 'POST', body: jsonBody({ ...scope, ids }) });
+}
+
+export function createPlanMilestoneApi(input: PlanMilestoneInput) {
+  return apiFetch<PlanMilestone>('/api/plan/milestones', { method: 'POST', body: jsonBody(input) });
+}
+
+export function updatePlanMilestoneApi(id: number, patch: Partial<PlanMilestoneInput>) {
+  return apiFetch<PlanMilestone>(`/api/plan/milestones/${id}`, { method: 'PATCH', body: jsonBody(patch) });
+}
+
+export function deletePlanMilestoneApi(id: number) {
+  return apiFetch<{ ok: true }>(`/api/plan/milestones/${id}`, { method: 'DELETE' });
+}
+
+export function reorderPlanMilestonesApi(ids: number[]) {
+  return apiFetch<Plan>('/api/plan/milestones/reorder', { method: 'POST', body: jsonBody({ ids }) });
+}
+
+export function createPlanVacationApi(input: PlanVacationInput) {
+  return apiFetch<PlanVacation>('/api/plan/vacations', { method: 'POST', body: jsonBody(input) });
+}
+
+export function updatePlanVacationApi(id: number, patch: Partial<PlanVacationInput>) {
+  return apiFetch<PlanVacation>(`/api/plan/vacations/${id}`, { method: 'PATCH', body: jsonBody(patch) });
+}
+
+export function deletePlanVacationApi(id: number) {
+  return apiFetch<{ ok: true }>(`/api/plan/vacations/${id}`, { method: 'DELETE' });
+}
+
+export function reorderPlanVacationsApi(ids: number[]) {
+  return apiFetch<Plan>('/api/plan/vacations/reorder', { method: 'POST', body: jsonBody({ ids }) });
+}
+
+export function createPlanRiskApi(input: PlanRiskInput) {
+  return apiFetch<PlanRisk>('/api/plan/risks', { method: 'POST', body: jsonBody(input) });
+}
+
+export function updatePlanRiskApi(id: number, patch: Partial<PlanRiskInput>) {
+  return apiFetch<PlanRisk>(`/api/plan/risks/${id}`, { method: 'PATCH', body: jsonBody(patch) });
+}
+
+export function deletePlanRiskApi(id: number) {
+  return apiFetch<{ ok: true }>(`/api/plan/risks/${id}`, { method: 'DELETE' });
+}
+
+export function reorderPlanRisksApi(ids: number[]) {
+  return apiFetch<Plan>('/api/plan/risks/reorder', { method: 'POST', body: jsonBody({ ids }) });
+}
+
+// ─── Per-game notes ─────────────────────────────────────────────────────────
+
+export function fetchGameNotes() {
+  return apiFetch<{ notes: GameNote[] }>('/api/game-notes');
+}
+
+export function putGameNoteApi(gameId: number, input: GameNoteInput) {
+  return apiFetch<GameNote>(`/api/game-notes/${gameId}`, { method: 'PUT', body: jsonBody(input) });
+}
+
+export function deleteGameNoteApi(gameId: number) {
+  return apiFetch<{ ok: true }>(`/api/game-notes/${gameId}`, { method: 'DELETE' });
+}
+
+// ─── Community (read-only) ───────────────────────────────────────────
+
+export function fetchCommunitySpaces() {
+  return apiFetch<{ spaces: CommunitySpace[] }>('/api/community/spaces');
+}
+
+export function fetchPublications(kind?: PublicationKind) {
+  const query = kind ? `?kind=${kind}` : '';
+  return apiFetch<{ publications: PublicationSummary[] }>(`/api/community/publications${query}`);
+}
+
+export function fetchPublication<K extends PublicationKind>(space: string, kind: K, slug: string) {
+  return apiFetch<Publication<K>>(
+    `/api/community/publications/${encodeURIComponent(space)}/${kind}/${encodeURIComponent(slug)}`,
+  );
+}
+
+// ─── Automatic rankings ───────────────────────────────────────────────────
+
+/** Lists derived on the server from the user's library; the client joins them with `games` by `gameId`. */
+export function fetchAutoRankings() {
+  return apiFetch<{ lists: RankingList[] }>('/api/rankings');
 }

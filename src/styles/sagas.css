@@ -1,4 +1,4 @@
-/* Sagas: faixa compacta, fases como seções numeradas e tabela por jogo. */
+/* Sagas: compact banner, phases as numbered sections and a per-game table. */
 @layer components {
   .sg-banner { position: relative; display: flex; align-items: flex-end; min-height: 128px; padding: 1.25rem 1.5rem; overflow: hidden; border-radius: var(--radius-cover); background: var(--color-gray-900); color: #fff; isolation: isolate; }
   .sg-banner > img, .sg-banner > .sg-banner-fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; }
@@ -31,7 +31,7 @@
     .sg-status { grid-column: 3; align-items: stretch; text-align: left; }
   }
 
-  /* Cabeçalho de seção que quebra linha no celular: número fixo, ação abaixo do título. */
+  /* Section head that wraps on mobile: fixed number, action below the title. */
   .sh-wrap .section-num { flex-shrink: 0; white-space: nowrap; }
   @media (max-width: 767px) {
     .sh-wrap { flex-wrap: wrap; }

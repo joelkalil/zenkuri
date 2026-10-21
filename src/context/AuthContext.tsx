@@ -11,7 +11,7 @@ import {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  /** true enquanto valida a sessão persistida no primeiro carregamento */
+  /** true while the persisted session is validated on first load */
   checking: boolean;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, displayName?: string) => Promise<void>;

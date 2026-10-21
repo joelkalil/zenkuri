@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 
-/** Ancestral rolável mais próximo; cai no scrollingElement do documento. */
+/** Nearest scrollable ancestor; falls back to the document's scrollingElement. */
 export function findScrollParent(node: HTMLElement | null): HTMLElement {
   for (let el = node?.parentElement ?? null; el; el = el.parentElement) {
     const { overflowY } = getComputedStyle(el);
@@ -10,16 +10,16 @@ export function findScrollParent(node: HTMLElement | null): HTMLElement {
 }
 
 interface UseInfiniteScrollOptions {
-  /** Chamado quando o sentinela entra na área observada. */
+  /** Called when the sentinel enters the observed area. */
   onLoadMore: () => void;
-  /** Muda a cada lote carregado para reobservar o sentinela, caso ele ainda esteja visível. */
+  /** Changes with every loaded batch to re-observe the sentinel in case it is still visible. */
   rearmKey?: number;
   rootMargin?: string;
 }
 
 /**
- * Retorna um ref callback para um elemento sentinela. Quando ele se aproxima da
- * viewport, `onLoadMore` é chamado. O observer é desconectado ao desmontar.
+ * Returns a ref callback for a sentinel element. When it approaches the
+ * viewport, `onLoadMore` is called. The observer is disconnected on unmount.
  */
 export function useInfiniteScroll({ onLoadMore, rearmKey = 0, rootMargin = '800px 0px' }: UseInfiniteScrollOptions) {
   const onLoadMoreRef = useRef(onLoadMore);
@@ -41,7 +41,7 @@ export function useInfiniteScroll({ onLoadMore, rearmKey = 0, rootMargin = '800p
       observer.observe(node);
       return () => observer.disconnect();
     },
-    // rearmKey recria o observer para disparar novamente se o sentinela continuar visível.
+    // rearmKey recreates the observer so it fires again if the sentinel is still visible.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rootMargin, rearmKey],
   );

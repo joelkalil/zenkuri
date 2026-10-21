@@ -1,0 +1,88 @@
+import type { Shape } from '../../types';
+import type { hallPtBR } from './pt-BR';
+
+export const hallEn = {
+  title: 'Platinum Hall',
+  almanacLink: { short: 'Almanac', full: 'Almanac of the year' },
+  filtersLabel: 'Filter completions',
+  filters: { all: 'All', platinum: 'Platinums', perfect: '100%' },
+  kind: { platinum: 'Platinum', perfect: '100%' },
+  order: 'No. {order}',
+  posterLabel: '{name} — {kind}, {date}',
+  summary: {
+    completions: { one: 'completion', other: 'completions' },
+    platinums: { one: 'platinum', other: 'platinums' },
+    perfects: 'at 100%',
+    since: 'since {date}',
+  },
+  yearLabel: 'Completions in {year}',
+  empty: {
+    title: 'No completions recorded',
+    firstPlatinum: 'Your first platinum becomes stamp no. 1.',
+    firstPerfect: 'Your first 100% completion becomes stamp no. 1.',
+    link: 'See games that are almost there',
+  },
+  errors: {
+    load: 'Could not load the hall',
+    level: 'Could not load the level',
+  },
+  levelPanel: {
+    title: 'Zenkuri level',
+    progress: 'Progress to level {next}',
+    empty: 'Sync a platform to start earning XP.',
+    intoLevel: '{into} of {total} XP in this level. {remaining} to go for level {next}',
+    tierArrives: '; {tier} arrives at level {minLevel}',
+    stats: {
+      totalXp: 'Total XP',
+      achievements: 'Achievements',
+      rare: 'Rare (<10%)',
+      platinums: 'Platinums',
+    },
+    byPlatform: 'XP by platform',
+    byRarity: 'XP by rarity',
+    bonus: {
+      one: 'Includes {xp} bonus XP for {count} game at 100%.',
+      other: 'Includes {xp} bonus XP for {count} games at 100%.',
+    },
+    xpUnit: '{xp} XP',
+    rarity: {
+      mythic: 'Mythic',
+      ultra: 'Ultra rare',
+      rare: 'Rare',
+      uncommon: 'Uncommon',
+      common: 'Common',
+      trivial: 'Trivial',
+      unknown: 'No rarity',
+    },
+    platforms: {
+      title: 'On the platforms',
+      description: 'What each profile shows today, queried straight from Steam, PSN and RetroAchievements.',
+      refresh: 'Query again',
+      refreshing: 'Querying…',
+      failed: 'Could not query the platforms.',
+      unlinked: 'Account not linked.',
+      link: 'Link in Connections',
+      steam: {
+        level: 'Steam level',
+        progress: 'Progress to Steam level {next}',
+        summary: '{xp} XP · {remaining} to go for {next}',
+      },
+      psn: {
+        level: 'trophy level · {grade}',
+        progress: 'Progress to PSN level {next}',
+        toNext: '{percent} to {next}',
+        grades: { bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum' },
+        trophies: { platinum: 'Platinum', gold: 'Gold', silver: 'Silver', bronze: 'Bronze' },
+      },
+      ra: {
+        points: 'hardcore points',
+        rank: 'Rank',
+        noRank: 'No rank',
+        ofTotal: ' of {total}',
+        truePoints: 'True points',
+        softcore: 'Softcore',
+        top: 'Top',
+      },
+    },
+  },
+} satisfies Shape<typeof hallPtBR>;

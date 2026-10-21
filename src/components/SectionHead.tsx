@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 
 interface SectionHeadProps {
-  /** "01", "02"… exibido em mono antes do título ("01 · Agora") */
+  /** "01", "02"… shown in mono before the title ("01 · Now") */
   number: string;
   title: ReactNode;
-  /** texto auxiliar após o título */
+  /** helper text after the title */
   sub?: ReactNode;
-  /** ação à direita (link, botão, segmentado) */
+  /** right-aligned action (link, button, segmented control) */
   action?: ReactNode;
   className?: string;
 }

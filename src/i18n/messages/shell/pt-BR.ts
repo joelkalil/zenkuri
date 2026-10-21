@@ -1,0 +1,30 @@
+export const shellPtBR = {
+  skipLink: 'Ir para o conteúdo',
+  logo: {
+    tagline: '全クリ — zerar tudo',
+  },
+  sync: {
+    never: 'Nunca sincronizado',
+    syncing: 'Sincronizando…',
+    failed: 'Falha ao sincronizar',
+    failedWithReason: 'Falha ao sincronizar: {error}',
+    syncedAgo: 'Sincronizado {when}',
+    syncNow: 'Sincronizar agora',
+  },
+  profile: {
+    openMenu: 'Abrir menu do perfil',
+    title: 'Perfil',
+    fallbackName: 'Meu perfil',
+    fallbackUsername: 'local',
+    settings: 'Ajustes',
+    connections: 'Conexões',
+    tutorials: 'Tutoriais',
+    appearance: 'Aparência',
+    platforms: 'Plataformas',
+    connected: 'conectado',
+    notConfigured: 'não configurado',
+    recent: 'Recentes',
+    noRecent: 'Nenhum jogo nas últimas 2 semanas.',
+    logout: 'Sair da conta',
+  },
+};

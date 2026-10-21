@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LayoutGrid, List, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
+import { useI18n, useT, type ScopedT } from '../i18n';
 import { useLocalDb } from '../hooks/useLocalDb';
 import { findScrollParent, useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { LibraryCard } from '../components/LibraryCard';
@@ -17,29 +18,15 @@ type SortMode = 'completion' | 'playtime' | 'name' | 'backlog';
 type PlatformTab = 'all' | Platform;
 type LibraryLayout = 'list' | 'grid';
 
-const TABS: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: 'Todos' },
-  { key: 'inprogress', label: 'Em progresso' },
-  { key: 'completed', label: '100%' },
-  { key: 'platinum', label: 'Platinas' },
-  { key: 'notstarted', label: 'Não iniciados' },
-  { key: 'pinned', label: 'Fixados' },
-  { key: 'dropped', label: 'Abandonados' },
-];
+const TABS: FilterTab[] = ['all', 'inprogress', 'completed', 'platinum', 'notstarted', 'pinned', 'dropped'];
 
-const SORTS: { key: SortMode; label: string }[] = [
-  { key: 'name', label: 'Alfabética (A–Z)' },
-  { key: 'completion', label: 'Conclusão (maior primeiro)' },
-  { key: 'playtime', label: 'Tempo jogado' },
-  { key: 'backlog', label: 'Ordem da fila' },
-];
+const SORTS: SortMode[] = ['name', 'completion', 'playtime', 'backlog'];
 
-const PLATFORM_TABS: { key: PlatformTab; label: string }[] = [
-  { key: 'all', label: 'Todos' },
-  { key: 'steam', label: 'Steam' },
-  { key: 'psn', label: 'PlayStation' },
-  { key: 'retroachievements', label: 'RetroAchievements' },
-];
+const PLATFORM_TABS: PlatformTab[] = ['all', 'steam', 'psn', 'retroachievements'];
+
+function platformLabel(t: ScopedT<'library'>, key: PlatformTab): string {
+  return key === 'all' ? t('platforms.all') : PLATFORM_META[key].label;
+}
 
 const BATCH_SIZE = 48;
 const STORAGE_PREFIX = 'zk-lib-visible:';
@@ -64,21 +51,21 @@ function writeSavedView(key: string, view: SavedView) {
   try {
     sessionStorage.setItem(key, JSON.stringify(view));
   } catch {
-    /* armazenamento indisponível: segue sem restauração */
+    /* storage unavailable: carry on without restoring */
   }
 }
 
-const numberFormat = new Intl.NumberFormat('pt-BR');
-
 function parseFilter(value: string | null): FilterTab {
-  return TABS.find((tab) => tab.key === value)?.key ?? 'all';
+  return TABS.find((tab) => tab === value) ?? 'all';
 }
 
 function parsePlatform(value: string | null): PlatformTab {
-  return PLATFORM_TABS.find((tab) => tab.key === value)?.key ?? 'all';
+  return PLATFORM_TABS.find((tab) => tab === value) ?? 'all';
 }
 
 export default function Library() {
+  const t = useT('library');
+  const { formatNumber, plural } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const { gamesWithStats, loading, error, completionMap } = useSteam();
   const { db, toggleBacklog, togglePinned, createCollection, renameCollection, deleteCollection, setCollection } = useLocalDb();
@@ -90,13 +77,13 @@ export default function Library() {
   const pendingScrollRef = useRef<number | null>(restored?.scrollY ?? null);
   const listTopRef = useRef<HTMLDivElement>(null);
 
-  /* filtro, plataforma, visão e layout vêm da URL: o subnav (Jogos/Coleções) muda a rota sem remontar a página */
+  /* filter, platform, view and layout come from the URL: the subnav (Games/Collections) changes the route without remounting the page */
   const filter = parseFilter(searchParams.get('status'));
   const platform = parsePlatform(searchParams.get('platform'));
   const isCollections = searchParams.get('view') === 'collections';
   const layout: LibraryLayout = searchParams.get('layout') === 'grid' ? 'grid' : 'list';
 
-  /* qualquer mudança de busca, filtro, plataforma, ordem ou layout volta ao primeiro lote (sem rodar na montagem) */
+  /* any change to search, filter, platform, sort or layout goes back to the first batch (skipped on mount) */
   const resetKey = `${search}|${filter}|${platform}|${sort}|${layout}`;
   const lastResetKeyRef = useRef(resetKey);
   useEffect(() => {
@@ -108,8 +95,8 @@ export default function Library() {
     }
   }, [resetKey]);
 
-  /* guarda o scroll para voltar ao mesmo ponto depois de abrir um jogo.
-     useLayoutEffect: o cleanup roda no commit, antes de o scroll ser zerado pela página seguinte */
+  /* saves the scroll position to come back to the same spot after opening a game.
+     useLayoutEffect: the cleanup runs on commit, before the next page resets the scroll */
   useLayoutEffect(() => {
     const scroller = findScrollParent(listTopRef.current);
     const target: HTMLElement | Window = scroller === document.scrollingElement ? window : scroller;
@@ -119,7 +106,7 @@ export default function Library() {
     }
     const list = listTopRef.current;
     target.addEventListener('scroll', onScroll, { passive: true });
-    /* captura também no clique: a navegação pode ocorrer antes do próximo evento de scroll */
+    /* also capture on click: navigation may happen before the next scroll event */
     list?.addEventListener('click', onScroll, true);
     return () => {
       target.removeEventListener('scroll', onScroll);
@@ -173,7 +160,7 @@ export default function Library() {
     };
   }, [completionMap, db.pinned, db.dropped]);
 
-  /** Jogos após plataforma e busca: base das contagens das abas e da lista. */
+  /** Games after platform and search: basis for the tab counts and the list. */
   const scoped = useMemo(() => {
     let list = gamesWithStats;
     if (platform !== 'all') list = list.filter((g) => g.platform === platform);
@@ -185,7 +172,7 @@ export default function Library() {
   }, [gamesWithStats, platform, search]);
 
   const tabCounts = useMemo(
-    () => Object.fromEntries(TABS.map(({ key }) => [key, scoped.filter((g) => matchesStatus(g, key)).length])) as Record<FilterTab, number>,
+    () => Object.fromEntries(TABS.map((key) => [key, scoped.filter((g) => matchesStatus(g, key)).length])) as Record<FilterTab, number>,
     [scoped, matchesStatus],
   );
 
@@ -214,7 +201,7 @@ export default function Library() {
 
   const sentinelRef = useInfiniteScroll({ onLoadMore: loadMore, rearmKey: visibleCount });
 
-  /* restaura o scroll uma única vez, quando as linhas restauradas já estão no DOM */
+  /* restores the scroll exactly once, when the restored rows are already in the DOM */
   useLayoutEffect(() => {
     if (pendingScrollRef.current === null || pageItems.length === 0) return;
     findScrollParent(listTopRef.current).scrollTo({ top: pendingScrollRef.current });
@@ -233,16 +220,16 @@ export default function Library() {
     <div className="page biblioteca">
       <header className="lib-head">
         <h1 className="lib-title">
-          {isCollections ? 'Coleções' : 'Biblioteca'}
-          <small>{filtered.length === gamesWithStats.length ? `${numberFormat.format(gamesWithStats.length)} jogos` : `${numberFormat.format(filtered.length)} de ${numberFormat.format(gamesWithStats.length)} jogos`}</small>
+          {isCollections ? t('title.collections') : t('title.library')}
+          <small>{filtered.length === gamesWithStats.length ? plural('library.gamesCount', gamesWithStats.length) : plural('library.filteredCount', gamesWithStats.length, { shown: formatNumber(filtered.length) })}</small>
         </h1>
         <div className="lib-tools">
-          <label className="search-pill"><Search size={16} aria-hidden="true" /><span className="sr-only">Buscar na biblioteca</span>
-            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar na biblioteca…" />
+          <label className="search-pill"><Search size={16} aria-hidden="true" /><span className="sr-only">{t('search.label')}</span>
+            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('search.placeholder')} />
           </label>
           {!isCollections && (
-            <div className="segmented" role="group" aria-label="Visualização da biblioteca">
-              {([{ key: 'list', label: 'Lista', icon: List }, { key: 'grid', label: 'Grade', icon: LayoutGrid }] as const).map(({ key, label, icon: Icon }) => (
+            <div className="segmented" role="group" aria-label={t('layout.label')}>
+              {([{ key: 'list', label: t('layout.list'), icon: List }, { key: 'grid', label: t('layout.grid'), icon: LayoutGrid }] as const).map(({ key, label, icon: Icon }) => (
                 <button key={key} onClick={() => setLayoutAndUrl(key)} aria-pressed={layout === key} aria-label={label} title={label}>
                   <Icon size={16} aria-hidden="true" />
                 </button>
@@ -259,10 +246,10 @@ export default function Library() {
       </header>
 
       <div className="lib-tabs">
-        <div className="subtabs" role="group" aria-label="Filtrar por status">
-          {TABS.map(({ key, label }) => (
+        <div className="subtabs" role="group" aria-label={t('tabs.label')}>
+          {TABS.map((key) => (
             <button key={key} onClick={() => setFilterAndUrl(key)} className="subtab" aria-pressed={filter === key}>
-              {label}<span className="count">{numberFormat.format(tabCounts[key])}</span>
+              {t(`tabs.${key}`)}<span className="count">{formatNumber(tabCounts[key])}</span>
             </button>
           ))}
         </div>
@@ -270,14 +257,14 @@ export default function Library() {
 
       {activeFilters > 0 && (
         <div className="lib-filters">
-          <span>Filtros:</span>
+          <span>{t('activeFilters.label')}</span>
           {platform !== 'all' && <span className="active-filter">
-            <img src={PLATFORM_META[platform].logo} alt="" />{PLATFORM_TABS.find((item) => item.key === platform)?.label}
-            <button onClick={() => setPlatformAndUrl('all')} aria-label="Remover filtro de plataforma"><X size={12} /></button>
+            <img src={PLATFORM_META[platform].logo} alt="" />{platformLabel(t, platform)}
+            <button onClick={() => setPlatformAndUrl('all')} aria-label={t('activeFilters.removePlatform')}><X size={12} /></button>
           </span>}
           {sort !== 'name' && <span className="active-filter">
-            Ordem: {SORTS.find((item) => item.key === sort)?.label}
-            <button onClick={() => setSort('name')} aria-label="Voltar à ordem alfabética"><X size={12} /></button>
+            {t('activeFilters.sort', { sort: t(`sorts.${sort}`) })}
+            <button onClick={() => setSort('name')} aria-label={t('activeFilters.resetSort')}><X size={12} /></button>
           </span>}
         </div>
       )}
@@ -290,7 +277,7 @@ export default function Library() {
             {Array.from({ length: 14 }).map((_, i) => <SkeletonCard key={i} portrait />)}
           </div>
         ) : filtered.length === 0 && !isCollections ? (
-          <div className="gallery-empty"><p className="font-display text-lg font-bold text-gray-100">Nenhum jogo corresponde a este filtro.</p><p>Tente outro nome, plataforma ou status.</p><button className="btn btn-secondary" onClick={clearAll}>Limpar filtros</button></div>
+          <div className="gallery-empty"><p className="font-display text-lg font-bold text-gray-100">{t('empty.title')}</p><p>{t('empty.hint')}</p><button className="btn btn-secondary" onClick={clearAll}>{t('empty.clear')}</button></div>
         ) : isCollections ? (
           <CollectionsView
             games={filtered} completionMap={completionMap}
@@ -299,16 +286,16 @@ export default function Library() {
             onDelete={deleteCollection} onAssign={setCollection}
           />
         ) : layout === 'list' ? (
-          <div className="lib-table" role="table" aria-label="Jogos da biblioteca">
+          <div className="lib-table" role="table" aria-label={t('table.label')}>
             <div className="lib-head-row col-head" role="row">
               <span role="columnheader" className="r hide-sm">#</span>
-              <span role="columnheader"><span className="sr-only">Capa</span></span>
-              <span role="columnheader">Jogo</span>
-              <span role="columnheader" className="hide-sm hide-md">Plat.</span>
-              <span role="columnheader" className="r hide-sm">Troféus</span>
-              <span role="columnheader" className="hide-sm">Progresso</span>
-              <span role="columnheader" className="r hide-sm hide-md">Tempo</span>
-              <span role="columnheader"><span className="sr-only">Ações</span></span>
+              <span role="columnheader"><span className="sr-only">{t('table.cover')}</span></span>
+              <span role="columnheader">{t('table.game')}</span>
+              <span role="columnheader" className="hide-sm hide-md">{t('table.platform')}</span>
+              <span role="columnheader" className="r hide-sm">{t('table.trophies')}</span>
+              <span role="columnheader" className="hide-sm">{t('table.progress')}</span>
+              <span role="columnheader" className="r hide-sm hide-md">{t('table.time')}</span>
+              <span role="columnheader"><span className="sr-only">{t('table.actions')}</span></span>
             </div>
             {pageItems.map((g, index) => (
               <LibraryRow key={g.appid} game={g} rank={index + 1} completion={completionMap.get(g.appid) ?? null}
@@ -330,8 +317,8 @@ export default function Library() {
 
         {!isCollections && filtered.length > 0 && (
           <div className="lib-more">
-            <p role="status" aria-live="polite">Mostrando {numberFormat.format(pageItems.length)} de {numberFormat.format(filtered.length)} jogos</p>
-            {hasMore && <button className="btn btn-secondary" onClick={loadMore}>Carregar mais</button>}
+            <p role="status" aria-live="polite">{plural('library.more.showing', filtered.length, { shown: formatNumber(pageItems.length) })}</p>
+            {hasMore && <button className="btn btn-secondary" onClick={loadMore}>{t('more.loadMore')}</button>}
             {hasMore && <div ref={sentinelRef} aria-hidden="true" className="lib-sentinel" />}
           </div>
         )}
@@ -340,7 +327,7 @@ export default function Library() {
   );
 }
 
-/** Botão "Filtrar e ordenar" com painel recolhível — ordenação e plataforma. */
+/** "Filter and sort" button with a collapsible panel: sort order and platform. */
 function FilterSortMenu({ sort, onSort, platform, onPlatform, counts, activeCount, onClear }: {
   sort: SortMode;
   onSort: (sort: SortMode) => void;
@@ -350,6 +337,8 @@ function FilterSortMenu({ sort, onSort, platform, onPlatform, counts, activeCoun
   activeCount: number;
   onClear: () => void;
 }) {
+  const t = useT('library');
+  const { plural } = useI18n();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -376,31 +365,31 @@ function FilterSortMenu({ sort, onSort, platform, onPlatform, counts, activeCoun
   return (
     <div ref={wrapRef} className="tool-wrap">
       <button ref={triggerRef} className="tool-btn" aria-expanded={open} aria-controls="library-filter-panel" onClick={() => setOpen(!open)}>
-        <SlidersHorizontal size={16} aria-hidden="true" /><span className="tool-btn-label">Filtrar e ordenar</span>
-        {activeCount > 0 && <span className="tool-badge" aria-label={`${activeCount} ajustes ativos`}>{activeCount}</span>}
+        <SlidersHorizontal size={16} aria-hidden="true" /><span className="tool-btn-label">{t('menu.button')}</span>
+        {activeCount > 0 && <span className="tool-badge" aria-label={plural('library.menu.active', activeCount)}>{activeCount}</span>}
       </button>
-      {open && <div id="library-filter-panel" className="popover filter-panel" role="dialog" aria-label="Filtrar e ordenar">
+      {open && <div id="library-filter-panel" className="popover filter-panel" role="dialog" aria-label={t('menu.button')}>
         <header>
-          <h2>Filtrar e ordenar</h2>
-          <button className="link-btn" onClick={onClear} disabled={activeCount === 0}>Limpar tudo</button>
-          <button className="icon-btn" onClick={() => setOpen(false)} aria-label="Fechar"><X size={18} /></button>
+          <h2>{t('menu.button')}</h2>
+          <button className="link-btn" onClick={onClear} disabled={activeCount === 0}>{t('menu.clearAll')}</button>
+          <button className="icon-btn" onClick={() => setOpen(false)} aria-label={t('menu.close')}><X size={18} /></button>
         </header>
         <fieldset>
-          <legend>Ordenar</legend>
+          <legend>{t('menu.sortLegend')}</legend>
           {SORTS.map((item) => (
-            <label key={item.key} className="filter-option">
-              <input type="radio" name="library-sort" checked={sort === item.key} onChange={() => onSort(item.key)} />
-              {item.label}
+            <label key={item} className="filter-option">
+              <input type="radio" name="library-sort" checked={sort === item} onChange={() => onSort(item)} />
+              {t(`sorts.${item}`)}
             </label>
           ))}
         </fieldset>
         <fieldset>
-          <legend>Plataforma</legend>
+          <legend>{t('menu.platformLegend')}</legend>
           {PLATFORM_TABS.map((item) => (
-            <label key={item.key} className="filter-option">
-              <input type="radio" name="library-platform" checked={platform === item.key} onChange={() => onPlatform(item.key)} />
-              {item.key !== 'all' && <img src={PLATFORM_META[item.key].logo} alt="" />}
-              {item.label}<small>{counts[item.key]}</small>
+            <label key={item} className="filter-option">
+              <input type="radio" name="library-platform" checked={platform === item} onChange={() => onPlatform(item)} />
+              {item !== 'all' && <img src={PLATFORM_META[item].logo} alt="" />}
+              {platformLabel(t, item)}<small>{counts[item]}</small>
             </label>
           ))}
         </fieldset>

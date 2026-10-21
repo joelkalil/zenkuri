@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useI18n } from '../i18n';
+import { messageForCode, useErrorMessage } from '../i18n/useErrorMessage';
 import { fetchGames, getConfig, syncAllPlatforms } from '../lib/api';
+import { PLATFORM_META } from '../lib/platforms';
 import type { Game, Platform } from '../types/steam';
 
 export interface CompletionEntry {
@@ -30,6 +33,8 @@ const LAST_SYNC_KEY = 'zenkuri-last-sync';
 const SteamContext = createContext<SteamContextValue | null>(null);
 
 export function SteamProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useI18n();
+  const describeError = useErrorMessage();
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,11 +52,11 @@ export function SteamProvider({ children }: { children: React.ReactNode }) {
     try {
       setGames(await fetchGames());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load games');
+      setError(describeError(err, 'errors.context.loadGamesFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [describeError]);
 
   useEffect(() => {
     loadGames();
@@ -74,13 +79,21 @@ export function SteamProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     return syncAllPlatforms()
       .then((response) => {
-        // A requisição em si pode "dar certo" (200 OK) mesmo que uma
-        // plataforma tenha falhado por dentro (ex.: key da Steam inválida) —
-        // isso é o que ficava silencioso antes. `results[].ok` é a fonte de
-        // verdade por plataforma, não a resolução da promise.
+        // The request itself can succeed (200 OK) even when a platform failed
+        // inside (e.g. an invalid Steam key), which used to be silent.
+        // `results[].ok` is the per-platform source of truth, not the promise.
         const failed = response.results.filter((result) => !result.ok);
         if (failed.length > 0) {
-          setError(failed.map((result) => `${result.platform}: ${result.error ?? 'falha desconhecida'}`).join(' · '));
+          setError(
+            failed
+              .map((result) =>
+                t('errors.context.syncPlatformFailure', {
+                  platform: PLATFORM_META[result.platform].short,
+                  reason: messageForCode(t, result.code) ?? t('errors.context.syncUnknownFailure'),
+                }),
+              )
+              .join(t('errors.context.syncJoiner')),
+          );
         }
         const now = Date.now();
         localStorage.setItem(LAST_SYNC_KEY, String(now));
@@ -89,11 +102,11 @@ export function SteamProvider({ children }: { children: React.ReactNode }) {
         return failed.length === 0;
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to sync platforms');
+        setError(describeError(err, 'errors.context.syncFailed'));
         return false;
       })
       .finally(() => setScanning(false));
-  }, []);
+  }, [describeError, t]);
 
   const completionMap = useMemo(() => {
     const map = new Map<number, CompletionEntry>();

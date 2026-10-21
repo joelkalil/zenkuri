@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUserLevel } from '../hooks/useUserLevel';
+import { useI18n } from '../i18n';
 import { Logo } from './Logo';
 import { LevelChip } from './LevelBadge';
 import { SyncButton } from './SyncButton';
@@ -11,12 +12,13 @@ import { TabBar } from './TabBar';
 import { NAV_GROUPS, groupOf } from './nav';
 
 /*
- * Cabeçalho do shell: topbar de 56 px (marca, 3 grupos, sincronização, nível,
- * perfil) e subnav de 40 px com os itens do grupo ativo. No mobile a topbar
- * encolhe e a navegação vai para a TabBar inferior.
+ * Shell header: 56px topbar (brand, 4 groups, sync, level, profile) and a 40px
+ * subnav with the active group's items. On mobile the topbar shrinks and the
+ * navigation moves to the bottom TabBar.
  */
 export function TopNav() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const { level } = useUserLevel();
   const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -53,15 +55,15 @@ export function TopNav() {
       <header className="shell-head no-print">
         <div className="topbar">
           <div className="topbar-start">
-            <Link to="/" aria-label="Zenkuri — Hoje" className="brand-link">
+            <Link to="/" aria-label={t('nav.aria.home')} className="brand-link">
               <span className="hidden md:block"><Logo size={32} withWordmark /></span>
               <span className="md:hidden"><Logo size={28} withWordmark={false} /></span>
             </Link>
           </div>
-          <nav className="topbar-nav" aria-label="Navegação principal">
+          <nav className="topbar-nav" aria-label={t('nav.aria.main')}>
             {NAV_GROUPS.map((item) => (
               <NavLink key={item.id} to={item.to} className="nav-group" aria-current={item.id === activeGroup ? 'page' : undefined}>
-                {item.label}
+                {t(item.labelKey)}
               </NavLink>
             ))}
           </nav>
@@ -79,7 +81,7 @@ export function TopNav() {
                 ref={triggerRef}
                 type="button"
                 className="profile-trigger"
-                aria-label="Abrir menu do perfil"
+                aria-label={t('shell.profile.openMenu')}
                 aria-haspopup="true"
                 aria-expanded={profileOpen}
                 aria-controls="profile-panel"
@@ -97,12 +99,12 @@ export function TopNav() {
           </div>
         </div>
         {group && (
-          <nav className="subnav" aria-label="Seção">
+          <nav className="subnav" aria-label={t('nav.aria.section')}>
             {group.items.map((item) => {
               const active = item.isActive(location.pathname, location.search);
               return (
                 <Link key={item.to} to={item.to} className="subnav-link" aria-current={active ? 'page' : undefined}>
-                  {item.label}
+                  {t(item.labelKey)}
                 </Link>
               );
             })}

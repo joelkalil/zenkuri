@@ -1,49 +1,38 @@
 /*
- * Plano: o ano é a navegação. Linha editorial com a situação, a régua do ano
- * (YearStrip) escolhe a fase e a página mostra só essa fase ao lado da fila.
+ * Plan: the year is the navigation. An editorial line with the status, the year
+ * strip (YearStrip) picks the phase and the page shows only that phase next to the queue.
  */
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Check, ChevronDown, Gamepad2, ListPlus, ListChecks, TriangleAlert } from 'lucide-react';
+import { Check, ChevronDown, Gamepad2, ListPlus, ListChecks, Pencil, TriangleAlert } from 'lucide-react';
 import { GameCover } from '../components/GameCover';
 import { ProgressBar } from '../components/ProgressBar';
 import { SectionHead } from '../components/SectionHead';
 import { Stamp } from '../components/Stamp';
+import { PlanCreateForm } from '../components/plan/PlanCreateForm';
+import { PlanEditorView } from '../components/plan/PlanEditorView';
 import { Queue } from '../components/plan/Queue';
 import { YearStrip, type PhaseSummary } from '../components/plan/YearStrip';
 import { useSteam } from '../context/SteamContext';
+import { useI18n, useT } from '../i18n';
+import { useErrorMessage } from '../i18n/useErrorMessage';
 import { useLocalDb } from '../hooks/useLocalDb';
+import { usePlan } from '../hooks/usePlan';
+import { usePlanEditor } from '../hooks/usePlanEditor';
 import {
-  ACCEPT_AS_IS,
-  AFTER_PLAN,
-  FLAG_LABEL,
-  IF_TIME,
-  MILESTONES,
-  PHASES,
-  PLAN_BASELINE_AVG,
-  PLAN_PRINCIPLE,
-  PLAN_TARGET_AVG,
-  PLAN_WEEKLY_HOURS,
-  RECURRING,
-  RISKS,
-  VACATIONS,
+  type Plan as PlanData,
   type PlanEntry,
   type PlanKind,
-  type PlanLooseGame,
+  type PlanMilestone,
   type PlanPhase,
   type PlanRef,
-} from '../data/plan';
-import { daysBetween, formatDay, formatMinutes, isoDay, parseDay, relativeDays, todayStart } from '../lib/planDates';
+  type PlanVacation,
+} from '../types/plan';
+import { daysBetween, formatDay, formatDayLong, formatMinutes, isoDay, parseDay, planRange, relativeDays, todayStart } from '../lib/planDates';
+import '../styles/plano-editor.css';
 import type { Game } from '../types/steam';
 
-const FC_WEEKLY_HOURS = RECURRING.hours;
-
-const KIND_GROUP: { kind: PlanKind; title: string; hint: string }[] = [
-  { kind: 'foco', title: 'Foco', hint: 'Na ordem, um emendado no outro' },
-  { kind: 'platina', title: 'Platinas abertas', hint: 'Fechar o que já está começado' },
-  { kind: 'limpeza', title: 'Fechar', hint: 'Abertos com bom ganho por hora' },
-  { kind: 'colher', title: 'Colher', hint: 'Só até a meta indicada' },
-];
+const KIND_GROUPS: PlanKind[] = ['foco', 'platina', 'limpeza', 'colher'];
 
 function refKey(ref: PlanRef) {
   return `${ref.platform}:${ref.id}`;
@@ -67,8 +56,6 @@ function resolve(entry: PlanEntry, lookup: Map<string, Game>): ResolvedEntry {
   const target = entry.target ?? 100;
   return { entry, game, percent, target, done: game !== null && percent >= target };
 }
-
-const pct = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function Num({ children }: { children: ReactNode }) {
   return <span className="num font-medium text-gray-100">{children}</span>;
@@ -94,6 +81,7 @@ function ExternalCover({ entry }: { entry: PlanEntry }) {
 }
 
 function EntryStatus({ item, today }: { item: ResolvedEntry; today: Date }) {
+  const t = useT('plan');
   const { entry, game, percent, target, done } = item;
 
   if (!entry.ref) {
@@ -101,13 +89,13 @@ function EntryStatus({ item, today }: { item: ResolvedEntry; today: Date }) {
     const days = release ? daysBetween(today, parseDay(release)) : null;
     return (
       <span className="block text-sm sm:text-right">
-        <span className="block text-gray-300">{days === null ? 'Sem data' : days > 0 ? `Lança ${relativeDays(days)}` : 'Disponível'}</span>
-        <span className="block text-xs text-gray-500">{entry.external?.label ?? 'Fora da biblioteca'}</span>
+        <span className="block text-gray-300">{days === null ? t('view.external.noDate') : days > 0 ? t('view.external.releases', { when: relativeDays(days) }) : t('view.external.available')}</span>
+        <span className="block text-xs text-gray-500">{entry.external?.label ?? t('view.external.outsideLibrary')}</span>
       </span>
     );
   }
 
-  if (!game) return <span className="block text-sm text-gray-500 sm:text-right">Não sincronizado</span>;
+  if (!game) return <span className="block text-sm text-gray-500 sm:text-right">{t('view.notSynced')}</span>;
 
   if (done) {
     return (
@@ -115,7 +103,7 @@ function EntryStatus({ item, today }: { item: ResolvedEntry; today: Date }) {
         {target >= 100
           ? <Stamp kind="100" size={24} seed={entry.title} />
           : <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />}
-        Feito · <span className="num">{percent}%</span>
+        {t('view.done')} · <span className="num">{percent}%</span>
       </span>
     );
   }
@@ -123,7 +111,7 @@ function EntryStatus({ item, today }: { item: ResolvedEntry; today: Date }) {
   return (
     <span className="block">
       <span className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
-        <span className="text-gray-500">{target < 100 ? `meta ${target}%` : percent > 0 ? 'em andamento' : 'não iniciado'}</span>
+        <span className="text-gray-500">{target < 100 ? t('view.goal', { target }) : percent > 0 ? t('view.inProgress') : t('view.notStarted')}</span>
         <span className="num text-gray-300">{percent}%</span>
       </span>
       <ProgressBar percent={Math.min(100, Math.round((percent / target) * 100))} height="h-1.5" />
@@ -137,6 +125,8 @@ function EntryRow({ item, today, inQueue, onToggleQueue }: {
   inQueue: boolean;
   onToggleQueue: (() => void) | null;
 }) {
+  const t = useT('plan');
+  const { formatNumber } = useI18n();
   const { entry, game, done } = item;
   const cover = game ? <GameCover game={game} className="h-10 w-[4.5rem] rounded-md bg-gray-800" imgClassName="object-cover" /> : <ExternalCover entry={entry} />;
   const risky = entry.flags?.includes('risco');
@@ -154,11 +144,11 @@ function EntryRow({ item, today, inQueue, onToggleQueue }: {
           <span className="text-sm font-medium text-gray-100">{entry.title}</span>
         )}
         <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
-          <span className="num">~{entry.hours} h</span>
-          {otherFlags.map((flag) => <span key={flag}>· {FLAG_LABEL[flag]}</span>)}
+          {entry.hours !== null && <span className="num">{t('common.hours', { hours: formatNumber(entry.hours) })}</span>}
+          {otherFlags.map((flag) => <span key={flag}>· {t(`flag.${flag}`)}</span>)}
           {risky && (
             <span className="inline-flex items-center gap-1 text-zk-gold">
-              · <TriangleAlert className="h-3 w-3" aria-hidden="true" /> {FLAG_LABEL.risco}
+              · <TriangleAlert className="h-3 w-3" aria-hidden="true" /> {t('flag.risco')}
             </span>
           )}
         </p>
@@ -173,8 +163,8 @@ function EntryRow({ item, today, inQueue, onToggleQueue }: {
             type="button"
             onClick={onToggleQueue}
             aria-pressed={inQueue}
-            aria-label={inQueue ? `Tirar ${entry.title} da fila` : `Pôr ${entry.title} na fila`}
-            title={inQueue ? 'Na fila' : 'Pôr na fila'}
+            aria-label={inQueue ? t('view.queueRemoveAria', { title: entry.title }) : t('view.queueAddAria', { title: entry.title })}
+            title={inQueue ? t('view.inQueue') : t('view.addToQueue')}
             className={`grid h-10 w-10 place-items-center rounded transition-colors ${inQueue ? 'text-violet-400 hover:bg-gray-850' : 'text-gray-500 hover:bg-gray-850 hover:text-gray-100'}`}
           >
             {inQueue ? <ListChecks className="h-[18px] w-[18px]" aria-hidden="true" /> : <ListPlus className="h-[18px] w-[18px]" aria-hidden="true" />}
@@ -199,24 +189,25 @@ function Disclosure({ title, meta, children }: { title: string; meta?: string; c
   );
 }
 
-function LooseList({ title, hint, items, lookup }: { title: string; hint: string; items: PlanLooseGame[]; lookup: Map<string, Game> }) {
+function LooseList({ title, hint, items, lookup }: { title: string; hint: string; items: PlanEntry[]; lookup: Map<string, Game> }) {
+  const { formatNumber } = useI18n();
   return (
     <div>
       <h3 className="font-display text-sm font-bold text-gray-200">{title}</h3>
       <p className="mt-0.5 text-sm text-gray-500">{hint}</p>
       <ul className="mt-3 space-y-3">
         {items.map((item) => {
-          const game = lookup.get(refKey(item.ref)) ?? null;
+          const game = item.ref ? lookup.get(refKey(item.ref)) ?? null : null;
           const percent = game?.completion?.percent ?? 0;
           return (
-            <li key={refKey(item.ref)} className="flex items-baseline gap-3 text-sm">
+            <li key={item.id} className="flex items-baseline gap-3 text-sm">
               <span className="min-w-0 flex-1">
                 {game ? (
                   <Link to={`/game/${game.appid}`} className="font-medium text-gray-200 hover:text-violet-400">{item.title}</Link>
                 ) : (
                   <span className="font-medium text-gray-200">{item.title}</span>
                 )}
-                <span className="block text-xs text-gray-500">{item.hours ? `~${item.hours} h · ` : ''}{item.reason}</span>
+                <span className="block text-xs text-gray-500">{item.hours ? `~${formatNumber(item.hours)} h · ` : ''}{item.note}</span>
               </span>
               <span className={`num shrink-0 text-xs ${percent >= 100 ? 'text-zk-complete' : 'text-gray-500'}`}>{game ? `${percent}%` : '—'}</span>
             </li>
@@ -228,14 +219,15 @@ function LooseList({ title, hint, items, lookup }: { title: string; hint: string
 }
 
 function RecentPlay({ games }: { games: Game[] }) {
+  const t = useT('plan');
   const minutes = games.reduce((total, game) => total + (game.playtime_2weeks ?? 0), 0);
   return (
-    <section aria-label="Últimos 14 dias">
-      <SectionHead className="sh-wrap" number="04" title="Últimos 14 dias" />
+    <section aria-label={t('recent.title')}>
+      <SectionHead className="sh-wrap" number="04" title={t('recent.title')} />
       <p className="lede">
         {games.length === 0
-          ? 'A Steam não registrou tempo de jogo nesse período.'
-          : <><Num>{formatMinutes(minutes)}</Num> em {games.length} {games.length === 1 ? 'jogo' : 'jogos'}, segundo a Steam</>}
+          ? t('recent.none')
+          : <><Num>{formatMinutes(minutes)}</Num> {t.plural('recent.inGames', games.length)}</>}
       </p>
       {games.length > 0 && (
         <ul className="mt-3 border-t border-gray-800">
@@ -254,31 +246,33 @@ function RecentPlay({ games }: { games: Game[] }) {
   );
 }
 
-function Agenda({ today }: { today: Date }) {
+function Agenda({ today, milestones, vacations }: { today: Date; milestones: PlanMilestone[]; vacations: PlanVacation[] }) {
+  const t = useT('plan');
   const todayIso = isoDay(today);
   const items = [
-    ...MILESTONES.map((milestone) => ({
-      key: `m-${milestone.title}`,
+    ...milestones.map((milestone) => ({
+      key: `m-${milestone.id}`,
       date: milestone.date,
       dateLabel: milestone.date ? formatDay(milestone.date, today) : milestone.label,
       title: milestone.title,
       note: milestone.note,
       tone: 'bg-zk-gold',
     })),
-    ...VACATIONS.map((vacation) => ({
+    ...vacations.map((vacation) => ({
       key: `v-${vacation.id}`,
       date: vacation.start,
       dateLabel: formatDay(vacation.start, today),
-      title: `Férias ${vacation.id} · ${vacation.days} dias`,
-      note: `${vacation.purpose}. ${vacation.note}`,
+      title: t.plural('agenda.vacationTitle', vacation.days, { slug: vacation.slug }),
+      note: [vacation.purpose, vacation.note].filter(Boolean).join('. '),
       tone: 'bg-zk-complete',
     })),
   ].sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'));
 
   return (
-    <section aria-label="Agenda">
-      <SectionHead className="sh-wrap" number="05" title="Agenda" />
-      <p className="lede">Lançamentos que fecham blocos e as férias de 2027.</p>
+    <section aria-label={t('agenda.title')}>
+      <SectionHead className="sh-wrap" number="05" title={t('agenda.title')} />
+      <p className="lede">{t('agenda.lede')}</p>
+      {items.length === 0 && <p className="pe-empty mt-3">{t('agenda.empty')}</p>}
       <ol className="mt-3 border-t border-gray-800">
         {items.map((item) => {
           const days = item.date ? daysBetween(today, parseDay(item.date)) : null;
@@ -292,7 +286,7 @@ function Agenda({ today }: { today: Date }) {
                   <span className="min-w-0 flex-1">{item.title}</span>
                   {days !== null && days >= 0 && <span className="num shrink-0 text-xs font-normal text-gray-500">{relativeDays(days)}</span>}
                 </span>
-                <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{item.date ? item.note : `${item.dateLabel}. ${item.note}`}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{item.date ? item.note : [item.dateLabel, item.note].filter(Boolean).join('. ')}</span>
               </span>
             </li>
           );
@@ -302,7 +296,13 @@ function Agenda({ today }: { today: Date }) {
   );
 }
 
-export default function Plan() {
+function PlanView({ plan, onEdit }: { plan: PlanData; onEdit: () => void }) {
+  const t = useT('plan');
+  const { formatNumber } = useI18n();
+  const pct = (value: number) => formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const { phases: PHASES, milestones: MILESTONES, vacations: VACATIONS, risks: RISKS } = plan;
+  const recurring = plan.recurring;
+  const FC_WEEKLY_HOURS = recurring.reduce((sum, entry) => sum + (entry.hours ?? 0), 0);
   const { games, loading, completionMap } = useSteam();
   const { db, toggleBacklog, reorderBacklog, setSchedule } = useLocalDb();
   const [params, setParams] = useSearchParams();
@@ -319,7 +319,7 @@ export default function Plan() {
 
   const phases = useMemo(
     () => PHASES.map((phase) => ({ phase, items: phase.entries.map((entry) => resolve(entry, lookup)) })),
-    [lookup],
+    [PHASES, lookup],
   );
 
   const steamAvg = useMemo(() => {
@@ -339,43 +339,45 @@ export default function Plan() {
   );
 
   const current = PHASES.find((phase) => phase.start <= todayIso && todayIso <= phase.end) ?? null;
-  const fallback = todayIso < PHASES[0].start ? PHASES[0] : PHASES[PHASES.length - 1];
+  const fallback = PHASES.length === 0 ? null : todayIso < PHASES[0].start ? PHASES[0] : PHASES[PHASES.length - 1];
   const requested = params.get('fase');
-  const selected = phases.find(({ phase }) => phase.id === requested) ?? phases.find(({ phase }) => phase.id === (current ?? fallback).id)!;
+  const selected = phases.find(({ phase }) => phase.slug === requested) ?? phases.find(({ phase }) => phase.slug === (current ?? fallback)?.slug) ?? phases[0] ?? null;
   const nextMilestone = MILESTONES.find((milestone) => milestone.date && milestone.date >= todayIso) ?? null;
 
   const tracked = phases.flatMap(({ items }) => items).filter((item) => item.entry.ref);
   const doneCount = tracked.filter((item) => item.done).length;
-  const fc = resolve(RECURRING, lookup);
+  const recurringItems = recurring.map((entry) => resolve(entry, lookup));
   const inQueue = new Set(db.backlog);
 
   function selectPhase(id: string) {
     setParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (id === current?.id) next.delete('fase');
+      if (id === current?.slug) next.delete('fase');
       else next.set('fase', id);
       return next;
     }, { replace: true });
   }
 
-  const { phase, items } = selected;
-  const active = phase.id === current?.id;
-  const past = phase.end < todayIso;
-  const planned = items.reduce((sum, item) => sum + item.entry.hours, 0) + Math.round(phaseWeeks(phase) * FC_WEEKLY_HOURS);
+  const phase = selected?.phase ?? null;
+  const items = selected?.items ?? [];
+  const active = phase !== null && phase.slug === current?.slug;
+  const past = phase !== null && phase.end < todayIso;
+  const planned = phase === null ? 0 : items.reduce((sum, item) => sum + (item.entry.hours ?? 0), 0) + Math.round(phaseWeeks(phase) * FC_WEEKLY_HOURS);
   const phaseDone = items.filter((item) => item.done).length;
-  const groups = KIND_GROUP
-    .map((group) => ({ ...group, items: items.filter((item) => item.entry.kind === group.kind) }))
+  const range = planRange(PHASES, VACATIONS, MILESTONES.map((milestone) => milestone.date));
+  const groups = KIND_GROUPS
+    .map((kind) => ({ kind, items: items.filter((item) => item.entry.kind === kind) }))
     .filter((group) => group.items.length > 0);
 
   const queueToggle = (item: ResolvedEntry) => (item.game ? () => toggleBacklog(String(item.game!.appid)) : null);
 
   const summaries: Record<string, PhaseSummary> = Object.fromEntries(
     phases.map(({ phase: item, items: entries }) => [
-      item.id,
+      item.slug,
       {
         done: entries.filter((entry) => entry.done).length,
         total: entries.length,
-        hours: entries.reduce((sum, entry) => sum + entry.entry.hours, 0) + Math.round(phaseWeeks(item) * FC_WEEKLY_HOURS),
+        hours: entries.reduce((sum, entry) => sum + (entry.entry.hours ?? 0), 0) + Math.round(phaseWeeks(item) * FC_WEEKLY_HOURS),
       },
     ]),
   );
@@ -386,46 +388,58 @@ export default function Plan() {
     <div className="page">
       <header className="page-head">
         <div>
-          <span className="page-eyebrow">Outubro de 2026 → outubro de 2027</span>
-          <h1 className="page-title">Plano</h1>
+          <span className="page-eyebrow">{PHASES.length === 0 && VACATIONS.length === 0 ? t('view.noDates') : <>{formatDayLong(range.start)} → {formatDayLong(range.end)}</>}</span>
+          <h1 className="page-title">{plan.title || t('pageTitle')}</h1>
           <p className="page-desc">
-            ~{PLAN_WEEKLY_HOURS} h por semana: FF VII antes do Revelation, Witcher antes do Songs of the Past,
-            Kingdom Hearts antes do KH IV e a limpeza da Steam no meio.
+            {t('view.perWeek', { hours: formatNumber(plan.weeklyHours) })}
           </p>
+        </div>
+        <div className="page-actions">
+          <button type="button" className="btn btn-secondary" onClick={onEdit}>
+            <Pencil className="h-4 w-4" aria-hidden="true" /> {t('view.edit')}
+          </button>
         </div>
       </header>
 
-      <p className="lede" aria-label="Situação do plano">
+      <p className="lede" aria-label={t('view.situationAria')}>
         {current
-          ? <><strong>Fase {current.id}</strong> (até <span className="num">{formatDay(current.end, today)}</span>)</>
-          : 'Fora da janela do plano'}
-        {' · '}<Num>{doneCount} de {tracked.length}</Num> etapas
-        {' · '}média Steam <Num>{steamAvg !== null ? `${pct(steamAvg)}%` : '—'}</Num> (meta <span className="num">{pct(PLAN_TARGET_AVG)}%</span>, começou em <span className="num">{pct(PLAN_BASELINE_AVG)}%</span>)
+          ? <><strong>{t('view.currentPhase', { slug: current.slug })}</strong> ({t('view.until')} <span className="num">{formatDay(current.end, today)}</span>)</>
+          : t('view.outsideWindow')}
+        {' · '}<Num>{t('view.ofTotal', { done: doneCount, total: tracked.length })}</Num> {t.plural('view.stepWord', tracked.length)}
+        {' · '}{t('view.steamAvg')} <Num>{steamAvg !== null ? `${pct(steamAvg)}%` : '—'}</Num> {plan.targetAvg !== null && <>({t('view.goalLabel')} <span className="num">{pct(plan.targetAvg)}%</span>{plan.baselineAvg !== null && <>, {t('view.startedAt')} <span className="num">{pct(plan.baselineAvg)}%</span></>})</>}
         {nextMilestone && daysToMilestone !== null && <>{' · '}{nextMilestone.title} {relativeDays(daysToMilestone)}</>}
       </p>
 
-      <section aria-label="O ano">
-        <SectionHead className="sh-wrap" number="01" title="O ano" sub="Escolha uma fase para ver a lista dela" />
+      {phase === null && (
+        <div className="empty-state mt-8">
+          <strong>{t('view.noPhasesTitle')}</strong>
+          <span>{t('view.noPhasesBody')}</span>
+          <button type="button" className="btn btn-primary" onClick={onEdit}>{t('view.addPhases')}</button>
+        </div>
+      )}
+
+      {phase !== null && <section aria-label={t('view.yearAria')}>
+        <SectionHead className="sh-wrap" number="01" title={t('view.yearTitle')} sub={t('view.yearSub')} />
         <YearStrip
           phases={PHASES}
           milestones={MILESTONES}
           vacations={VACATIONS}
           summaries={summaries}
           today={today}
-          currentId={current?.id ?? null}
-          selectedId={phase.id}
+          currentId={current?.slug ?? null}
+          selectedId={phase.slug}
           onSelect={selectPhase}
         />
-      </section>
+      </section>}
 
       <div className="grid gap-x-12 gap-y-14 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="min-w-0">
-          <section aria-labelledby="phase-title" aria-live="polite">
+          {phase !== null && <section aria-labelledby="phase-title" aria-live="polite">
             <SectionHead className="sh-wrap"
               number="02"
-              title={<span id="phase-title">Fase {phase.id}</span>}
-              sub={<>{formatDay(phase.start, today)} → {formatDay(phase.end, today)}{active && ' · agora'}{past && ' · encerrada'}{phase.floating && ' · datas móveis'}</>}
-              action={<span className="num text-xs text-gray-500">{phaseDone} de {items.length} feitos · ~{planned} h de ~{phase.capacity} h</span>}
+              title={<span id="phase-title">{t('view.phaseTitle', { slug: phase.slug })}</span>}
+              sub={<>{formatDay(phase.start, today)} → {formatDay(phase.end, today)}{active && ` · ${t('view.phaseNow')}`}{past && ` · ${t('view.phaseEnded')}`}{phase.floating && ` · ${t('view.phaseFloating')}`}</>}
+              action={<span className="num text-xs text-gray-500">{t('view.phaseProgress', { done: phaseDone, total: items.length, planned: formatNumber(planned), capacity: formatNumber(phase.capacity) })}</span>}
             />
             <h3 className="max-w-2xl font-display text-xl font-bold text-gray-100 [text-wrap:balance]">{phase.title}</h3>
             <p className="lede mt-2 max-w-2xl">{phase.summary}</p>
@@ -443,16 +457,16 @@ export default function Plan() {
               groups.map((group) => (
                 <div key={group.kind} className="mt-9">
                   <h3 className="flex flex-wrap items-baseline gap-x-3 font-display text-sm font-bold text-gray-200">
-                    {group.title}
+                    {t(`view.groups.${group.kind}.title`)}
                     <span className="num text-xs font-normal text-gray-500">
                       {group.items.filter((item) => item.done).length}/{group.items.length}
                     </span>
-                    <span className="text-xs font-normal text-gray-500">{group.hint}</span>
+                    <span className="text-xs font-normal text-gray-500">{t(`view.groups.${group.kind}.hint`)}</span>
                   </h3>
                   <ol className="mt-2 border-t border-gray-800">
                     {group.items.map((item, index) => (
                       <EntryRow
-                        key={`${phase.id}-${group.kind}-${index}`}
+                        key={`${phase.slug}-${group.kind}-${index}`}
                         item={item}
                         today={today}
                         inQueue={item.game ? inQueue.has(String(item.game.appid)) : false}
@@ -464,53 +478,57 @@ export default function Plan() {
               ))
             )}
 
-            <div className="mt-9">
-              <h3 className="flex flex-wrap items-baseline gap-x-3 font-display text-sm font-bold text-gray-200">
-                Toda semana
-                <span className="text-xs font-normal text-gray-500">Fora das fases, {FC_WEEKLY_HOURS} h por semana</span>
-              </h3>
-              <ol className="mt-2 border-t border-gray-800">
-                <EntryRow
-                  item={fc}
-                  today={today}
-                  inQueue={fc.game ? inQueue.has(String(fc.game.appid)) : false}
-                  onToggleQueue={queueToggle(fc)}
-                />
-              </ol>
-            </div>
-          </section>
+            {recurringItems.length > 0 && (
+              <div className="mt-9">
+                <h3 className="flex flex-wrap items-baseline gap-x-3 font-display text-sm font-bold text-gray-200">
+                  {t('view.recurringTitle')}
+                  <span className="text-xs font-normal text-gray-500">{t('view.recurringHint', { hours: formatNumber(FC_WEEKLY_HOURS) })}</span>
+                </h3>
+                <ol className="mt-2 border-t border-gray-800">
+                  {recurringItems.map((item) => (
+                    <EntryRow
+                      key={item.entry.id}
+                      item={item}
+                      today={today}
+                      inQueue={item.game ? inQueue.has(String(item.game.appid)) : false}
+                      onToggleQueue={queueToggle(item)}
+                    />
+                  ))}
+                </ol>
+              </div>
+            )}
+          </section>}
 
           <div className="mt-12 border-b border-gray-800">
-            <Disclosure title="Fora do plano" meta={`${AFTER_PLAN.length + ACCEPT_AS_IS.length + IF_TIME.length} jogos`}>
+            <Disclosure title={t('view.outsideTitle')} meta={t.plural('gameCount', plan.afterPlan.length + plan.acceptAsIs.length + plan.ifTime.length)}>
               <div className="grid gap-10 md:grid-cols-3">
-                <LooseList title="Depois de nov/2027" hint="Fecháveis que não couberam. Puxe nesta ordem se o plano adiantar." items={AFTER_PLAN} lookup={lookup} />
-                <LooseList title="Aceitar como estão" hint="O custo não paga: online morto, skill no teto ou grind eterno." items={ACCEPT_AS_IS} lookup={lookup} />
-                <LooseList title="Só se sobrar" hint="PSN e RetroAchievements fora da rota principal." items={IF_TIME} lookup={lookup} />
+                <LooseList title={t('view.afterTitle')} hint={t('view.afterHint')} items={plan.afterPlan} lookup={lookup} />
+                <LooseList title={t('view.acceptTitle')} hint={t('view.acceptHint')} items={plan.acceptAsIs} lookup={lookup} />
+                <LooseList title={t('view.ifTimeTitle')} hint={t('view.ifTimeHint')} items={plan.ifTime} lookup={lookup} />
               </div>
             </Disclosure>
-            <Disclosure title="Riscos" meta={`${RISKS.length}`}>
+            <Disclosure title={t('view.risksTitle')} meta={`${RISKS.length}`}>
               <dl className="grid gap-x-10 gap-y-5 md:grid-cols-2">
                 {RISKS.map((item) => (
-                  <div key={item.risk}>
+                  <div key={item.id}>
                     <dt className="text-sm font-medium text-gray-200">{item.risk}</dt>
                     <dd className="mt-1 text-sm leading-relaxed text-gray-500">{item.action}</dd>
                   </div>
                 ))}
               </dl>
             </Disclosure>
-            <Disclosure title="Como o plano funciona">
+            <Disclosure title={t('view.howTitle')}>
               <div className="max-w-prose space-y-3 text-[0.9375rem] leading-relaxed text-gray-400">
-                <p>{PLAN_PRINCIPLE}</p>
+                {plan.principle && <p>{plan.principle}</p>}
                 <p>
-                  Capacidade de {PLAN_WEEKLY_HOURS} h por semana, mais 6 h por feriado em dia útil e por dia útil de férias.
-                  Horas por jogo são estimativas (±30%) de completionist, ajustadas pelo que falta em cada lista.
+                  {t('view.capacityNote', { hours: formatNumber(plan.weeklyHours) })}
                 </p>
               </div>
             </Disclosure>
           </div>
         </div>
 
-        <aside className="space-y-12" aria-label="Fila e agenda">
+        <aside className="space-y-12" aria-label={t('view.sideAria')}>
           <Queue
             games={queueGames}
             order={db.backlog}
@@ -522,9 +540,74 @@ export default function Plan() {
             onSetMonth={setSchedule}
           />
           <RecentPlay games={recentGames} />
-          <Agenda today={today} />
+          <Agenda today={today} milestones={MILESTONES} vacations={VACATIONS} />
         </aside>
       </div>
     </div>
   );
+}
+
+function PlanEditing({ plan, setPlan, onDone }: { plan: PlanData; setPlan: Dispatch<SetStateAction<PlanData | null>>; onDone: () => void }) {
+  const t = useT('plan');
+  const describe = useErrorMessage();
+  const editor = usePlanEditor(plan, setPlan);
+  return (
+    <div className="page">
+      <header className="page-head">
+        <div>
+          <span className="page-eyebrow">{t('editor.eyebrow')}</span>
+          <h1 className="page-title">{plan.title || t('pageTitle')}</h1>
+          <p className="page-desc">{t('editor.desc')}</p>
+        </div>
+        <div className="page-actions">
+          <button type="button" className="btn btn-primary" onClick={onDone}>{t('editor.done')}</button>
+        </div>
+      </header>
+      <div className="pe-bar" role="status" aria-live="polite">
+        <span className="pe-bar-status">{editor.pending > 0 ? t('editor.saving') : t('editor.saved')}</span>
+      </div>
+      {editor.error !== null && (
+        <div className="pe-bar-error" role="alert">
+          <span>{t('editor.restored', { error: describe(editor.error) })}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={editor.dismissError}>{t('editor.dismiss')}</button>
+        </div>
+      )}
+      <PlanEditorView plan={plan} editor={editor} />
+    </div>
+  );
+}
+
+export default function Plan() {
+  const t = useT('plan');
+  const describe = useErrorMessage();
+  const { plan, loading, error, setPlan, reload } = usePlan();
+  const [editing, setEditing] = useState(false);
+
+  if (loading && !plan) return <div className="page" aria-busy="true"><h1 className="page-title">{t('pageTitle')}</h1></div>;
+  if (error !== null && !plan) {
+    return (
+      <div className="page">
+        <h1 className="page-title">{t('pageTitle')}</h1>
+        <p className="lede">{describe(error)}</p>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={reload}>{t('page.retry')}</button>
+      </div>
+    );
+  }
+  if (!plan) {
+    return (
+      <div className="page">
+        <header className="page-head">
+          <div>
+            <span className="page-eyebrow">{t('page.eyebrow')}</span>
+            <h1 className="page-title">{t('pageTitle')}</h1>
+          </div>
+        </header>
+        <div className="mt-8">
+          <PlanCreateForm onCreated={(created) => { setPlan(created); setEditing(true); }} />
+        </div>
+      </div>
+    );
+  }
+  if (editing) return <PlanEditing plan={plan} setPlan={setPlan} onDone={() => setEditing(false)} />;
+  return <PlanView plan={plan} onEdit={() => setEditing(true)} />;
 }
