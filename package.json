@@ -10,7 +10,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "media:backfill": "tsx server/scripts/mediaBackfill.ts",
+    "meta:backfill": "tsx server/scripts/storeMetaBackfill.ts",
     "test:level": "tsx server/levelMath.test.ts",
+    "test:collections": "tsx server/collections/collections.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

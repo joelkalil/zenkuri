@@ -4,9 +4,12 @@ import { ArrowLeft, Check, ChevronRight, FolderInput, Pencil, Plus, Trash2, X } 
 import { GameCover } from './GameCover';
 import { LibraryCard } from './LibraryCard';
 import { LibraryGameRail } from './LibraryGameRail';
+import { AutoCollectionsSection } from './AutoCollectionsSection';
+import { useAutoCollections } from '../hooks/useAutoCollections';
 import type { Game, GameCollection } from '../types/steam';
 
 type Completion = { percent: number; unlocked: number; total: number };
+type CollectionsSection = 'mine' | 'franchises' | 'companies';
 
 interface CollectionsViewProps {
   games: Game[];
@@ -32,6 +35,8 @@ export function CollectionsView({ games, completionMap, collections, collectionO
   const [editName, setEditName] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [section, setSection] = useState<CollectionsSection>('mine');
+  const auto = useAutoCollections();
 
   useEffect(() => {
     if (!contextMenu) return undefined;
@@ -89,7 +94,7 @@ export function CollectionsView({ games, completionMap, collections, collectionO
   const selectedCollection = collections.find((collection) => collection.id === selectedId);
   const selectedGames = selectedCollection ? byCollection.get(selectedCollection.id) ?? [] : [];
 
-  return (
+  const manualView = (
     <div className="lib-collections">
       {showGameRail && <LibraryGameRail games={games} collections={collections} collectionOf={collectionOf} onAssign={onAssign} />}
 
@@ -176,6 +181,33 @@ export function CollectionsView({ games, completionMap, collections, collectionO
           </div>
           {collectionOf[String(contextMenu.game.appid)] && <button role="menuitem" className="danger" onClick={() => { onAssign(String(contextMenu.game.appid), null); setContextMenu(null); }}><X className="h-3.5 w-3.5" aria-hidden="true" /> Remover da coleção</button>}
         </div>
+      )}
+    </div>
+  );
+
+  const sections: { key: CollectionsSection; label: string; count: number }[] = [
+    { key: 'mine', label: 'Minhas', count: collections.length },
+    { key: 'franchises', label: 'Franquias', count: auto.data.franchises.length },
+    { key: 'companies', label: 'Empresas', count: auto.data.companies.length },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="subtabs border-b border-gray-800" role="group" aria-label="Tipo de coleção">
+        {sections.map(({ key, label, count }) => (
+          <button key={key} onClick={() => setSection(key)} className="subtab" aria-pressed={section === key}>
+            {label}<span className="count">{count}</span>
+          </button>
+        ))}
+      </div>
+      {section === 'mine' && manualView}
+      {section === 'franchises' && (
+        <AutoCollectionsSection number="02" title="Franquias" kind="franchise" collections={auto.data.franchises}
+          games={games} completionMap={completionMap} loading={auto.loading} error={auto.error} />
+      )}
+      {section === 'companies' && (
+        <AutoCollectionsSection number="03" title="Empresas" kind="company" collections={auto.data.companies}
+          games={games} completionMap={completionMap} loading={auto.loading} error={auto.error} />
       )}
     </div>
   );

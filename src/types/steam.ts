@@ -66,6 +66,33 @@ export interface GameCollection {
   name: string;
 }
 
+export type AutoCollectionKind = 'franchise' | 'company';
+export type AutoCollectionRole = 'dev' | 'pub' | 'both';
+
+export interface AutoCollectionMember {
+  /** id do jogo (mesmo valor de Game.appid) */
+  gameId: number;
+  /** só em empresas: papel do estúdio no jogo */
+  role?: AutoCollectionRole;
+  source: 'store' | 'title';
+}
+
+/** Coleção derivada no servidor (franquia ou empresa); somente leitura. */
+export interface AutoCollection {
+  /** `franchise:<chave>` | `company:<chave>` */
+  id: string;
+  kind: AutoCollectionKind;
+  name: string;
+  members: AutoCollectionMember[];
+  /** jogos distintos (Steam + PSN do mesmo jogo contam uma vez) */
+  groupCount: number;
+}
+
+export interface AutoCollections {
+  franchises: AutoCollection[];
+  companies: AutoCollection[];
+}
+
 export interface PatinaDb {
   backlog: string[];
   pinned: string[];

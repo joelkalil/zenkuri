@@ -3,6 +3,7 @@ import {
   pruneUserGames,
   refreshGameAchievementFlag,
   upsertAchievement,
+  upsertGameStoreMeta,
   upsertGame,
 } from '../db';
 import {
@@ -11,6 +12,7 @@ import {
 } from '@retroachievements/api';
 import { raServiceAuth } from '../serviceAuth';
 import { requireVerifiedLink } from '../verification';
+import { raCredit } from '../storeMeta';
 
 function raConfig(userId: number) {
   // Credencial de serviço (.env) consultando o username público vinculado.
@@ -65,6 +67,18 @@ export async function syncRetroAchievementsForGame(userId: number, gameId: numbe
     username,
     gameId: Number(game.external_id),
   });
+
+  try {
+    upsertGameStoreMeta({
+      gameId,
+      source: 'retroachievements',
+      developers: raCredit(response.developer),
+      publishers: raCredit(response.publisher),
+      franchises: [],
+    });
+  } catch (error) {
+    console.warn('[store-meta] could not store RA metadata:', error instanceof Error ? error.message : error);
+  }
 
   const achievements = Object.values(response.achievements ?? {});
   // Total de jogadores do set: usado para derivar a raridade (numAwarded / players).

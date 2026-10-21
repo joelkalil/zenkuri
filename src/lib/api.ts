@@ -1,4 +1,4 @@
-import type { AchievementWithStatus, Game, PatinaDb, Platform, UnlockItem } from '../types/steam';
+import type { AchievementWithStatus, AutoCollections, Game, PatinaDb, Platform, UnlockItem } from '../types/steam';
 
 const TOKEN_KEY = 'zenkuri-token';
 
@@ -215,6 +215,10 @@ export function fetchPlanning() {
 
 export function patchPlanning(gameId: string, patch: Record<string, unknown>) {
   return apiFetch<PatinaDb>(`/api/planning/${gameId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+
+export function fetchAutoCollections() {
+  return apiFetch<AutoCollections>('/api/collections/auto');
 }
 
 export function createCollectionApi(name: string, gameIds: string[] = []) {
