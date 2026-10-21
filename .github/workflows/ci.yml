@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 24 (Active LTS). Floor required by the toolchain: Vite 8 needs
+      # ^20.19 || >=22.12, ESLint 10 needs ^20.19 || ^22.13 || >=24, and
+      # @types/node is ^24, so we develop and type-check against 24.
+      # package.json declares `engines.node` (>=22.13) and .nvmrc pins 24.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # package.json carries an `allowScripts` allowlist (newer npm gates
+      # dependency install scripts). Depending on the npm bundled with the
+      # runner's Node, `npm ci` may skip better-sqlite3's install script, which
+      # leaves the native binding unbuilt. Rebuild it explicitly so CI does not
+      # depend on that behaviour, then fail fast if the binding cannot load.
+      - name: Build better-sqlite3 native binding
+        run: |
+          npm rebuild better-sqlite3
+          node -e "const D=require('better-sqlite3');new D(':memory:').prepare('select 1').get();console.log('better-sqlite3 OK')"
+
+      # Tests create throwaway SQLite DBs (community.test.ts sets
+      # ZENKURI_DB_PATH itself under os.tmpdir()). Point the default DB at the
+      # runner temp dir too, so nothing touches the repo's data/ directory.
+      # No secrets or network access are needed.
+      - name: Use throwaway database path
+        run: echo "ZENKURI_DB_PATH=$RUNNER_TEMP/zenkuri-ci.sqlite" >> "$GITHUB_ENV"
+
+      - name: Type-check
+        run: npx tsc -b
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

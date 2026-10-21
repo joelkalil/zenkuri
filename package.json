@@ -3,16 +3,26 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
     "dev:web": "vite",
     "dev:api": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "community:validate": "tsx server/scripts/communityValidate.ts",
+    "personal:import": "tsx server/scripts/personalImport.ts",
     "media:backfill": "tsx server/scripts/mediaBackfill.ts",
     "meta:backfill": "tsx server/scripts/storeMetaBackfill.ts",
+    "test:server": "tsx server/env.test.ts && tsx server/errors.test.ts",
+    "test:i18n": "tsx src/i18n/i18n.test.ts && tsx src/i18n/errors.test.ts",
     "test:level": "tsx server/levelMath.test.ts",
     "test:collections": "tsx server/collections/collections.test.ts",
+    "test:community": "tsx server/community/community.test.ts",
+    "test:rankings": "tsx server/rankings/derive.test.ts && tsx server/rankings/auto.test.ts",
+    "test": "npm run test:level && npm run test:collections && npm run test:community && npm run test:rankings && npm run test:server && npm run test:i18n && npm run community:validate",
     "preview": "vite preview"
   },
   "dependencies": {
