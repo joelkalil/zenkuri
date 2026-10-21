@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Boxes, Check, ChevronRight, FolderInput, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, FolderInput, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { GameCover } from './GameCover';
 import { LibraryCard } from './LibraryCard';
+import { LibraryGameRail } from './LibraryGameRail';
 import type { Game, GameCollection } from '../types/steam';
 
 type Completion = { percent: number; unlocked: number; total: number };
@@ -27,12 +27,10 @@ interface ContextMenuState {
 }
 
 export function CollectionsView({ games, completionMap, collections, collectionOf, onCreate, onRename, onDelete, onAssign, showGameRail = true }: CollectionsViewProps) {
-  const navigate = useNavigate();
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [gameSearch, setGameSearch] = useState('');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   useEffect(() => {
@@ -58,11 +56,6 @@ export function CollectionsView({ games, completionMap, collections, collectionO
     }
     return map;
   }, [games, collectionOf]);
-
-  const visibleGames = useMemo(() => {
-    const query = gameSearch.trim().toLocaleLowerCase();
-    return query ? games.filter((game) => game.name.toLocaleLowerCase().includes(query)) : games;
-  }, [games, gameSearch]);
 
   function averagePercent(list: Game[]): number {
     const percents = list.map((game) => completionMap.get(game.appid)?.percent).filter((percent): percent is number => percent !== undefined);
@@ -97,30 +90,8 @@ export function CollectionsView({ games, completionMap, collections, collectionO
   const selectedGames = selectedCollection ? byCollection.get(selectedCollection.id) ?? [] : [];
 
   return (
-    <div className="flex min-h-0 flex-col gap-5 lg:flex-row">
-      {showGameRail && <aside className="shrink-0 overflow-hidden rounded-xl border border-gray-800 bg-gray-900/65 lg:sticky lg:top-0 lg:h-[calc(100vh-3rem)] lg:w-60">
-        <div className="border-b border-gray-800 p-3">
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-600">Todos os jogos</p>
-          <label className="relative block">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-600" />
-            <input value={gameSearch} onChange={(event) => setGameSearch(event.target.value)} placeholder="Filtrar jogos…"
-              className="w-full rounded-lg border border-gray-800 bg-gray-950 py-1.5 pl-8 pr-2 text-xs text-gray-200 placeholder-gray-700 focus:border-violet-600 focus:outline-none" />
-          </label>
-        </div>
-        <div className="max-h-48 overflow-y-auto p-1.5 lg:max-h-[calc(100vh-8rem)]">
-          {visibleGames.map((game) => {
-            const collection = collections.find((item) => item.id === collectionOf[String(game.appid)]);
-            return (
-              <button key={game.appid} onClick={() => navigate(`/game/${game.appid}`)} onContextMenu={(event) => openContextMenu(event, game)}
-                className="group flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-gray-800 focus-visible:bg-gray-800">
-                <GameCover game={game} className="h-6 w-6 shrink-0 rounded-sm bg-gray-800" imgClassName="object-cover" />
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-400 group-hover:text-gray-100">{game.name}</span>
-                {collection && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" title={collection.name} />}
-              </button>
-            );
-          })}
-        </div>
-      </aside>}
+    <div className="lib-collections">
+      {showGameRail && <LibraryGameRail games={games} collections={collections} collectionOf={collectionOf} onAssign={onAssign} />}
 
       <div className="min-w-0 flex-1">
         {selectedCollection ? (
@@ -134,16 +105,16 @@ export function CollectionsView({ games, completionMap, collections, collectionO
                   <div className="flex items-center gap-1.5">
                     <input value={editName} autoFocus onChange={(event) => setEditName(event.target.value)}
                       onKeyDown={(event) => { if (event.key === 'Enter') submitRename(selectedCollection.id); if (event.key === 'Escape') setEditingId(null); }}
-                      className="w-64 rounded-lg border border-gray-700 bg-gray-950 px-3 py-1.5 text-lg font-semibold text-gray-100 focus:border-violet-600 focus:outline-none" />
-                    <button onClick={() => submitRename(selectedCollection.id)} aria-label="Salvar nome" className="grid h-8 w-8 place-items-center rounded-lg text-emerald-400 hover:bg-gray-800"><Check className="h-4 w-4" /></button>
-                    <button onClick={() => setEditingId(null)} aria-label="Cancelar edição" className="grid h-8 w-8 place-items-center rounded-lg text-gray-500 hover:bg-gray-800"><X className="h-4 w-4" /></button>
+                      className="w-64 field !h-9 !text-lg font-semibold" />
+                    <button onClick={() => submitRename(selectedCollection.id)} aria-label="Salvar nome" className="icon-btn text-zk-complete"><Check className="h-4 w-4" /></button>
+                    <button onClick={() => setEditingId(null)} aria-label="Cancelar edição" className="icon-btn"><X className="h-4 w-4" /></button>
                   </div>
-                ) : <h2 className="heading-editorial text-xl font-semibold text-gray-100">{selectedCollection.name}</h2>}
+                ) : <h2 className="font-display text-2xl font-bold text-gray-100">{selectedCollection.name}</h2>}
                 <span className="text-sm text-gray-500">{selectedGames.length} {selectedGames.length === 1 ? 'jogo' : 'jogos'}</span>
                 <span className="flex-1" />
                 {editingId !== selectedCollection.id && <div className="flex items-center gap-1">
-                  <button onClick={() => { setEditingId(selectedCollection.id); setEditName(selectedCollection.name); }} aria-label="Renomear coleção" className="grid h-8 w-8 place-items-center rounded-lg text-gray-500 hover:bg-gray-800 hover:text-gray-200"><Pencil className="h-4 w-4" /></button>
-                  <button onClick={() => { onDelete(selectedCollection.id); setSelectedId(null); }} aria-label="Excluir coleção" className="grid h-8 w-8 place-items-center rounded-lg text-gray-500 hover:bg-red-900/30 hover:text-red-400"><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => { setEditingId(selectedCollection.id); setEditName(selectedCollection.name); }} aria-label="Renomear coleção" className="icon-btn"><Pencil className="h-4 w-4" /></button>
+                  <button onClick={() => { onDelete(selectedCollection.id); setSelectedId(null); }} aria-label="Excluir coleção" className="icon-btn hover:!text-zk-danger"><Trash2 className="h-4 w-4" /></button>
                 </div>}
               </div>
             </header>
@@ -152,7 +123,7 @@ export function CollectionsView({ games, completionMap, collections, collectionO
                 {selectedGames.map((game) => <div key={game.appid} onContextMenu={(event) => openContextMenu(event, game)}><LibraryCard game={game} completion={completionMap.get(game.appid)} /></div>)}
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-gray-800 py-16 text-center"><Boxes className="mx-auto mb-3 h-8 w-8 text-gray-700" /><p className="text-sm text-gray-500">Nenhum jogo dos filtros atuais está nesta coleção.</p></div>
+              <p className="py-12 text-sm text-gray-500">Nenhum jogo dos filtros atuais está nesta coleção.</p>
             )}
           </section>
         ) : (
@@ -180,8 +151,8 @@ export function CollectionsView({ games, completionMap, collections, collectionO
                     </span>
                     <span className="collection-card-covers">
                       {Array.from({ length: 4 }).map((_, i) => members[i]
-                        ? <GameCover key={members[i].appid} game={members[i]} portrait className="h-full w-full bg-gray-800" imgClassName="object-cover" />
-                        : <span key={`empty-${i}`} className="grid place-items-center">{i === 0 && members.length === 0 ? <Boxes className="h-5 w-5 text-gray-600" aria-hidden="true" /> : null}</span>)}
+                        ? <GameCover key={members[i].appid} game={members[i]} portrait className="h-full w-full bg-gray-850" imgClassName="object-cover" />
+                        : <span key={`empty-${i}`} className="grid place-items-center">{i === 0 && members.length === 0 ? <span className="font-display text-lg font-black text-gray-700" aria-hidden="true">全</span> : null}</span>)}
                     </span>
                   </button>
                 );
@@ -193,19 +164,17 @@ export function CollectionsView({ games, completionMap, collections, collectionO
 
       {contextMenu && (
         <div role="menu" aria-label={`Coleção de ${contextMenu.game.name}`} onClick={(event) => event.stopPropagation()}
-          className="fixed z-50 w-60 overflow-hidden rounded-xl border border-gray-700 bg-gray-900 p-1.5 shadow-2xl shadow-black/60"
-          style={{ left: contextMenu.x, top: contextMenu.y }}>
-          <div className="border-b border-gray-800 px-2.5 py-2"><p className="truncate text-xs font-semibold text-gray-200">{contextMenu.game.name}</p><p className="mt-0.5 text-[11px] text-gray-600">Adicionar à coleção</p></div>
+          className="lib-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+          <div className="lib-menu-head"><p className="truncate text-xs font-semibold text-gray-100">{contextMenu.game.name}</p><p className="micro mt-0.5">Adicionar à coleção</p></div>
           <div className="max-h-72 overflow-y-auto py-1">
             {collections.map((collection) => {
               const current = collectionOf[String(contextMenu.game.appid)] === collection.id;
-              return <button key={collection.id} role="menuitem" onClick={() => { onAssign(String(contextMenu.game.appid), collection.id); setContextMenu(null); }}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${current ? 'bg-violet-600/15 text-violet-300' : 'text-gray-300 hover:bg-gray-800'}`}>
-                <FolderInput className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 flex-1 truncate">{collection.name}</span>{current && <Check className="h-3.5 w-3.5" />}
+              return <button key={collection.id} role="menuitem" aria-current={current} onClick={() => { onAssign(String(contextMenu.game.appid), collection.id); setContextMenu(null); }}>
+                <FolderInput className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="min-w-0 flex-1 truncate">{collection.name}</span>{current && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
               </button>;
             })}
           </div>
-          {collectionOf[String(contextMenu.game.appid)] && <button role="menuitem" onClick={() => { onAssign(String(contextMenu.game.appid), null); setContextMenu(null); }} className="flex w-full items-center gap-2 rounded-lg border-t border-gray-800 px-2.5 py-2 text-left text-xs text-red-400 hover:bg-red-900/25"><X className="h-3.5 w-3.5" /> Remover da coleção</button>}
+          {collectionOf[String(contextMenu.game.appid)] && <button role="menuitem" className="danger" onClick={() => { onAssign(String(contextMenu.game.appid), null); setContextMenu(null); }}><X className="h-3.5 w-3.5" aria-hidden="true" /> Remover da coleção</button>}
         </div>
       )}
     </div>

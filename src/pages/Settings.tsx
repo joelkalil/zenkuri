@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import {
-  AlertTriangle, CheckCircle2, Copy, Download, FileUp, KeyRound, Link2, Loader2, LogOut, Medal,
-  RefreshCw, RotateCcw, StickyNote, Trash2, Unplug, Upload, UserRound,
-} from 'lucide-react';
-import type { ElementType } from 'react';
+import { Loader2 } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useAuth } from '../context/AuthContext';
+import { THEMES, useTheme } from '../context/ThemeContext';
 import { useLocalDb } from '../hooks/useLocalDb';
 import { Switch } from '../components/Switch';
+import { SectionHead } from '../components/SectionHead';
 import { LevelPanel, PlatformLevels } from '../components/LevelPanel';
 import { useUserLevel } from '../hooks/useUserLevel';
 import { PLATFORM_META } from '../lib/platforms';
@@ -19,6 +17,7 @@ import {
   type PublicCredential, type SyncRun,
 } from '../lib/api';
 import type { Platform } from '../types/steam';
+import '../styles/ajustes.css';
 
 interface SettingsProps {
   onReset: () => void;
@@ -26,7 +25,7 @@ interface SettingsProps {
 }
 
 const TABS = [
-  { key: 'account', label: 'Conta', hint: 'Nome, senha e sessão' },
+  { key: 'account', label: 'Conta', hint: 'Nome, aparência, senha e sessão' },
   { key: 'level', label: 'Nível', hint: 'XP e níveis das plataformas' },
   { key: 'connections', label: 'Conexões', hint: 'Steam, PSN e RetroAchievements' },
   { key: 'sync', label: 'Sincronização', hint: 'Agendamento e histórico' },
@@ -35,14 +34,22 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
 
-const TAB_ICONS: Record<Tab, ElementType> = {
-  account: UserRound,
-  level: Medal,
-  connections: Link2,
-  sync: RefreshCw,
-  export: Download,
-  danger: AlertTriangle,
-};
+/** Linha de ficha: rótulo à esquerda, controle à direita. */
+function Row({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: ReactNode }) {
+  return (
+    <div className="aj-row">
+      <div>
+        {htmlFor ? <label htmlFor={htmlFor} className="aj-label">{label}</label> : <p className="aj-label">{label}</p>}
+        {hint && <p className="aj-hint">{hint}</p>}
+      </div>
+      <div className="aj-control">{children}</div>
+    </div>
+  );
+}
+
+function Busy({ busy }: { busy: boolean }) {
+  return busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null;
+}
 
 const PLATFORMS: Platform[] = ['steam', 'psn', 'retroachievements'];
 
@@ -118,61 +125,50 @@ export default function Settings({ onReset, onConfigured }: SettingsProps) {
       <header className="page-head">
         <div>
           <h1 className="page-title">Ajustes</h1>
-          <p className="page-desc">Gerencie conexões, sincronização e seus dados locais de planejamento.</p>
+          <p className="page-desc">Conexões, sincronização e seus dados locais de planejamento.</p>
         </div>
       </header>
 
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Seções dos ajustes">
-          {TABS.map((t) => {
-            const Icon = TAB_ICONS[t.key];
-            return (
-              <button key={t.key} onClick={() => setTab(t.key)} aria-current={tab === t.key ? 'page' : undefined}
-                className={`settings-nav-item ${t.key === 'danger' ? 'is-danger' : ''}`}>
-                <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
-                <span className="min-w-0">
-                  <span className="block">{t.label}</span>
-                  <span className="settings-nav-hint">{t.hint}</span>
-                </span>
-              </button>
-            );
-          })}
+          {TABS.map((t) => (
+            <button key={t.key} onClick={() => setTab(t.key)} aria-current={tab === t.key ? 'page' : undefined}
+              className={`settings-nav-item ${t.key === 'danger' ? 'is-danger' : ''}`}>
+              {t.label}
+              <span className="settings-nav-hint">{t.hint}</span>
+            </button>
+          ))}
         </nav>
 
         <div className="min-w-0">
-          <h2 className="mb-5 text-xl font-semibold text-gray-100">{TABS.find((t) => t.key === tab)?.label}</h2>
-          {toast && (
-            <p role="status" className={`mb-4 rounded-lg border px-3 py-2 text-xs ${toast.kind === 'err' ? 'border-red-800/30 bg-red-900/20 text-red-300' : 'border-emerald-800/30 bg-emerald-900/20 text-emerald-300'}`}>
-              {toast.text}
-            </p>
+          <h2 className="mb-5 font-display text-2xl font-bold text-gray-100">{TABS.find((t) => t.key === tab)?.label}</h2>
+          {toast && <p role="status" className="aj-toast" data-kind={toast.kind}>{toast.text}</p>}
+          {tab === 'account' && <AccountTab flash={flash} />}
+          {tab === 'level' && <LevelTab onOpenConnections={() => setTab('connections')} />}
+          {tab === 'connections' && (
+            <ConnectionsTab
+              configured={configured} credByPlatform={credByPlatform} latest={latest}
+              onConfigured={() => { refreshConfig(); onConfigured(); }} flash={flash}
+            />
           )}
-      {tab === 'account' && <AccountTab flash={flash} />}
-      {tab === 'level' && <LevelTab onOpenConnections={() => setTab('connections')} />}
-      {tab === 'connections' && (
-        <ConnectionsTab
-          configured={configured} credByPlatform={credByPlatform} latest={latest}
-          onConfigured={() => { refreshConfig(); onConfigured(); }} flash={flash}
-        />
-      )}
-      {tab === 'sync' && (
-        <SyncTab configured={configured} runs={runs} latest={latest} scanning={scanning} overallPercent={overallPercent}
-          onSync={() => {
-            // O toast de erro (key inválida etc.) vem do efeito acima, ligado
-            // ao `syncError` do contexto — aqui só confirmamos o sucesso real.
-            sync().then((ok) => { if (ok) flash('ok', 'Sincronização concluída.'); });
-            setTimeout(refreshConfig, 500);
-          }} />
-      )}
-      {tab === 'export' && <ExportTab db={db} refresh={refresh} exportDb={exportDb} flash={flash} />}
-      {tab === 'danger' && (
-        <DangerTab configured={configured} refresh={refresh} onReset={onReset} flash={flash} />
-      )}
+          {tab === 'sync' && (
+            <SyncTab configured={configured} runs={runs} latest={latest} scanning={scanning} overallPercent={overallPercent}
+              onSync={() => {
+                // O toast de erro (key inválida etc.) vem do efeito acima, ligado
+                // ao `syncError` do contexto; aqui só confirmamos o sucesso real.
+                sync().then((ok) => { if (ok) flash('ok', 'Sincronização concluída.'); });
+                setTimeout(refreshConfig, 500);
+              }} />
+          )}
+          {tab === 'export' && <ExportTab db={db} refresh={refresh} exportDb={exportDb} flash={flash} />}
+          {tab === 'danger' && (
+            <DangerTab configured={configured} refresh={refresh} onReset={onReset} flash={flash} />
+          )}
         </div>
       </div>
     </div>
   );
 }
-
 
 /* ── Nível ───────────────────────────────────────────────────────────────── */
 
@@ -184,7 +180,7 @@ function LevelTab({ onOpenConnections }: { onOpenConnections: () => void }) {
       {level ? (
         <LevelPanel level={level} />
       ) : error ? (
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-zk-danger">{error}</p>
       ) : (
         <div className="space-y-4" aria-hidden="true">
           <div className="h-4 w-28 animate-pulse rounded bg-gray-800" />
@@ -201,15 +197,13 @@ function LevelTab({ onOpenConnections }: { onOpenConnections: () => void }) {
 
 function AccountTab({ flash }: { flash: (k: 'ok' | 'err', t: string) => void }) {
   const { user, logout, setUser } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-
-  const fieldClass =
-    'w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-violet-500 focus:outline-none';
 
   async function saveName() {
     if (!displayName.trim()) return flash('err', 'O nome de exibição é obrigatório.');
@@ -243,57 +237,68 @@ function AccountTab({ flash }: { flash: (k: 'ok' | 'err', t: string) => void }) 
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-      <section className="space-y-4 rounded-2xl border border-gray-800 bg-gray-900 p-5 lg:col-span-2">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-gray-200">
-          <UserRound className="h-4 w-4 text-violet-300" /> Perfil
-        </h2>
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-500">Usuário</p>
-          <input value={user?.username ?? ''} disabled className={`${fieldClass} opacity-60`} />
-        </div>
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-500">Nome de exibição</p>
-          <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={fieldClass} />
-        </div>
-        <button onClick={saveName} disabled={savingName}
-          className="flex items-center gap-2 rounded-lg accent-fill px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60">
-          {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Salvar Perfil
-        </button>
-
-        <h2 className="flex items-center gap-2 border-t border-gray-800 pt-4 text-sm font-bold text-gray-200">
-          <KeyRound className="h-4 w-4 text-violet-300" /> Alterar senha
-        </h2>
-        <div className="grid gap-2.5 sm:grid-cols-3">
-          <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="Senha atual" autoComplete="current-password" className={fieldClass} />
-          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Nova senha" autoComplete="new-password" className={fieldClass} />
-          <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Confirmar nova senha" autoComplete="new-password" className={fieldClass} />
-        </div>
-        <button onClick={savePassword} disabled={savingPassword}
-          className="flex items-center gap-2 rounded-lg accent-fill px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60">
-          {savingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Alterar Senha
-        </button>
+    <>
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="01" title="Perfil" />
+        <Row label="Usuário" htmlFor="aj-username">
+          <input id="aj-username" value={user?.username ?? ''} disabled className="field opacity-60" />
+        </Row>
+        <Row label="Nome de exibição" htmlFor="aj-display">
+          <input id="aj-display" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="field" />
+          <button onClick={saveName} disabled={savingName} className="btn btn-primary btn-sm">
+            <Busy busy={savingName} /> Salvar perfil
+          </button>
+        </Row>
       </section>
 
-      <section className="h-fit rounded-2xl border border-gray-800 bg-gray-900 p-5">
-        <h2 className="mb-3 text-sm font-bold text-gray-200">Sessão</h2>
-        <p className="mb-4 text-xs text-gray-500">
-          Conectado como <span className="font-semibold text-gray-300">@{user?.username}</span>. Suas conquistas,
-          backlog e contas de plataforma ficam associadas apenas a este usuário.
-        </p>
-        <button onClick={logout}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-800/40 px-4 py-2.5 text-sm font-semibold text-red-300 transition-colors hover:bg-red-900/30">
-          <LogOut className="h-4 w-4" /> Sair da conta
-        </button>
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="02" title="Aparência" />
+        <Row label="Tema" hint="Também disponível no menu do perfil.">
+          <div role="radiogroup" aria-label="Tema" className="flex flex-wrap gap-x-6 gap-y-1">
+            {THEMES.map((item) => (
+              <label key={item.id} className="radio-row">
+                <input type="radio" name="theme" value={item.id} checked={theme === item.id} onChange={() => setTheme(item.id)} />
+                <span>
+                  {item.label}
+                  <span className="ml-2 text-xs text-gray-500">{item.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </Row>
       </section>
-    </div>
+
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="03" title="Alterar senha" />
+        <Row label="Senha atual" htmlFor="aj-pw-current">
+          <input id="aj-pw-current" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
+            autoComplete="current-password" className="field" />
+        </Row>
+        <Row label="Nova senha" hint="Mínimo de 6 caracteres." htmlFor="aj-pw-new">
+          <input id="aj-pw-new" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password" className="field" />
+        </Row>
+        <Row label="Confirmar nova senha" htmlFor="aj-pw-confirm">
+          <input id="aj-pw-confirm" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password" className="field" />
+          <button onClick={savePassword} disabled={savingPassword} className="btn btn-primary btn-sm">
+            <Busy busy={savingPassword} /> Alterar senha
+          </button>
+        </Row>
+      </section>
+
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="04" title="Sessão" />
+        <Row label="Conectado como" hint="Conquistas, fila e contas de plataforma ficam associadas apenas a este usuário.">
+          <span className="num text-sm text-gray-200">@{user?.username}</span>
+          <button onClick={logout} className="btn btn-secondary btn-sm">Sair da conta</button>
+        </Row>
+      </section>
+    </>
   );
 }
 
-/* ── Connections ─────────────────────────────────────────────────────────── */
+/* ── Conexões ────────────────────────────────────────────────────────────── */
 
 const IDENTIFIER_META: Record<Platform, { label: string; placeholder: string }> = {
   steam: { label: 'SteamID64 ou URL do perfil', placeholder: 'ex. 76561198000000000 ou steamcommunity.com/id/voce' },
@@ -311,12 +316,6 @@ function ConnectionsTab({ configured, credByPlatform, latest, onConfigured, flas
   const [selected, setSelected] = useState<Platform>('steam');
   const [identifier, setIdentifier] = useState('');
   const [busy, setBusy] = useState(false);
-
-  function accountLabel(p: Platform) {
-    const c = credByPlatform[p];
-    if (!c) return 'Não conectado';
-    return `Conectado · ${c.identifier}`;
-  }
 
   async function link() {
     setBusy(true);
@@ -341,98 +340,71 @@ function ConnectionsTab({ configured, credByPlatform, latest, onConfigured, flas
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-      <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 lg:col-span-2">
-        <h2 className="mb-4 text-sm font-bold text-gray-200">Plataformas Conectadas</h2>
-        <div className="space-y-2.5">
-          {PLATFORMS.map((p) => {
-            const isConn = configured.includes(p);
-            const meta = PLATFORM_META[p];
-            return (
-              <div key={p} className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-950/50 p-3">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gray-800">
-                  <img src={meta.logo} alt="" className={`h-5 w-5 object-contain ${isConn ? '' : 'grayscale opacity-50'}`} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-gray-100">{meta.label}</p>
-                  <p className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <span className={`h-1.5 w-1.5 rounded-full ${isConn ? 'bg-emerald-500' : 'bg-gray-600'}`} />
-                    {accountLabel(p)}
-                  </p>
-                </div>
-                <div className="hidden text-right text-xs text-gray-500 sm:block">
-                  Última sync<br /><span className="text-gray-400">{relativeTime(latest[p]?.startedAt)}</span>
-                </div>
-                <button
-                  onClick={() => { setSelected(p); setIdentifier(''); }}
-                  aria-label={isConn ? `Reconectar ${meta.label}` : credByPlatform[p] ? `Continuar vínculo com ${meta.label}` : `Vincular ${meta.label}`}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-700 px-2 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:border-violet-600 hover:text-violet-200 sm:px-3"
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{isConn ? 'Reconectar' : credByPlatform[p] ? 'Continuar' : 'Vincular'}</span>
-                </button>
-                {isConn && (
-                  <button onClick={() => disconnect(p)} title="Desconectar"
-                    className="shrink-0 rounded-lg border border-red-800/40 px-2 py-1.5 text-xs font-semibold text-red-300 transition-colors hover:bg-red-900/30">
-                    <Unplug className="h-3.5 w-3.5" />
-                  </button>
-                )}
+    <>
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="01" title="Plataformas" />
+        {PLATFORMS.map((p) => {
+          const isConn = configured.includes(p);
+          const meta = PLATFORM_META[p];
+          const cred = credByPlatform[p];
+          return (
+            <div key={p} className="aj-row">
+              <div className="flex items-center gap-3">
+                <img src={meta.logo} alt="" className={`h-5 w-5 object-contain ${isConn ? '' : 'opacity-50 grayscale'}`} />
+                <p className="aj-label">{meta.label}</p>
               </div>
-            );
-          })}
-        </div>
+              <div className="aj-control justify-between">
+                <div>
+                  <p className="aj-status">
+                    <span className="aj-status-dot" data-tone={isConn ? 'ok' : undefined} aria-hidden="true" />
+                    {cred ? `${isConn ? 'Conectado' : 'Vínculo incompleto'} · ${cred.identifier}` : 'Não conectado'}
+                  </p>
+                  <p className="aj-hint">Última sync: <span className="num">{relativeTime(latest[p]?.startedAt)}</span></p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setSelected(p); setIdentifier(''); }}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    {isConn ? 'Reconectar' : cred ? 'Continuar' : 'Vincular'}
+                    <span className="sr-only"> {meta.label}</span>
+                  </button>
+                  {isConn && (
+                    <button onClick={() => disconnect(p)} className="btn btn-danger btn-sm">
+                      Desconectar<span className="sr-only"> {meta.label}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </section>
 
-        <h2 className="mb-3 mt-6 flex items-center gap-2 text-sm font-bold text-gray-200"><KeyRound className="h-4 w-4 text-violet-300" /> Vincular Conta</h2>
-        <div className="rounded-xl border border-gray-800 bg-gray-950/50 p-4">
-          <div className="mb-3 flex gap-1">
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="02" title="Vincular conta" />
+        <Row label="Plataforma">
+          <div className="segmented" role="group" aria-label="Plataforma a vincular">
             {PLATFORMS.map((p) => (
-              <button key={p} onClick={() => { setSelected(p); setIdentifier(''); }}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${selected === p ? 'bg-violet-600/25 text-violet-200' : 'text-gray-500 hover:text-gray-300'}`}>
+              <button key={p} aria-pressed={selected === p} onClick={() => { setSelected(p); setIdentifier(''); }}>
                 <img src={PLATFORM_META[p].logo} alt="" className="h-3.5 w-3.5 object-contain" />{PLATFORM_META[p].short}
               </button>
             ))}
           </div>
-
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-500">{IDENTIFIER_META[selected].label}</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
-              placeholder={IDENTIFIER_META[selected].placeholder}
-              className="w-full rounded-lg border border-gray-800 bg-gray-950 px-3 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-violet-500 focus:outline-none" />
-            <button onClick={link} disabled={busy || !identifier.trim()}
-              className="flex shrink-0 items-center justify-center gap-2 rounded-lg accent-fill px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60">
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Vincular
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-gray-600">
-            Só lemos dados públicos do perfil — nada de senhas, tokens ou API keys.
-          </p>
-
-        </div>
+        </Row>
+        <Row label={IDENTIFIER_META[selected].label} hint="Só lemos dados públicos do perfil, nunca senhas, tokens ou API keys." htmlFor="aj-identifier">
+          <input id="aj-identifier" type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
+            placeholder={IDENTIFIER_META[selected].placeholder} className="field" />
+          <button onClick={link} disabled={busy || !identifier.trim()} className="btn btn-primary btn-sm">
+            <Busy busy={busy} /> Vincular
+          </button>
+        </Row>
       </section>
-
-      <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-        <h2 className="mb-4 text-sm font-bold text-gray-200">Visualização de Conta</h2>
-        <div className="space-y-2.5">
-          {PLATFORMS.map((p) => {
-            const isConn = configured.includes(p);
-            return (
-              <div key={p} className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-950/50 p-3">
-                <img src={PLATFORM_META[p].logo} alt="" className={`h-5 w-5 object-contain ${isConn ? '' : 'grayscale opacity-40'}`} />
-                <span className="flex-1 truncate text-sm text-gray-300">{PLATFORM_META[p].short}</span>
-                {isConn ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <span className="text-xs text-gray-600">—</span>}
-              </div>
-            );
-          })}
-        </div>
-        <p className="mt-4 rounded-lg border border-blue-800/30 bg-blue-950/20 px-3 py-2 text-xs text-blue-200">
-          O Zenkuri lê apenas dados públicos dos perfis vinculados. Você nunca informa senhas, tokens ou API keys.
-        </p>
-      </section>
-    </div>
+    </>
   );
 }
 
-/* ── Sync ────────────────────────────────────────────────────────────────── */
+/* ── Sincronização ───────────────────────────────────────────────────────── */
 
 function SyncTab({ configured, runs, latest, scanning, overallPercent, onSync }: {
   configured: Platform[];
@@ -451,84 +423,91 @@ function SyncTab({ configured, runs, latest, scanning, overallPercent, onSync }:
   useEffect(() => { localStorage.setItem('zenkuri-syncinterval', interval); }, [interval]);
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-      <section className="space-y-5 rounded-2xl border border-gray-800 bg-gray-900 p-5 lg:col-span-2">
-        <h2 className="text-sm font-bold text-gray-200">Configurações de Sync</h2>
-        <Switch checked={autoSync} onChange={setAutoSync} label="Auto Sync" description="Sincroniza automaticamente em segundo plano" />
-        <Switch checked={syncOnStart} onChange={setSyncOnStart} label="Sincronizar ao abrir o app" description="Roda uma sync assim que o app carrega" />
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-gray-200">Intervalo de sincronização</p>
-            <p className="mt-0.5 text-xs text-gray-500">Com que frequência sincronizar quando o Auto Sync está ligado</p>
-          </div>
-          <select value={interval} onChange={(e) => setIntervalValue(e.target.value)} disabled={!autoSync}
-            className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 focus:border-violet-500 focus:outline-none disabled:opacity-40">
+    <>
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="01" title="Agendamento" />
+        <Row label="Sincronização automática" hint="Sincroniza em segundo plano.">
+          <Switch checked={autoSync} onChange={setAutoSync} />
+        </Row>
+        <Row label="Sincronizar ao abrir o app" hint="Roda uma sync assim que o app carrega.">
+          <Switch checked={syncOnStart} onChange={setSyncOnStart} />
+        </Row>
+        <Row label="Intervalo" hint="Vale quando a sincronização automática está ligada." htmlFor="aj-interval">
+          <select id="aj-interval" value={interval} onChange={(e) => setIntervalValue(e.target.value)} disabled={!autoSync} className="field disabled:opacity-40">
             <option value="15">A cada 15 minutos</option>
             <option value="30">A cada 30 minutos</option>
             <option value="60">A cada 1 hora</option>
             <option value="360">A cada 6 horas</option>
           </select>
-        </div>
-
-        <div className="border-t border-gray-800 pt-4">
-          <p className="mb-3 text-sm font-medium text-gray-200">Sincronização manual</p>
-          <button onClick={onSync} disabled={scanning}
-            className="flex w-full items-center justify-center gap-2 rounded-xl accent-fill px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60">
-            {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Sync Now
-          </button>
-          <div className="mt-3">
-            <div className="mb-1 flex justify-between text-xs text-gray-500">
-              <span>Progresso geral</span><span className="font-mono">{overallPercent}%</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-gray-800">
-              <div className="h-full rounded-full bg-violet-500 transition-all duration-700" style={{ width: `${overallPercent}%` }} />
-            </div>
-          </div>
-        </div>
+        </Row>
       </section>
 
-      <div className="space-y-5">
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <h2 className="mb-3 text-sm font-bold text-gray-200">Status da Sincronização</h2>
-          <div className="space-y-2.5">
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="02" title="Sincronização manual" />
+        <Row label="Sincronizar agora" hint="Todas as plataformas conectadas.">
+          <button onClick={onSync} disabled={scanning} className="btn btn-primary btn-sm">
+            <Busy busy={scanning} /> {scanning ? 'Sincronizando…' : 'Sincronizar agora'}
+          </button>
+          <div className="w-full max-w-sm">
+            <div className="mb-1 flex justify-between text-xs text-gray-500">
+              <span>Progresso geral</span><span className="num">{overallPercent}%</span>
+            </div>
+            <div className="aj-progress" role="progressbar" aria-label="Progresso geral da sincronização" aria-valuenow={overallPercent} aria-valuemin={0} aria-valuemax={100}>
+              <div style={{ width: `${overallPercent}%` }} />
+            </div>
+          </div>
+        </Row>
+      </section>
+
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="03" title="Status por plataforma" />
+        <table className="aj-table">
+          <thead className="sr-only"><tr><th>Plataforma</th><th>Última sync</th><th>Estado</th></tr></thead>
+          <tbody>
             {PLATFORMS.map((p) => {
               const isConn = configured.includes(p);
               const st = latest[p];
+              const state = !isConn ? 'não conectada' : st?.status === 'error' ? 'com erro' : 'ok';
               return (
-                <div key={p} className="flex items-center gap-2.5">
-                  <img src={PLATFORM_META[p].logo} alt="" className={`h-4 w-4 object-contain ${isConn ? '' : 'grayscale opacity-40'}`} />
-                  <span className="flex-1 truncate text-sm text-gray-300">{PLATFORM_META[p].short}</span>
-                  <span className="text-xs text-gray-500">{relativeTime(st?.startedAt)}</span>
-                  <span className={`h-2 w-2 rounded-full ${!isConn ? 'bg-gray-600' : st?.status === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                </div>
+                <tr key={p}>
+                  <td className="w-8"><img src={PLATFORM_META[p].logo} alt="" className={`h-4 w-4 object-contain ${isConn ? '' : 'opacity-40 grayscale'}`} /></td>
+                  <td className="text-gray-200">{PLATFORM_META[p].label}</td>
+                  <td className="num text-gray-500">{relativeTime(st?.startedAt)}</td>
+                  <td className="text-right">
+                    <span className="aj-status"><span className="aj-status-dot" data-tone={!isConn ? undefined : st?.status === 'error' ? 'error' : 'ok'} aria-hidden="true" />{state}</span>
+                  </td>
+                </tr>
               );
             })}
-          </div>
-        </section>
+          </tbody>
+        </table>
+      </section>
 
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <h2 className="mb-3 text-sm font-bold text-gray-200">Histórico de Sincronizações</h2>
-          {runs.length === 0 ? (
-            <p className="text-xs text-gray-600">Nenhuma sincronização ainda.</p>
-          ) : (
-            <ul className="space-y-2">
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="04" title="Histórico" />
+        {runs.length === 0 ? (
+          <p className="text-sm text-gray-500">Nenhuma sincronização ainda.</p>
+        ) : (
+          <table className="aj-table">
+            <thead className="sr-only"><tr><th>Estado</th><th>Plataforma</th><th>Mensagem</th><th>Quando</th></tr></thead>
+            <tbody>
               {runs.slice(0, 8).map((r) => (
-                <li key={r.id} className="flex items-center gap-2 text-xs">
-                  <span className={`h-1.5 w-1.5 rounded-full ${r.status === 'error' ? 'bg-red-500' : r.status === 'running' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                  <span className="w-12 shrink-0 font-medium text-gray-300">{PLATFORM_META[r.platform]?.short ?? r.platform}</span>
-                  <span className="flex-1 truncate text-gray-600">{r.message ?? r.status}</span>
-                  <span className="shrink-0 text-gray-600">{relativeTime(r.startedAt)}</span>
-                </li>
+                <tr key={r.id}>
+                  <td className="w-6"><span className="aj-status-dot inline-block" data-tone={r.status === 'error' ? 'error' : r.status === 'running' ? 'run' : 'ok'} title={r.status} /></td>
+                  <td className="w-20 font-medium text-gray-200">{PLATFORM_META[r.platform]?.short ?? r.platform}</td>
+                  <td className="text-gray-500">{r.message ?? r.status}</td>
+                  <td className="num whitespace-nowrap text-right text-xs text-gray-500">{relativeTime(r.startedAt)}</td>
+                </tr>
               ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </div>
+            </tbody>
+          </table>
+        )}
+      </section>
+    </>
   );
 }
 
-/* ── Export ──────────────────────────────────────────────────────────────── */
+/* ── Exportar ────────────────────────────────────────────────────────────── */
 
 interface BackupEntry { name: string; date: string; size: number; }
 
@@ -578,59 +557,51 @@ function ExportTab({ db, refresh, exportDb, flash }: {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-      <section className="space-y-4 rounded-2xl border border-gray-800 bg-gray-900 p-5 lg:col-span-2">
-        <h2 className="text-sm font-bold text-gray-200">Exportar seu planejamento</h2>
-        <Switch checked={includeNotes} onChange={setIncludeNotes} label="Incluir notas pessoais" />
-        <Switch checked={includeGuides} onChange={setIncludeGuides} label="Incluir links de guia" />
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-500">Prévia dos dados</p>
-          <pre className="max-h-64 overflow-auto rounded-xl border border-gray-800 bg-gray-950 p-3 text-xs leading-relaxed text-gray-400">{json}</pre>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleExport} className="flex items-center gap-2 rounded-lg accent-fill px-4 py-2 text-sm font-semibold transition-colors">
-            <Download className="h-4 w-4" /> Exportar JSON
-          </button>
-          <button onClick={handleCopy} className="flex items-center gap-2 rounded-lg border border-gray-700 px-4 py-2 text-sm font-semibold text-gray-300 transition-colors hover:border-gray-600">
-            <Copy className="h-4 w-4" /> Copiar
-          </button>
-        </div>
+    <>
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="01" title="Exportar seu planejamento" />
+        <Row label="Notas pessoais"><Switch checked={includeNotes} onChange={setIncludeNotes} /><span className="text-sm text-gray-400">{includeNotes ? 'Incluídas' : 'Fora do backup'}</span></Row>
+        <Row label="Links de guia"><Switch checked={includeGuides} onChange={setIncludeGuides} /><span className="text-sm text-gray-400">{includeGuides ? 'Incluídos' : 'Fora do backup'}</span></Row>
+        <Row label="Prévia dos dados">
+          <pre className="max-h-64 w-full overflow-auto rounded border border-gray-800 bg-gray-900 p-3 font-mono text-xs leading-relaxed text-gray-400">{json}</pre>
+        </Row>
+        <Row label="Baixar">
+          <button onClick={handleExport} className="btn btn-primary btn-sm">Exportar JSON</button>
+          <button onClick={handleCopy} className="btn btn-secondary btn-sm">Copiar</button>
+        </Row>
       </section>
 
-      <div className="space-y-5">
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <h2 className="mb-3 text-sm font-bold text-gray-200">Importar backup</h2>
-          <button onClick={() => fileRef.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-gray-700 bg-gray-950/50 p-6 text-center transition-colors hover:border-violet-600">
-            <FileUp className="h-7 w-7 text-gray-600" />
-            <span className="text-sm font-medium text-gray-300">Selecionar arquivo</span>
-            <span className="text-xs text-gray-600">Substitui seu planejamento atual</span>
-          </button>
-          <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={handleImport} />
-        </section>
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="02" title="Importar backup" />
+        <Row label="Arquivo" hint="Substitui seu planejamento atual.">
+          <button onClick={() => fileRef.current?.click()} className="btn btn-secondary btn-sm">Selecionar arquivo</button>
+          <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={handleImport} aria-label="Arquivo de backup" />
+        </Row>
+      </section>
 
-        <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
-          <h2 className="mb-3 text-sm font-bold text-gray-200">Histórico de backups</h2>
-          {backups.length === 0 ? (
-            <p className="text-xs text-gray-600">Nenhum backup ainda.</p>
-          ) : (
-            <ul className="space-y-2">
+      <section className="aj-section">
+        <SectionHead className="sh-wrap" number="03" title="Histórico de backups" />
+        {backups.length === 0 ? (
+          <p className="text-sm text-gray-500">Nenhum backup ainda.</p>
+        ) : (
+          <table className="aj-table">
+            <thead className="sr-only"><tr><th>Arquivo</th><th>Tamanho</th></tr></thead>
+            <tbody>
               {backups.map((b, i) => (
-                <li key={i} className="flex items-center gap-2 text-xs">
-                  <Upload className="h-3.5 w-3.5 text-gray-600" />
-                  <span className="flex-1 truncate text-gray-300">{b.name}</span>
-                  <span className="shrink-0 text-gray-600">{(b.size / 1024).toFixed(1)} KB</span>
-                </li>
+                <tr key={i}>
+                  <td className="num text-gray-200">{b.name}</td>
+                  <td className="num text-right text-gray-500">{(b.size / 1024).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KB</td>
+                </tr>
               ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </div>
+            </tbody>
+          </table>
+        )}
+      </section>
+    </>
   );
 }
 
-/* ── Danger Zone ─────────────────────────────────────────────────────────── */
+/* ── Zona de risco ───────────────────────────────────────────────────────── */
 
 function DangerTab({ configured, refresh, onReset, flash }: {
   configured: Platform[];
@@ -639,38 +610,32 @@ function DangerTab({ configured, refresh, onReset, flash }: {
   flash: (k: 'ok' | 'err', t: string) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 rounded-xl border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm text-red-300">
-        <AlertTriangle className="h-5 w-5 shrink-0" />
-        Atenção: ações irreversíveis. Recomendamos fazer um backup antes de continuar.
-      </div>
+    <section className="aj-section aj-danger">
+      <p className="text-sm text-zk-danger">
+        <strong>Atenção:</strong> ações irreversíveis. Exporte um backup antes de continuar.
+      </p>
 
-      <DangerCard icon={RotateCcw} title="Resetar planejamento" description="Remove todo o backlog, jogos fixados, dropados, notas, esforços e agendamentos."
+      <DangerCard title="Resetar planejamento" description="Remove toda a fila, jogos fixados, abandonados, notas, esforços e agendamentos."
         keyword="RESETAR" onConfirm={async () => { await resetPlanning('all'); refresh(); flash('ok', 'Planejamento resetado.'); }} />
 
-      <DangerCard icon={StickyNote} title="Remover notas pessoais" description="Apaga apenas as notas pessoais de todos os jogos. O resto do planejamento é mantido."
+      <DangerCard title="Remover notas pessoais" description="Apaga apenas as notas pessoais de todos os jogos. O resto do planejamento é mantido."
         keyword="NOTAS" onConfirm={async () => { await resetPlanning('notes'); refresh(); flash('ok', 'Notas removidas.'); }} />
 
-      <DangerCard icon={Trash2} title="Limpar cache de sincronização" description="Apaga as imagens locais (capas, ícones, conquistas). Elas são baixadas novamente quando necessário."
+      <DangerCard title="Limpar cache de sincronização" description="Apaga as imagens locais (capas, ícones, conquistas). Elas são baixadas novamente quando necessário."
         keyword="CACHE" onConfirm={async () => { await clearMediaCache(); flash('ok', 'Cache de mídia limpo.'); }} />
 
-      <DangerCard icon={Unplug} title="Desconectar todas as plataformas" description="Remove todas as credenciais e volta para a configuração inicial."
+      <DangerCard title="Desconectar todas as plataformas" description="Remove todas as credenciais e volta para a configuração inicial."
         keyword="DESCONECTAR" onConfirm={async () => {
           await Promise.all(configured.map((p) => deletePlatformConfig(p)));
           window.dispatchEvent(new Event('zenkuri-config-updated'));
           flash('ok', 'Plataformas desconectadas.');
           onReset();
         }} />
-
-      <p className="flex items-center gap-1.5 px-1 text-xs text-gray-600">
-        <Link2 className="h-3 w-3" /> Em caso de dúvidas, exporte seus dados antes de qualquer ação destrutiva.
-      </p>
-    </div>
+    </section>
   );
 }
 
-function DangerCard({ icon: Icon, title, description, keyword, onConfirm }: {
-  icon: typeof RotateCcw;
+function DangerCard({ title, description, keyword, onConfirm }: {
   title: string;
   description: string;
   keyword: string;
@@ -678,18 +643,17 @@ function DangerCard({ icon: Icon, title, description, keyword, onConfirm }: {
 }) {
   const [value, setValue] = useState('');
   const armed = value.trim().toUpperCase() === keyword;
+  const inputId = `danger-${keyword}`;
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-red-900/30 bg-red-950/15 p-4 sm:flex-row sm:items-center">
-      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-red-900/30 text-red-300"><Icon className="h-5 w-5" /></span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-gray-100">{title}</p>
-        <p className="mt-0.5 text-xs text-gray-500">{description}</p>
+    <div className="aj-danger-row">
+      <div className="min-w-0">
+        <p className="aj-label">{title}</p>
+        <p className="aj-hint">{description}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <input value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Digite ${keyword}`}
-          className="w-32 rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:border-red-600 focus:outline-none" />
-        <button disabled={!armed} onClick={() => { onConfirm(); setValue(''); }}
-          className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-40">
+        <label htmlFor={inputId} className="sr-only">Digite {keyword} para confirmar</label>
+        <input id={inputId} value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Digite ${keyword}`} className="field w-40" />
+        <button disabled={!armed} onClick={() => { onConfirm(); setValue(''); }} className="btn btn-danger btn-sm">
           Confirmar
         </button>
       </div>

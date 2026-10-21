@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import type { Platform } from './types';
 
 /*
@@ -12,6 +12,44 @@ export const MEDIA_ROOT = process.env.ZENKURI_MEDIA_PATH ?? join(process.cwd(), 
 export const PLACEHOLDER_MARKER = 'zenkuri:placeholder';
 
 export type MediaCategory = 'covers' | 'portraits' | 'heroes' | 'icons' | 'achievements';
+
+export const MEDIA_CATEGORIES = ['covers', 'portraits', 'heroes', 'icons', 'achievements'] as const;
+
+export const MEDIA_PLATFORMS = ['steam', 'psn', 'retroachievements'] as const satisfies readonly Platform[];
+
+const SAFE_SEGMENT = /^[A-Za-z0-9._-]+$/;
+
+const EXTERNAL_ID_PATTERN: Record<Platform, RegExp> = {
+  steam: /^\d+$/,
+  psn: /^NPWR\d{5}_\d{2}$/,
+  retroachievements: /^\d+$/,
+};
+
+export function isMediaCategory(value: string | undefined): value is MediaCategory {
+  return (MEDIA_CATEGORIES as readonly string[]).includes(value ?? '');
+}
+
+export function isMediaPlatform(value: string | undefined): value is Platform {
+  return (MEDIA_PLATFORMS as readonly string[]).includes(value ?? '');
+}
+
+/** A single URL path segment that is safe to use as a file/dir name. */
+export function isSafeSegment(value: string): boolean {
+  return SAFE_SEGMENT.test(value) && value !== '.' && value !== '..' && !value.includes('..');
+}
+
+export function isValidExternalId(platform: Platform, externalId: string): boolean {
+  return EXTERNAL_ID_PATTERN[platform].test(externalId);
+}
+
+export function isInsideMediaRoot(target: string): boolean {
+  return resolve(target).startsWith(resolve(MEDIA_ROOT) + sep);
+}
+
+/** Throws unless `target` resolves strictly inside MEDIA_ROOT. Call before any read/write. */
+export function assertInsideMediaRoot(target: string): void {
+  if (!isInsideMediaRoot(target)) throw new Error('Path escapes media root');
+}
 
 export function slugify(value: string): string {
   return (value || 'untitled')

@@ -1,12 +1,11 @@
 import {
-  existsSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { db } from './db';
 import type { Platform } from './types';
 import {
@@ -14,54 +13,111 @@ import {
   PLACEHOLDER_MARKER,
   achievementSlot,
   coverSlot,
+  assertInsideMediaRoot,
   heroSlot,
   iconSlot,
+  isInsideMediaRoot,
+  isMediaCategory,
+  isMediaPlatform,
+  isSafeSegment,
+  isValidExternalId,
   portraitSlot,
   type MediaCategory,
 } from './mediaPaths';
+import {
+  ASSET_ORIGIN,
+  clearSlotFailure,
+  getCatalogAsset,
+  getCatalogSlot,
+  getSlotFailure,
+  setCatalogSlot,
+  setSlotFailure,
+  sha256,
+  slotKey,
+  type AssetKind,
+  type AssetOrigin,
+} from './mediaCatalog';
+import { IMAGE_EXTS, isPlaceholderFile, slotFiles } from './mediaFiles';
+import { steamStoreAssets } from './steamStoreAssets';
 
-/** Steam's vertical library capsule (portrait box art). */
-function steamPortraitUrl(appid: string) {
-  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900.jpg`;
+/** A download candidate and where it came from (recorded in the catalog). */
+interface SourceCandidate {
+  url: string;
+  origin: AssetOrigin;
 }
 
-/** Steam's wide cinematic library hero banner (1920x620). */
-function steamHeroUrl(appid: string) {
-  return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_hero.jpg`;
+/** A candidate, or a lookup resolved only if earlier ones fail. */
+type MediaSource = SourceCandidate | null | undefined | (() => Promise<SourceCandidate | null>);
+
+type GameCategory = 'covers' | 'portraits' | 'heroes' | 'icons';
+
+interface GameSourceRow {
+  title: string;
+  cover_url: string | null;
+  icon_url: string | null;
+}
+
+function steamLegacyUrl(appid: string, file: string): SourceCandidate | null {
+  if (!/^\d+$/.test(appid)) return null;
+  return { url: `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/${file}`, origin: ASSET_ORIGIN.STEAM_LEGACY };
+}
+
+function steamStoreSource(appid: string, title: string, kind: AssetKind): MediaSource {
+  if (!/^\d+$/.test(appid)) return null;
+  return async () => (await steamStoreAssets(appid, title))[kind] ?? null;
+}
+
+/** Cover-ish URL stored on the game row, tagged with the right provenance. */
+function dbSource(platform: string, url: string | null | undefined): SourceCandidate | null {
+  if (!url) return null;
+  const origin = platform === 'psn' ? ASSET_ORIGIN.PSN_TROPHY_ICON : platform === 'ra' || platform === 'retroachievements' ? ASSET_ORIGIN.RA : ASSET_ORIGIN.DB;
+  return { url, origin };
+}
+
+function catalogSource(platform: string, externalId: string, kind: AssetKind, origin: AssetOrigin): SourceCandidate | null {
+  const asset = getCatalogAsset(platform, externalId, kind);
+  return asset?.origin === origin ? { url: asset.url, origin } : null;
 }
 
 /**
- * Newer Steam apps only publish the hero under a hashed path, which the store
- * API hands out. Only called when the legacy URL above already failed.
+ * Single source of truth for where a game's art comes from, in priority order.
+ * Used by both the lazy `/media` route and the sync-time warmer.
+ *
+ *   steam  portrait: legacy 600x900 → store capsule → cover_url
+ *          cover:    cover_url → store header → store main capsule
+ *          hero:     legacy hero → store hero → cover_url
+ *          icon:     icon_url → store community icon
+ *   psn    portrait/cover: catalog concept art → trophy icon (cover_url)
+ *          hero:     catalog concept art → none (placeholder)
+ *   other  cover_url / icon_url
  */
-async function steamStoreHeroUrl(appid: string): Promise<string | null> {
-  const input = {
-    ids: [{ appid: Number(appid) }],
-    context: { language: 'english', country_code: 'US' },
-    data_request: { include_assets: true },
-  };
-  try {
-    const res = await fetch(
-      `https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=${encodeURIComponent(JSON.stringify(input))}`,
-      { signal: AbortSignal.timeout(15_000) },
-    );
-    if (!res.ok) return null;
-    const body = await res.json() as {
-      response?: { store_items?: { assets?: { asset_url_format?: string; library_hero?: string } }[] };
-    };
-    const assets = body.response?.store_items?.[0]?.assets;
-    if (!assets?.asset_url_format || !assets.library_hero) return null;
-    return `https://shared.akamai.steamstatic.com/store_item_assets/${assets.asset_url_format.replace('${FILENAME}', assets.library_hero)}`;
-  } catch {
-    return null;
+function mediaSources(category: GameCategory, platform: string, externalId: string, row: GameSourceRow | undefined): MediaSource[] {
+  const title = row?.title ?? externalId;
+  const cover = dbSource(platform, row?.cover_url);
+  const icon = dbSource(platform, row?.icon_url);
+
+  if (platform === 'steam') {
+    if (category === 'portraits') {
+      return [steamLegacyUrl(externalId, 'library_600x900.jpg'), steamStoreSource(externalId, title, 'portrait'), cover];
+    }
+    if (category === 'covers') return [cover, steamStoreSource(externalId, title, 'cover')];
+    if (category === 'heroes') {
+      return [steamLegacyUrl(externalId, 'library_hero.jpg'), steamStoreSource(externalId, title, 'hero'), cover];
+    }
+    return [icon, steamStoreSource(externalId, title, 'icon')];
   }
-}
 
-/** A download candidate: a URL, or a lookup resolved only if earlier ones fail. */
-type MediaSource = string | null | undefined | (() => Promise<string | null>);
+  if (platform === 'psn') {
+    if (category === 'portraits' || category === 'covers') {
+      return [catalogSource(platform, externalId, 'portrait', ASSET_ORIGIN.PSN_CONCEPT), cover];
+    }
+    // No wide banner without concept art: leave a replaceable placeholder
+    // instead of stretching the square trophy-title icon across the hero.
+    if (category === 'heroes') return [catalogSource(platform, externalId, 'hero', ASSET_ORIGIN.PSN_CONCEPT)];
+    return [icon];
+  }
 
-function steamHeroSources(appid: string, coverUrl: string | null | undefined): MediaSource[] {
-  return [steamHeroUrl(appid), () => steamStoreHeroUrl(appid), coverUrl];
+  return [category === 'icons' ? icon : cover];
 }
 
 /*
@@ -71,11 +127,18 @@ function steamHeroSources(appid: string, coverUrl: string | null | undefined): M
   `data/media/` so the UI never depends on a remote CDN and the library keeps
   working offline. See `mediaPaths.ts` for the on-disk layout.
 
+  `data/media/catalog.json` (see `mediaCatalog.ts`) sits beside the images: it
+  remembers the better art sources we discovered (Steam store assets, PSN concept
+  art) and a provenance record (origin, url, sha256) for every file we write. That
+  provenance is what makes upgrades safe: only files we can prove are our own
+  low-quality download (the PSN trophy icon) are ever replaced.
+
   When a source has no art (some Steam titles ship without a header image, etc.)
   we drop a branded SVG *placeholder* at the exact path the real art would take.
   The user can download any image, give it the same base name (any image
   extension) and it is picked up on the next render — no resync required, because
   a file counts as a placeholder only while it still carries our marker comment.
+  Such manual files are never overwritten.
 */
 
 const CONTENT_TYPE_EXT: Record<string, string> = {
@@ -87,8 +150,6 @@ const CONTENT_TYPE_EXT: Record<string, string> = {
   'image/avif': 'avif',
   'image/svg+xml': 'svg',
 };
-
-const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'svg', 'bmp', 'ico']);
 
 const MIME: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',
@@ -107,57 +168,45 @@ export function clearMediaCache(): { removed: boolean } {
   return { removed: true };
 }
 
-/** All files in `dir` whose name is `base.<ext>` (the slot for one asset). */
-function slotFiles(dir: string, base: string): string[] {
-  if (!existsSync(dir)) return [];
-  const prefix = `${base}.`;
-  return readdirSync(dir)
-    .filter((name) => name.startsWith(prefix) && IMAGE_EXTS.has(name.slice(prefix.length).toLowerCase()))
-    .map((name) => join(dir, name));
-}
-
-function isPlaceholderFile(filePath: string): boolean {
-  if (!filePath.toLowerCase().endsWith('.svg')) return false;
-  try {
-    return readFileSync(filePath, 'utf8').includes(PLACEHOLDER_MARKER);
-  } catch {
-    return false;
-  }
-}
-
 function escapeXml(value: string): string {
   return value.replace(/[<>&'"]/g, (c) => (
     { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c] as string
   ));
 }
 
-const PLACEHOLDER_TINT: Record<MediaCategory, { from: string; to: string; accent: string }> = {
-  covers: { from: '#1a1530', to: '#0d0a1a', accent: '#a78bfa' },
-  portraits: { from: '#1a1530', to: '#0d0a1a', accent: '#a78bfa' },
-  heroes: { from: '#1a1530', to: '#0d0a1a', accent: '#a78bfa' },
-  icons: { from: '#1a1530', to: '#0d0a1a', accent: '#a78bfa' },
-  achievements: { from: '#241a12', to: '#13100a', accent: '#fbbf24' },
-};
+// Bump when the placeholder look changes: older cached placeholders get regenerated.
+const PLACEHOLDER_VERSION = 'v2';
+const PLACEHOLDER_VERSION_MARKER = `${PLACEHOLDER_MARKER} ${PLACEHOLDER_VERSION}`;
 
+function isCurrentPlaceholder(filePath: string): boolean {
+  try {
+    return readFileSync(filePath, 'utf8').includes(PLACEHOLDER_VERSION_MARKER);
+  } catch {
+    return false;
+  }
+}
+
+// Brand placeholder: flat sumi background, vermilion hanko seal (public/brand/mark.svg), title below.
 function placeholderSvg(category: MediaCategory, label: string): string {
-  const tint = PLACEHOLDER_TINT[category];
   const portrait = category === 'portraits';
   const square = category === 'icons' || category === 'achievements';
   const hero = category === 'heroes';
   const w = portrait ? 300 : hero ? 960 : square ? 240 : 460;
   const h = portrait ? 450 : hero ? 420 : 240;
   const safe = escapeXml(label.length > 36 ? `${label.slice(0, 35)}…` : label);
+  const seal = Math.round(Math.min(w, h) * (square ? 0.34 : 0.28));
+  const sealX = Math.round((w - seal) / 2);
+  const sealY = Math.round(h * (square ? 0.2 : 0.3));
+  const textY = Math.round(sealY + seal + (square ? 26 : 34));
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice">
-  <!-- ${PLACEHOLDER_MARKER}: replace this file with real art (keep the base name, any image extension) -->
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="${tint.from}"/>
-      <stop offset="1" stop-color="${tint.to}"/>
-    </linearGradient>
-  </defs>
-  <rect width="${w}" height="${h}" fill="url(#g)"/>
-  <text x="50%" y="${square ? '44%' : '46%'}" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="${square ? 64 : 76}" font-weight="800" fill="${tint.accent}" opacity="0.85">Z</text>
-  <text x="50%" y="${square ? '70%' : '66%'}" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="16" font-weight="600" fill="#cbd0e0" opacity="0.65">${safe}</text>
+  <!-- ${PLACEHOLDER_VERSION_MARKER}: replace this file with real art (keep the base name, any image extension) -->
+  <rect width="${w}" height="${h}" fill="#1A1817"/>
+  <g transform="translate(${sealX} ${sealY}) scale(${(seal / 64).toFixed(4)})">
+    <path fill="#E5533A" fill-rule="evenodd" d="M13 2H51A11 11 0 0 1 62 13V51A11 11 0 0 1 51 62H13A11 11 0 0 1 2 51V13A11 11 0 0 1 13 2Z"/>
+    <path fill="#F3EEE4" fill-rule="evenodd" d="M14 6.5H50A7.5 7.5 0 0 1 57.5 14V50A7.5 7.5 0 0 1 50 57.5H14A7.5 7.5 0 0 1 6.5 50V14A7.5 7.5 0 0 1 14 6.5ZM14 8H50A6 6 0 0 1 56 14V50A6 6 0 0 1 50 56H14A6 6 0 0 1 8 50V14A6 6 0 0 1 14 8Z"/>
+    <path fill="#F3EEE4" d="M13.5 28.4L28 11L36 11L50.5 28.4L42.5 28.4L32 15.35L21.5 28.4ZM13.5 47.2L29.4 47.2L29.4 44.2L23 44.2L23 39L29.4 39L29.4 36L18.5 36L18.5 30.8L45.5 30.8L45.5 36L34.6 36L34.6 39L41 39L41 44.2L34.6 44.2L34.6 47.2L50.5 47.2L50.5 52.4L13.5 52.4Z"/>
+  </g>
+  <text x="50%" y="${textY}" text-anchor="middle" font-family="Inter,system-ui,Segoe UI,sans-serif" font-size="${square ? 14 : 16}" font-weight="600" fill="#A59D92">${safe}</text>
 </svg>`;
 }
 
@@ -171,19 +220,57 @@ function extFromResponse(url: string, contentType: string | null): string {
   return 'jpg';
 }
 
+const MAX_DOWNLOAD_BYTES = 15 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = 15_000;
+
+/** Read the body up to the size cap; null when it is exceeded. */
+async function readCapped(res: Response): Promise<Buffer | null> {
+  const declared = Number(res.headers.get('content-length') ?? 0);
+  if (declared > MAX_DOWNLOAD_BYTES || !res.body) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = res.body.getReader();
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    total += chunk.value.byteLength;
+    if (total > MAX_DOWNLOAD_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(chunk.value);
+  }
+  return Buffer.concat(chunks);
+}
+
 async function download(url: string): Promise<{ buffer: Buffer; ext: string } | null> {
+  // The timeout covers headers and body; it is only cleared once the body is read.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
     const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
     if (!res.ok) return null;
-    const ext = extFromResponse(url, res.headers.get('content-type'));
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.byteLength === 0) return null;
-    return { buffer, ext };
+    const contentType = res.headers.get('content-type')?.split(';')[0].trim().toLowerCase() ?? '';
+    // Remote SVG is rejected: it can carry script and would be served from our origin.
+    if (!contentType.startsWith('image/') || contentType === 'image/svg+xml') return null;
+    const buffer = await readCapped(res);
+    if (!buffer || buffer.byteLength === 0) return null;
+    return { buffer, ext: extFromResponse(url, contentType) };
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Write via tmp + rename so a partial file never counts as real art. */
+function writeFileAtomic(target: string, data: Buffer | string) {
+  assertInsideMediaRoot(target);
+  const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    writeFileSync(tmp, data);
+    renameSync(tmp, target);
+  } catch (error) {
+    try { rmSync(tmp, { force: true }); } catch { /* ignore */ }
+    throw error;
   }
 }
 
@@ -193,11 +280,82 @@ function removeSlot(files: string[]) {
   }
 }
 
+interface SlotContext {
+  platform: Platform;
+  /** The game row's cover_url: for PSN this is the square trophy icon. */
+  trophyIconUrl?: string | null;
+}
+
+function fileSha(filePath: string): string | null {
+  try {
+    return sha256(readFileSync(filePath));
+  } catch {
+    return null;
+  }
+}
+
+function isCandidate(source: MediaSource): source is SourceCandidate {
+  return typeof source === 'object' && source !== null;
+}
+
+/**
+ * Is this real file provably our own low-quality PSN trophy icon (and therefore
+ * safe to replace)? Files without a matching provenance record that don't equal
+ * a fresh trophy-icon download are treated as manual drop-ins and left alone.
+ */
+async function isReplaceableTrophyIcon(key: string, file: string, ctx: SlotContext): Promise<boolean> {
+  const fileHash = fileSha(file);
+  if (!fileHash) return false;
+  const record = getCatalogSlot(key);
+  if (record) return record.origin === ASSET_ORIGIN.PSN_TROPHY_ICON && record.sha256 === fileHash;
+  if (!ctx.trophyIconUrl) return false;
+  const fresh = await download(ctx.trophyIconUrl);
+  const isIcon = fresh !== null && sha256(fresh.buffer) === fileHash;
+  if (!isIcon) setCatalogSlot(key, 'manual', '', fileHash); // remember: don't re-download to compare
+  return isIcon;
+}
+
+/** Download the first working candidate and write it to the slot, recording provenance. */
+async function fillSlot(
+  dir: string,
+  base: string,
+  key: string | null,
+  sources: MediaSource[],
+  existing: string[],
+): Promise<string | null> {
+  for (const source of sources) {
+    const candidate = typeof source === 'function' ? await source() : source;
+    if (!candidate?.url) continue;
+    const downloaded = await download(candidate.url);
+    if (!downloaded) continue;
+    const target = join(dir, `${base}.${downloaded.ext}`);
+    writeFileAtomic(target, downloaded.buffer);
+    removeSlot(existing.filter((file) => file !== target));
+    if (key) setCatalogSlot(key, candidate.origin, candidate.url, sha256(downloaded.buffer));
+    return target;
+  }
+  return null;
+}
+
+interface SlotOptions {
+  /** Ignore the failure TTL and retry every source (backfill CLI only). */
+  bypassFailureTtl?: boolean;
+}
+
+const FAILURE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function isRecentFailure(failureKey: string): boolean {
+  const at = getSlotFailure(failureKey);
+  return at !== undefined && Date.now() - at < FAILURE_TTL_MS;
+}
+
 /**
  * Resolve a slot to a readable file path, caching on demand.
- * - real art already on disk (downloaded or user-supplied) → returned untouched
- * - otherwise try to download from `sourceUrl`
- * - if that fails or there is no source, leave/refresh a branded placeholder
+ * - real art already on disk (downloaded or user-supplied) → returned untouched,
+ *   except a provable PSN trophy icon, which is upgraded when concept art exists
+ * - otherwise try each source in order
+ * - if all fail or there are none, leave/refresh a branded placeholder
+ * `ctx` enables catalog provenance (omitted for achievement badges).
  */
 async function ensureSlot(
   dir: string,
@@ -205,34 +363,46 @@ async function ensureSlot(
   category: MediaCategory,
   label: string,
   sources: MediaSource[],
+  ctx?: SlotContext,
+  options: SlotOptions = {},
 ): Promise<string> {
+  assertInsideMediaRoot(join(dir, base));
   ensureDir(dir);
+  const key = ctx ? slotKey(category, ctx.platform, base) : null;
+  const failureKey = relative(MEDIA_ROOT, join(dir, base));
+  const recentlyFailed = !options.bypassFailureTtl && isRecentFailure(failureKey);
   const files = slotFiles(dir, base);
   const real = files.find((file) => !isPlaceholderFile(file));
   if (real) {
     // A real image (downloaded or manually dropped in) wins — clear any stale
     // placeholder left next to it so the folder stays tidy.
     removeSlot(files.filter(isPlaceholderFile));
+    const better = sources.filter((s) => isCandidate(s) && s.origin === ASSET_ORIGIN.PSN_CONCEPT);
+    if (ctx && key && better.length > 0 && !recentlyFailed && await isReplaceableTrophyIcon(key, real, ctx)) {
+      const upgraded = await fillSlot(dir, base, key, better, [real]);
+      if (upgraded) {
+        clearSlotFailure(failureKey);
+        return upgraded;
+      }
+      setSlotFailure(failureKey);
+    }
     return real;
   }
 
-  // Try each candidate source in order (e.g. portrait → landscape fallback).
-  for (const source of sources) {
-    const sourceUrl = typeof source === 'function' ? await source() : source;
-    if (!sourceUrl) continue;
-    const downloaded = await download(sourceUrl);
-    if (downloaded) {
-      removeSlot(files); // drop the placeholder, if any
-      const target = join(dir, `${base}.${downloaded.ext}`);
-      writeFileSync(target, downloaded.buffer);
-      return target;
+  const placeholder = files.find(isPlaceholderFile);
+  // Every source failed recently: keep serving the placeholder without any network.
+  if (!recentlyFailed) {
+    const written = await fillSlot(dir, base, key, sources, files);
+    if (written) {
+      clearSlotFailure(failureKey);
+      return written;
     }
+    setSlotFailure(failureKey);
   }
 
-  const placeholder = files.find(isPlaceholderFile);
-  if (placeholder) return placeholder;
+  if (placeholder && isCurrentPlaceholder(placeholder)) return placeholder;
   const target = join(dir, `${base}.svg`);
-  writeFileSync(target, placeholderSvg(category, label));
+  writeFileAtomic(target, placeholderSvg(category, label));
   return target;
 }
 
@@ -250,13 +420,19 @@ async function pool<T>(items: T[], size: number, worker: (item: T) => Promise<vo
   await Promise.all(runners);
 }
 
-interface GameMediaRow {
+interface GameMediaRow extends GameSourceRow {
   platform: Platform;
   external_id: string;
-  title: string;
-  cover_url: string | null;
-  icon_url: string | null;
 }
+
+function gameSlot(category: GameCategory, platform: Platform, externalId: string, title: string) {
+  if (category === 'covers') return coverSlot(platform, externalId, title);
+  if (category === 'portraits') return portraitSlot(platform, externalId, title);
+  if (category === 'heroes') return heroSlot(platform, externalId, title);
+  return iconSlot(platform, externalId, title);
+}
+
+const WARM_CATEGORIES: GameCategory[] = ['covers', 'portraits', 'heroes', 'icons'];
 
 /** Mirror covers + game icons for a platform. Best effort; never throws. */
 export async function warmGameMedia(platform: Platform): Promise<number> {
@@ -265,28 +441,13 @@ export async function warmGameMedia(platform: Platform): Promise<number> {
     .all(platform) as GameMediaRow[];
   let cached = 0;
   await pool(rows, 8, async (row) => {
-    const cover = coverSlot(row.platform, row.external_id, row.title);
-    await ensureSlot(cover.dir, cover.base, 'covers', row.title, [row.cover_url]);
-
-    const portrait = portraitSlot(row.platform, row.external_id, row.title);
-    const portraitSources = row.platform === 'steam'
-      ? [steamPortraitUrl(row.external_id), row.cover_url]
-      : [row.cover_url];
-    await ensureSlot(portrait.dir, portrait.base, 'portraits', row.title, portraitSources);
-
-    const hero = heroSlot(row.platform, row.external_id, row.title);
-    // PSN has no wide banner art, so we leave a replaceable placeholder instead
-    // of stretching the square trophy-title icon across the hero.
-    const heroSources = row.platform === 'steam'
-      ? steamHeroSources(row.external_id, row.cover_url)
-      : row.platform === 'psn'
-        ? []
-        : [row.cover_url];
-    await ensureSlot(hero.dir, hero.base, 'heroes', row.title, heroSources);
-
-    if (row.icon_url) {
-      const icon = iconSlot(row.platform, row.external_id, row.title);
-      await ensureSlot(icon.dir, icon.base, 'icons', row.title, [row.icon_url]);
+    for (const category of WARM_CATEGORIES) {
+      if (category === 'icons' && !row.icon_url) continue;
+      const slot = gameSlot(category, row.platform, row.external_id, row.title);
+      await ensureSlot(slot.dir, slot.base, category, row.title, mediaSources(category, row.platform, row.external_id, row), {
+        platform: row.platform,
+        trophyIconUrl: row.cover_url,
+      });
     }
     cached += 1;
   });
@@ -313,11 +474,11 @@ export async function warmAchievementMedia(gameId: number): Promise<number> {
   await pool(rows, 8, async (row) => {
     if (row.icon_url) {
       const slot = achievementSlot(game.platform, game.external_id, game.title, row.external_id, row.title, false);
-      await ensureSlot(slot.dir, slot.base, 'achievements', row.title, [row.icon_url]);
+      await ensureSlot(slot.dir, slot.base, 'achievements', row.title, [dbSource('db', row.icon_url)]);
     }
     if (row.locked_icon_url && row.locked_icon_url !== row.icon_url) {
       const slot = achievementSlot(game.platform, game.external_id, game.title, row.external_id, row.title, true);
-      await ensureSlot(slot.dir, slot.base, 'achievements', row.title, [row.locked_icon_url]);
+      await ensureSlot(slot.dir, slot.base, 'achievements', row.title, [dbSource('db', row.locked_icon_url)]);
     }
     cached += 1;
   });
@@ -331,6 +492,8 @@ function lastSegment(base: string): string {
   return idx >= 0 ? base.slice(idx + 1) : base;
 }
 
+const MAX_SEGMENT_LENGTH = 200;
+
 export interface ResolvedMedia {
   filePath: string;
   contentType: string;
@@ -342,55 +505,73 @@ export interface ResolvedMedia {
  * downloading from the original source on first hit. Returns null only for a
  * malformed request — a valid slot always yields at least a placeholder.
  */
-export async function serveMedia(parts: string[]): Promise<ResolvedMedia | null> {
-  const [category, platform, ...rest] = parts;
-  if (!platform || rest.length === 0) return null;
+export async function serveMedia(parts: string[], options: SlotOptions = {}): Promise<ResolvedMedia | null> {
+  const decoded = decodeSegments(parts);
+  if (!decoded) return null;
+  const [category, platform, ...rest] = decoded;
+  if (!isMediaCategory(category) || !isMediaPlatform(platform) || rest.length === 0) return null;
 
   let dir: string;
   let base: string;
   let label: string;
-  let resolvedCategory: MediaCategory;
   let sources: MediaSource[];
+  let ctx: SlotContext | undefined;
 
-  if (category === 'covers' || category === 'icons' || category === 'portraits' || category === 'heroes') {
-    resolvedCategory = category;
-    base = decodeURIComponent(rest[0]);
-    const externalId = lastSegment(base);
-    dir = join(MEDIA_ROOT, category, platform);
-    const row = db
-      .prepare('select title, cover_url, icon_url from games where platform = ? and external_id = ?')
-      .get(platform, externalId) as { title: string; cover_url: string | null; icon_url: string | null } | undefined;
-    label = row?.title ?? externalId;
-    if (category === 'covers') sources = [row?.cover_url];
-    else if (category === 'icons') sources = [row?.icon_url];
-    else if (category === 'portraits') sources = platform === 'steam' ? [steamPortraitUrl(externalId), row?.cover_url] : [row?.cover_url];
-    // PSN: replaceable placeholder banner (no stretched square icon).
-    else sources = platform === 'steam' ? steamHeroSources(externalId, row?.cover_url) : platform === 'psn' ? [] : [row?.cover_url];
-  } else if (category === 'achievements') {
-    resolvedCategory = 'achievements';
-    if (rest.length < 2) return null;
-    const gameDir = decodeURIComponent(rest[0]);
-    base = decodeURIComponent(rest[1]);
-    dir = join(MEDIA_ROOT, 'achievements', platform, gameDir);
+  if (category === 'achievements') {
+    if (rest.length !== 2) return null;
+    const [gameDir, achBase] = rest;
+    if (rest.some((part) => part.length > MAX_SEGMENT_LENGTH)) return null;
+    base = achBase;
     const gameExternalId = lastSegment(gameDir);
+    if (!isValidExternalId(platform, gameExternalId)) return null;
+    dir = join(MEDIA_ROOT, 'achievements', platform, gameDir);
     const locked = base.endsWith('.locked');
     const achId = lastSegment(locked ? base.slice(0, -'.locked'.length) : base);
     const row = db
       .prepare(`
-        select a.title as title, a.icon_url as icon_url, a.locked_icon_url as locked_icon_url
+        select a.title as title, a.icon_url as icon_url, a.locked_icon_url as locked_icon_url, g.title as game_title
         from achievements a
         join games g on g.id = a.game_id
         where g.platform = ? and g.external_id = ? and a.external_id = ?
       `)
       .get(platform, gameExternalId, achId) as
-      { title: string; icon_url: string | null; locked_icon_url: string | null } | undefined;
-    label = row?.title ?? achId;
-    sources = [locked ? (row?.locked_icon_url ?? row?.icon_url) : row?.icon_url];
+      { title: string; icon_url: string | null; locked_icon_url: string | null; game_title: string } | undefined;
+    if (!row) return null;
+    // Only the canonical slug is served; anything else would mint arbitrary files/catalog entries.
+    const canonical = achievementSlot(platform, gameExternalId, row.game_title, achId, row.title, locked);
+    if (gameDir !== basename(canonical.dir) || base !== canonical.base) return null;
+    label = row.title;
+    sources = [dbSource('db', locked ? (row.locked_icon_url ?? row.icon_url) : row.icon_url)];
   } else {
-    return null;
+    if (rest.length !== 1) return null;
+    base = rest[0];
+    if (base.length > MAX_SEGMENT_LENGTH) return null;
+    const externalId = lastSegment(base);
+    if (!isValidExternalId(platform, externalId)) return null;
+    dir = join(MEDIA_ROOT, category, platform);
+    const row = db
+      .prepare('select title, cover_url, icon_url from games where platform = ? and external_id = ?')
+      .get(platform, externalId) as { title: string; cover_url: string | null; icon_url: string | null } | undefined;
+    if (!row) return null;
+    if (base !== gameSlot(category, platform, externalId, row.title).base) return null;
+    label = row.title;
+    sources = mediaSources(category, platform, externalId, row);
+    ctx = { platform, trophyIconUrl: row.cover_url };
   }
 
-  const filePath = await ensureSlot(dir, base, resolvedCategory, label, sources);
+  if (!isInsideMediaRoot(join(dir, base))) return null;
+  const filePath = await ensureSlot(dir, base, category, label, sources, ctx, options);
   const ext = filePath.slice(filePath.lastIndexOf('.') + 1).toLowerCase();
   return { filePath, contentType: MIME[ext] ?? 'application/octet-stream', body: readFileSync(filePath) };
+}
+
+/** Decode and validate every URL segment; null when any is unsafe. */
+function decodeSegments(parts: string[]): string[] | null {
+  try {
+    const decoded = parts.map((part) => decodeURIComponent(part));
+    // category + platform are matched against known sets later; the rest must be plain file names.
+    return decoded.every((part, index) => (index < 2 ? /^[a-z]+$/.test(part) : isSafeSegment(part))) ? decoded : null;
+  } catch {
+    return null;
+  }
 }

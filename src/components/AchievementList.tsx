@@ -1,4 +1,5 @@
-import { Lock, Unlock, Trophy } from 'lucide-react';
+import { Check } from 'lucide-react';
+import { Stamp } from './Stamp';
 import type { AchievementWithStatus, Platform } from '../types/steam';
 
 interface AchievementListProps {
@@ -6,14 +7,11 @@ interface AchievementListProps {
   platform?: Platform;
 }
 
+const percentFormat = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+
 function fmtDate(ts: number): string {
   if (!ts) return '';
   return new Date(ts * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function fmtTime(ts: number): string {
-  if (!ts) return '';
-  return new Date(ts * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -31,92 +29,73 @@ const TYPE_ICON: Record<string, string> = {
 };
 
 const TYPE_COLOR: Record<string, string> = {
-  platinum: 'text-slate-200',
-  gold: 'text-yellow-400',
-  silver: 'text-gray-300',
-  bronze: 'text-orange-300',
+  platinum: 'text-zk-platinum',
+  gold: 'text-zk-gold',
+  silver: 'text-zk-silver',
+  bronze: 'text-zk-bronze',
 };
 
+/** Checklist em tabela densa: nº, imagem, nome + descrição, tipo/pontos, raridade, data e estado. */
 export function AchievementList({ achievements }: AchievementListProps) {
   if (achievements.length === 0) {
-    return (
-      <div className="py-12 text-center text-gray-600">
-        <Trophy className="mx-auto mb-3 h-10 w-10 opacity-30" />
-        <p>Nenhum troféu encontrado para este filtro.</p>
-      </div>
-    );
+    return <p className="py-10 text-sm text-gray-500">Nenhum troféu encontrado para este filtro.</p>;
   }
 
   return (
-    <ul className="space-y-2">
-      {achievements.map((a) => {
+    <div role="table" aria-label="Troféus do jogo" className="trophy-table">
+      <div role="row" className="trophy-head col-head">
+        <span role="columnheader" className="r">#</span>
+        <span role="columnheader"><span className="sr-only">Imagem</span></span>
+        <span role="columnheader">Troféu</span>
+        <span role="columnheader" className="trophy-hide-sm">Tipo</span>
+        <span role="columnheader" className="r">Raridade</span>
+        <span role="columnheader" className="r trophy-hide-sm">Obtido em</span>
+        <span role="columnheader"><span className="sr-only">Estado</span></span>
+      </div>
+      {achievements.map((a, index) => {
         const earned = a.achieved;
-        const trophyIcon = a.type ? TYPE_ICON[a.type] : undefined;
+        const type = a.type;
+        const trophyIcon = type ? TYPE_ICON[type] : undefined;
+        const hasRarity = typeof a.rarity === 'number' && a.rarity > 0;
         return (
-          <li
-            key={a.name}
-            className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
-              earned ? 'border-gray-800 bg-gray-900 hover:border-gray-700' : 'border-gray-900 bg-gray-950/60'
-            }`}
-          >
-            {/* Badge */}
-            <div className="relative shrink-0">
+          <div key={a.name} role="row" className="trophy-row" data-earned={earned} data-platinum={type === 'platinum'}>
+            <span role="cell" className="n r">{index + 1}</span>
+            <span role="cell">
               <img
                 src={earned ? a.icon : a.icongray}
                 alt=""
-                className={`h-12 w-12 rounded-lg ${earned ? '' : 'grayscale opacity-60'}`}
+                className={`trophy-img ${earned ? '' : 'grayscale opacity-60'}`}
                 onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
               />
-            </div>
-
-            {/* Title + description */}
-            <div className="min-w-0 flex-1">
-              <p className={`truncate text-sm font-semibold ${earned ? 'text-gray-100' : 'text-gray-500'}`}>
-                {a.displayName || a.name}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-gray-600">
-                {a.hidden && !earned ? 'Troféu oculto' : a.description || 'Sem descrição'}
-              </p>
-            </div>
-
-            {/* Type (PSN trophy icon) or points (RA) */}
-            {trophyIcon && a.type ? (
-              <div className={`hidden w-24 shrink-0 items-center gap-2 sm:flex ${earned ? '' : 'opacity-60'}`}>
-                <img src={trophyIcon} alt="" className="h-6 w-6 object-contain" />
-                <span className={`text-xs font-semibold ${TYPE_COLOR[a.type] ?? 'text-gray-300'}`}>{TYPE_LABEL[a.type]}</span>
-              </div>
-            ) : typeof a.points === 'number' && a.points > 0 ? (
-              <span className={`hidden w-24 shrink-0 text-xs font-semibold text-amber-300 sm:block ${earned ? '' : 'opacity-60'}`}>
-                {a.points} pts
-              </span>
-            ) : (
-              <span className="hidden w-24 shrink-0 sm:block" />
-            )}
-
-            {/* Date + time */}
-            <div className="hidden w-24 shrink-0 text-right sm:block">
-              {earned && a.unlocktime > 0 ? (
-                <>
-                  <p className="text-xs font-medium text-emerald-400/90 tabular-nums">{fmtDate(a.unlocktime)}</p>
-                  <p className="text-[11px] text-gray-600 tabular-nums">{fmtTime(a.unlocktime)}</p>
-                </>
-              ) : (
-                <p className="text-xs text-gray-700">—</p>
-              )}
-            </div>
-
-            {/* Lock status */}
-            <span
-              className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
-                earned ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-900 text-gray-700'
-              }`}
-              title={earned ? 'Desbloqueado' : 'Bloqueado'}
-            >
-              {earned ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
             </span>
-          </li>
+            <span role="cell" className="min-w-0">
+              <span className="trophy-name">{a.displayName || a.name}</span>
+              <span className="trophy-desc">{a.hidden && !earned ? 'Troféu oculto' : a.description || 'Sem descrição'}</span>
+            </span>
+            <span role="cell" className="trophy-hide-sm trophy-type">
+              {trophyIcon && type ? (
+                <>
+                  <img src={trophyIcon} alt="" />
+                  <span className={TYPE_COLOR[type] ?? 'text-gray-300'}>{TYPE_LABEL[type]}</span>
+                </>
+              ) : typeof a.points === 'number' && a.points > 0 ? (
+                <span className="num">{a.points} pts</span>
+              ) : null}
+            </span>
+            <span role="cell" className="num r">{hasRarity ? `${percentFormat.format(a.rarity as number)}%` : '—'}</span>
+            <span role="cell" className="num r trophy-hide-sm trophy-date">{earned && a.unlocktime > 0 ? fmtDate(a.unlocktime) : '—'}</span>
+            <span role="cell" className="trophy-state">
+              {earned ? (
+                type === 'platinum' && a.unlocktime > 0
+                  ? <Stamp kind="platina" size={24} seed={a.name} />
+                  : <span className="trophy-mark" role="img" aria-label={`Obtido${a.unlocktime > 0 ? ` em ${fmtDate(a.unlocktime)}` : ''}`}><Check size={12} strokeWidth={3} aria-hidden="true" /></span>
+              ) : (
+                <span className="trophy-open" role="img" aria-label="Bloqueado" />
+              )}
+            </span>
+          </div>
         );
       })}
-    </ul>
+    </div>
   );
 }

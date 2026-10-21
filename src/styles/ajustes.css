@@ -1,0 +1,38 @@
+/* Ajustes: menu lateral em texto, seções em régua com rótulo à esquerda e controle à direita (ficha). */
+@layer components {
+  .aj-section { margin-bottom: 2.5rem; max-width: 56rem; }
+  .aj-row { display: grid; grid-template-columns: 12.5rem minmax(0, 1fr); gap: 0.5rem 2rem; align-items: start; padding-block: 1rem; border-top: 1px solid var(--color-gray-800); }
+  .aj-row:last-child { border-bottom: 1px solid var(--color-gray-800); }
+  .aj-label { font-size: 0.875rem; font-weight: 600; color: var(--color-gray-200); }
+  .aj-hint { margin-top: 0.125rem; font-size: 0.75rem; font-weight: 400; line-height: 1.45; color: var(--color-gray-500); }
+  .aj-control { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .aj-control > .field, .aj-control > .field-grow { flex: 1 1 12rem; width: auto; max-width: 26rem; }
+  .aj-status { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; color: var(--color-gray-400); }
+  .aj-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-gray-600); flex-shrink: 0; }
+  .aj-status-dot[data-tone="ok"] { background: var(--zk-complete); }
+  .aj-status-dot[data-tone="error"] { background: var(--zk-danger); }
+  .aj-status-dot[data-tone="run"] { background: var(--zk-gold); }
+  .aj-toast { margin-bottom: 1.25rem; padding: 0.5rem 0.75rem; border-left: 2px solid var(--color-violet-500); background: var(--color-gray-850); font-size: 0.8125rem; color: var(--color-gray-200); }
+  .aj-toast[data-kind="err"] { border-left-color: var(--zk-danger); color: var(--zk-danger); }
+  .aj-toast[data-kind="ok"] { border-left-color: var(--zk-complete); }
+  .aj-danger { border-top: 1px solid var(--zk-danger); padding-top: 1rem; }
+  .aj-danger-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem 1.5rem; align-items: center; padding-block: 1rem; border-bottom: 1px solid var(--color-gray-800); }
+  .aj-progress { height: 4px; background: var(--color-gray-800); overflow: hidden; border-radius: 1px; }
+  .aj-progress > div { height: 100%; background: var(--color-violet-500); transition: width 200ms var(--motion-ease); }
+  .aj-table { width: 100%; font-size: 0.8125rem; }
+  .aj-table td { padding: 0.625rem 0.25rem; border-top: 1px solid var(--color-gray-800); vertical-align: middle; }
+  .aj-table tr:last-child td { border-bottom: 1px solid var(--color-gray-800); }
+
+  @media (max-width: 767px) {
+    .aj-row { grid-template-columns: minmax(0, 1fr); }
+    .aj-danger-row { grid-template-columns: minmax(0, 1fr); }
+    .aj-control > .field, .aj-control > .field-grow { max-width: none; }
+  }
+
+  /* Cabeçalho de seção que quebra linha no celular: número fixo, ação abaixo do título. */
+  .sh-wrap .section-num { flex-shrink: 0; white-space: nowrap; }
+  @media (max-width: 767px) {
+    .sh-wrap { flex-wrap: wrap; }
+    .sh-wrap .section-action { margin-left: 0; flex-basis: 100%; }
+  }
+}

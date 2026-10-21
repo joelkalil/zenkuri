@@ -4,7 +4,7 @@ import type { UserLevel } from '../lib/api';
 /*
   Estilo por faixa. Fica no cliente (e não no servidor) porque o Tailwind precisa
   das classes escritas por extenso, e porque o acento `violet-*` é o token de
-  destaque do tema — assim a faixa acompanha Neo Mirai, Steam, PSNProfiles etc.
+  destaque do tema — assim a faixa acompanha Zenkuri e Papel.
   A faixa nunca é comunicada só por cor: o nome dela aparece sempre ao lado.
 */
 const TIER_STYLE: Record<string, { text: string; ring: string; bar: string }> = {
@@ -14,8 +14,8 @@ const TIER_STYLE: Record<string, { text: string; ring: string; bar: string }> = 
   artesao: { text: 'text-violet-400', ring: 'ring-violet-500/40', bar: 'bg-violet-400' },
   veterano: { text: 'text-violet-400', ring: 'ring-violet-500/60', bar: 'bg-violet-500' },
   mestre: { text: 'text-violet-400', ring: 'ring-violet-500/70', bar: 'bg-violet-500' },
-  sensei: { text: 'text-amber-400', ring: 'ring-amber-400/60', bar: 'bg-amber-400' },
-  lenda: { text: 'text-amber-300', ring: 'ring-amber-300/70', bar: 'bg-amber-300' },
+  sensei: { text: 'text-zk-gold', ring: 'ring-zk-gold/60', bar: 'bg-zk-gold' },
+  lenda: { text: 'text-zk-gold', ring: 'ring-zk-gold/70', bar: 'bg-zk-gold' },
 };
 
 export function tierStyle(tierKey: string) {
@@ -38,7 +38,7 @@ export function LevelBadge({ level, compact = false }: { level: UserLevel; compa
     return (
       <div
         title={caption}
-        className={`mx-auto grid h-10 w-10 place-items-center rounded-xl bg-gray-900 text-[13px] font-bold tabular-nums ring-1 ${style.ring} ${style.text}`}
+        className={`mx-auto grid h-10 w-10 place-items-center rounded bg-gray-900 text-[13px] font-bold tabular-nums ring-1 ${style.ring} ${style.text}`}
       >
         {level.level}
       </div>
@@ -51,7 +51,7 @@ export function LevelBadge({ level, compact = false }: { level: UserLevel; compa
         <span className={`font-display text-[11px] font-semibold uppercase tracking-[0.14em] ${style.text}`}>
           {level.tier.label}
         </span>
-        <span className="text-[11px] font-semibold tabular-nums text-gray-500">Nv {level.level}</span>
+        <span className="text-[11px] font-semibold tabular-nums text-gray-500">Nível {level.level}</span>
       </div>
       <div
         className="h-1 overflow-hidden rounded-full bg-gray-800"
@@ -77,9 +77,10 @@ export function LevelChip({ level }: { level: UserLevel }) {
   const label = `Nível ${level.level}, ${level.tier.label}. ${level.progressPercent}% até o nível ${level.level + 1}. Ver detalhes do nível`;
 
   return (
-    <Link to="/settings?tab=level" className="level-chip" aria-label={label} title={`${formatXp(level.xp)} XP`}>
+    <Link to="/settings?tab=level" className="level-chip" aria-label={label} title={`${level.progressPercent}% para o nível ${level.level + 1} · ${formatXp(level.xp)} XP`}>
       <span className="level-chip-text">
-        <span className="level-chip-number">Nv {level.level}</span>
+        <span className="level-chip-number">Nível {level.level}</span>
+        <span className="level-chip-sep" aria-hidden="true">·</span>
         <span className={`level-chip-tier ${style.text}`}>{level.tier.label}</span>
       </span>
       <span className="level-chip-track" aria-hidden="true">

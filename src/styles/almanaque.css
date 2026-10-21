@@ -1,0 +1,51 @@
+/* Almanaque: mapa de calor com o acento, lista de conclusões por mês e impressão em papel. */
+@layer components {
+  .hm-cell { position: absolute; border-radius: 2px; background: var(--color-gray-800); }
+  .hm-cell[data-level="1"], .hm-swatch[data-level="1"] { background: color-mix(in oklab, var(--color-violet-500) 28%, var(--color-gray-800)); }
+  .hm-cell[data-level="2"], .hm-swatch[data-level="2"] { background: color-mix(in oklab, var(--color-violet-500) 52%, var(--color-gray-800)); }
+  .hm-cell[data-level="3"], .hm-swatch[data-level="3"] { background: color-mix(in oklab, var(--color-violet-500) 78%, var(--color-gray-800)); }
+  .hm-cell[data-level="4"], .hm-swatch[data-level="4"] { background: var(--color-violet-500); }
+  .hm-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: var(--color-gray-800); }
+  .hm-month { position: absolute; top: 0; font-family: var(--font-mono); font-size: 0.6875rem; line-height: 16px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-gray-500); }
+  .hm-heat, .hm-cell, .hm-swatch { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+
+  .al-month { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 1.25rem 0.25rem 0.5rem; border-bottom: 1px solid var(--color-gray-700); }
+  .al-month h3 { font-size: 0.9375rem; font-weight: 700; color: var(--color-gray-100); text-transform: capitalize; }
+  .al-row { display: grid; grid-template-columns: 2.5rem 3.5rem minmax(0, 1fr) 5.5rem 5rem; align-items: center; gap: 1rem; width: 100%; min-height: 48px; padding: 0.25rem; border-bottom: 1px solid var(--color-gray-800); text-align: left; transition: background var(--motion-fast); }
+  .al-row:hover { background: var(--color-gray-850); }
+  .al-row:hover .al-name { color: var(--color-violet-400); }
+  .al-name { font-size: 0.875rem; font-weight: 600; color: var(--color-gray-100); transition: color var(--motion-fast); }
+  .al-date { font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-gray-500); font-variant-numeric: tabular-nums; }
+  .al-plat { font-size: 0.75rem; color: var(--color-gray-400); }
+  .al-kind { font-size: 0.75rem; font-weight: 600; text-align: right; }
+  .al-kind[data-kind="platinum"] { color: var(--zk-platinum); }
+  .al-kind[data-kind="perfect"] { color: var(--zk-complete); }
+
+  .al-year { font-family: var(--font-display); font-weight: 900; font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 767px) {
+    .al-row { grid-template-columns: 2.5rem minmax(0, 1fr) auto; min-height: 56px; }
+    .al-row > .al-plat, .al-row > .al-cover { display: none; }
+  }
+
+  /* Papel puro e tinta preta: reescreve a escala de cinzas com a do tema claro. */
+  @media print {
+    .almanac {
+      --color-gray-50: #0f0e0c; --color-gray-100: #1c1a17; --color-gray-200: #2e2a25; --color-gray-300: #433e37;
+      --color-gray-400: #565047; --color-gray-500: #686157; --color-gray-600: #7a7266; --color-gray-700: #c3b9a8;
+      --color-gray-800: #dcd3c5; --color-gray-850: #eae3d6; --color-gray-900: #fbf8f2; --color-gray-950: #ffffff;
+      --color-violet-500: #b93a23; --color-violet-400: #b93a23;
+      --zk-platinum: #2f6592; --zk-complete: #1f6b44; --zk-gold: #7d5a0a;
+      color: #1c1a17;
+    }
+    .almanac .page-head { border-top-color: #1c1a17; }
+    .al-row { break-inside: avoid; }
+  }
+
+  /* Cabeçalho de seção que quebra linha no celular: número fixo, ação abaixo do título. */
+  .sh-wrap .section-num { flex-shrink: 0; white-space: nowrap; }
+  @media (max-width: 767px) {
+    .sh-wrap { flex-wrap: wrap; }
+    .sh-wrap .section-action { margin-left: 0; flex-basis: 100%; }
+  }
+}

@@ -1,53 +1,77 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Trophy } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { fetchRecentCompletions, type CompletionHistoryItem } from '../lib/api';
 import { GameCover } from '../components/GameCover';
 import { SkeletonCard } from '../components/SkeletonCard';
+import { Stamp } from '../components/Stamp';
 import { PLATFORM_META } from '../lib/platforms';
+import '../styles/hall.css';
 
 type HallFilter = 'all' | 'platinum' | 'perfect';
 
-const FILTERS: { key: HallFilter; label: string }[] = [
-  { key: 'all', label: 'Todas' },
-  { key: 'platinum', label: 'Platinas' },
-  { key: 'perfect', label: '100%' },
+const FILTERS: { key: HallFilter; label: string; param: string | null }[] = [
+  { key: 'all', label: 'Todas', param: null },
+  { key: 'platinum', label: 'Platinas', param: 'platina' },
+  { key: 'perfect', label: '100%', param: '100' },
 ];
 
-function completionDate(item: CompletionHistoryItem) {
-  return new Date(item.completedAt * 1000).toLocaleDateString('pt-BR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+const FROM_HALL = { from: { to: '/hall', label: 'Hall' } };
+const MONTHS_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'] as const;
+
+function toDate(item: CompletionHistoryItem) {
+  return new Date(item.completedAt * 1000);
 }
 
-/** Cartaz de conclusão: capa no formato da biblioteca, selo, número de ordem e data. */
+function isoDate(item: CompletionHistoryItem) {
+  const date = toDate(item);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function longDate(item: CompletionHistoryItem) {
+  return toDate(item).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function shortDate(item: CompletionHistoryItem) {
+  const date = toDate(item);
+  return `${String(date.getDate()).padStart(2, '0')} ${MONTHS_SHORT[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+/** Cartaz de conclusão: capa 2:3 com o carimbo no canto, número de ordem, nome e data. */
 function HallPoster({ item, order }: { item: CompletionHistoryItem; order: number }) {
   const meta = item.game.platform ? PLATFORM_META[item.game.platform] : null;
-  const seal = item.kind === 'platinum' ? '/trophies/platinum.png' : '/trophies/achievement-100.png';
-  const sealLabel = item.kind === 'platinum' ? 'Platina' : '100% das conquistas';
+  const platinum = item.kind === 'platinum';
+  const label = platinum ? 'Platina' : '100%';
 
   return (
-    <article className="game-card">
-      <Link to={`/game/${item.game.appid}`} className="game-card-link" aria-label={`${item.game.name} — ${sealLabel}, ${completionDate(item)}`}>
-        <div className="game-card-cover">
+    <article className="hall-poster">
+      <Link to={`/game/${item.game.appid}`} state={FROM_HALL} aria-label={`${item.game.name} — ${label}, ${longDate(item)}`}>
+        <div className="hall-cover">
           <GameCover game={item.game} portrait className="h-full w-full" imgClassName="object-cover" />
-          <span className="hall-seal" title={sealLabel}><img src={seal} alt="" /></span>
+          <span className="hall-stamp">
+            <Stamp kind={platinum ? 'platina' : '100'} date={isoDate(item)} size={48} seed={item.game.appid} />
+          </span>
         </div>
-        <p className="hall-order">Nº {String(order).padStart(2, '0')}{meta ? ` · ${meta.short}` : ''}</p>
-        <h2 className="game-card-name mt-0.5" title={item.game.name}>{item.game.name}</h2>
+        <p className="hall-order"><span className="n">Nº {String(order).padStart(2, '0')}</span>{meta && <span>{meta.short}</span>}</p>
+        <h3 className="hall-name" title={item.game.name}>{item.game.name}</h3>
+        <p className="hall-date">{shortDate(item)}</p>
       </Link>
-      <p className="game-card-meta">{completionDate(item)}</p>
     </article>
   );
 }
 
 export default function Hall() {
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState<CompletionHistoryItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<HallFilter>('all');
+
+  const filter: HallFilter = FILTERS.find((item) => item.param !== null && item.param === searchParams.get('tipo'))?.key ?? 'all';
+
+  function selectFilter(next: (typeof FILTERS)[number]) {
+    const params = new URLSearchParams(searchParams);
+    if (next.param) params.set('tipo', next.param);
+    else params.delete('tipo');
+    setSearchParams(params, { replace: true });
+  }
 
   useEffect(() => {
     fetchRecentCompletions(500)
@@ -65,10 +89,15 @@ export default function Hall() {
       .map((item) => ({ item, order: orderByKey.get(`${item.game.appid}-${item.kind}`) ?? 0 }));
   }, [items]);
 
-  const visible = useMemo(
-    () => (numbered ?? []).filter(({ item }) => filter === 'all' || item.kind === filter),
-    [numbered, filter],
-  );
+  const years = useMemo(() => {
+    const groups = new Map<number, { item: CompletionHistoryItem; order: number }[]>();
+    for (const entry of numbered ?? []) {
+      if (filter !== 'all' && entry.item.kind !== filter) continue;
+      const year = toDate(entry.item).getFullYear();
+      groups.set(year, [...(groups.get(year) ?? []), entry]);
+    }
+    return [...groups.entries()].sort((a, b) => b[0] - a[0]);
+  }, [numbered, filter]);
 
   const counts = useMemo(() => {
     const platinum = items?.filter((item) => item.kind === 'platinum').length ?? 0;
@@ -76,51 +105,61 @@ export default function Hall() {
     return { platinum, perfect, all: platinum + perfect };
   }, [items]);
 
+  const first = useMemo(() => {
+    if (!items || items.length === 0) return null;
+    return items.reduce((a, b) => (a.completedAt <= b.completedAt ? a : b));
+  }, [items]);
+
   const countOf: Record<HallFilter, number> = { all: counts.all, platinum: counts.platinum, perfect: counts.perfect };
 
   return (
-    <div className="page">
-      <header className="page-head">
-        <div>
-          <span className="page-eyebrow"><Trophy className="h-3.5 w-3.5" aria-hidden="true" /> Coleção de conclusões</span>
-          <h1 className="page-title">Hall da Platina</h1>
-          <p className="page-desc">Cada platina e cada 100% vira um cartaz permanente, numerado na ordem em que aconteceu.</p>
+    <div className="page hall">
+      <header>
+        <div className="hall-head">
+          <h1 className="hall-title">Hall da Platina</h1>
+          <Link to="/almanaque" className="btn btn-secondary btn-sm"><span>Almanaque<span className="hidden sm:inline"> do ano</span> ›</span></Link>
         </div>
-        <div className="page-actions">
-          <button onClick={() => navigate('/almanaque')} className="btn btn-secondary">
-            <BookOpen className="h-4 w-4" aria-hidden="true" /> Almanaque do ano
-          </button>
-        </div>
+        {items && (
+          <p className="lede hall-lede">
+            <span className="num">{counts.all}</span> conclusões · <span className="num">{counts.platinum}</span> {counts.platinum === 1 ? 'platina' : 'platinas'} · <span className="num">{counts.perfect}</span> em 100%
+            {first && <> · desde {longDate(first)}</>}
+          </p>
+        )}
       </header>
 
-      <div className="tabs-bar">
+      <div className="hall-tabs">
         <div className="subtabs" role="group" aria-label="Filtrar conclusões">
-          {FILTERS.map(({ key, label }) => (
-            <button key={key} onClick={() => setFilter(key)} className="subtab" aria-pressed={filter === key}>
-              {label}<span className="count">{countOf[key]}</span>
+          {FILTERS.map((item) => (
+            <button key={item.key} onClick={() => selectFilter(item)} className="subtab" aria-pressed={filter === item.key}>
+              {item.label}<span className="count">{countOf[item.key]}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {error && <div className="rounded-xl border border-red-800/30 bg-red-900/20 p-4 text-sm text-red-400">{error}</div>}
+      {error && <p role="alert" className="text-sm text-zk-danger">{error}</p>}
 
       {!numbered && !error ? (
-        <div className="library-grid">
-          {Array.from({ length: 14 }).map((_, i) => <SkeletonCard key={i} portrait />)}
+        <div className="hall-grid">
+          {Array.from({ length: 16 }).map((_, i) => <SkeletonCard key={i} portrait />)}
         </div>
-      ) : visible.length === 0 ? (
-        <div className="empty-state">
-          <Trophy className="h-7 w-7 text-gray-600" aria-hidden="true" />
-          <strong>O hall espera pela primeira conquista.</strong>
-          <p className="max-w-sm">Cada platina ou 100% vira um cartaz permanente aqui. Escolha um jogo no Plano e comece a caçada.</p>
+      ) : years.length === 0 && numbered ? (
+        <div className="hall-empty">
+          <strong>Nenhuma conclusão registrada</strong>
+          <p>A primeira {filter === 'perfect' ? 'conclusão a 100%' : 'platina'} vira o carimbo nº 1.</p>
+          <Link to="/library?status=inprogress">Ver jogos quase lá</Link>
         </div>
       ) : (
-        <div className="library-grid">
-          {visible.map(({ item, order }) => (
-            <HallPoster key={`${item.game.appid}-${item.kind}`} item={item} order={order} />
-          ))}
-        </div>
+        years.map(([year, entries]) => (
+          <section key={year} aria-label={`Conclusões de ${year}`}>
+            <h2 className="hall-year">{year}<small>{entries.length}</small></h2>
+            <div className="hall-grid">
+              {entries.map(({ item, order }) => (
+                <HallPoster key={`${item.game.appid}-${item.kind}`} item={item} order={order} />
+              ))}
+            </div>
+          </section>
+        ))
       )}
     </div>
   );

@@ -4,12 +4,11 @@ interface SkeletonCardProps {
 
 export function SkeletonCard({ portrait = false }: SkeletonCardProps) {
   return (
-    <div aria-hidden="true" className={portrait ? 'animate-pulse' : 'bg-gray-900 border border-gray-800 rounded-xl overflow-hidden animate-pulse'}>
-      <div className={portrait ? 'aspect-[2/3] rounded-xl bg-gray-800' : 'h-28 bg-gray-800'} />
-      <div className={portrait ? 'pt-3 space-y-2' : 'p-3 space-y-2'}>
-        <div className="h-3 bg-gray-800 rounded w-3/4" />
-        <div className="h-2.5 bg-gray-800 rounded w-1/2" />
-        <div className="h-1.5 bg-gray-800 rounded-full w-full mt-3" />
+    <div aria-hidden="true" className="motion-safe:animate-pulse">
+      <div className={portrait ? 'aspect-[2/3] rounded-sm bg-gray-850' : 'h-28 rounded-sm bg-gray-850'} />
+      <div className="space-y-2 pt-3">
+        <div className="h-3 w-3/4 bg-gray-850" />
+        <div className="h-2.5 w-1/2 bg-gray-850" />
       </div>
     </div>
   );
@@ -17,12 +16,11 @@ export function SkeletonCard({ portrait = false }: SkeletonCardProps) {
 
 export function SkeletonRow() {
   return (
-    <div className="flex items-center gap-4 bg-gray-900 border border-gray-800 rounded-xl p-4 animate-pulse">
-      <div className="w-16 h-16 bg-gray-800 rounded-lg shrink-0" />
+    <div aria-hidden="true" className="flex items-center gap-4 border-b border-gray-800 py-3 motion-safe:animate-pulse">
+      <div className="h-10 w-10 shrink-0 bg-gray-850" />
       <div className="flex-1 space-y-2">
-        <div className="h-3.5 bg-gray-800 rounded w-1/2" />
-        <div className="h-2.5 bg-gray-800 rounded w-1/3" />
-        <div className="h-1.5 bg-gray-800 rounded-full w-full" />
+        <div className="h-3.5 w-1/2 bg-gray-850" />
+        <div className="h-2.5 w-1/3 bg-gray-850" />
       </div>
     </div>
   );

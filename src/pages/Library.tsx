@@ -1,36 +1,37 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
-import type { ElementType } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Activity, Boxes, CheckCircle2, ChevronLeft, ChevronRight, Circle, LayoutGrid, List, Pin, Search, SlidersHorizontal, Trophy, X, XCircle } from 'lucide-react';
+import { LayoutGrid, List, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useSteam } from '../context/SteamContext';
 import { useLocalDb } from '../hooks/useLocalDb';
+import { findScrollParent, useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { LibraryCard } from '../components/LibraryCard';
 import { LibraryRow } from '../components/LibraryRow';
 import { SkeletonCard } from '../components/SkeletonCard';
 import { CollectionsView } from '../components/CollectionsView';
-import { LibraryGameRail } from '../components/LibraryGameRail';
-import type { Platform } from '../types/steam';
+import type { Game, Platform } from '../types/steam';
 import { hasPsnPlatinum, PLATFORM_META } from '../lib/platforms';
+import '../styles/biblioteca.css';
 
 type FilterTab = 'all' | 'inprogress' | 'completed' | 'platinum' | 'notstarted' | 'pinned' | 'dropped';
 type SortMode = 'completion' | 'playtime' | 'name' | 'backlog';
 type PlatformTab = 'all' | Platform;
+type LibraryLayout = 'list' | 'grid';
 
-const TABS: { key: FilterTab; label: string; icon?: ElementType; color?: string }[] = [
+const TABS: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'Todos' },
-  { key: 'inprogress', label: 'Em progresso', icon: Activity, color: 'text-sky-400' },
-  { key: 'completed', label: '100%', icon: CheckCircle2, color: 'text-emerald-400' },
-  { key: 'platinum', label: 'Platina', icon: Trophy, color: 'text-amber-400' },
-  { key: 'notstarted', label: 'Não iniciados', icon: Circle, color: 'text-gray-400' },
-  { key: 'pinned', label: 'Fixados', icon: Pin, color: 'text-violet-400' },
-  { key: 'dropped', label: 'Abandonados', icon: XCircle, color: 'text-red-400' },
+  { key: 'inprogress', label: 'Em progresso' },
+  { key: 'completed', label: '100%' },
+  { key: 'platinum', label: 'Platinas' },
+  { key: 'notstarted', label: 'Não iniciados' },
+  { key: 'pinned', label: 'Fixados' },
+  { key: 'dropped', label: 'Abandonados' },
 ];
 
 const SORTS: { key: SortMode; label: string }[] = [
   { key: 'name', label: 'Alfabética (A–Z)' },
   { key: 'completion', label: 'Conclusão (maior primeiro)' },
   { key: 'playtime', label: 'Tempo jogado' },
-  { key: 'backlog', label: 'Ordem do backlog' },
+  { key: 'backlog', label: 'Ordem da fila' },
 ];
 
 const PLATFORM_TABS: { key: PlatformTab; label: string }[] = [
@@ -40,43 +41,112 @@ const PLATFORM_TABS: { key: PlatformTab; label: string }[] = [
   { key: 'retroachievements', label: 'RetroAchievements' },
 ];
 
-const PAGE_SIZE = 24;
+const BATCH_SIZE = 48;
+const STORAGE_PREFIX = 'zk-lib-visible:';
+
+interface SavedView { visible: number; scrollY: number }
+
+function readSavedView(key: string): SavedView | null {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const { visible, scrollY } = parsed as Partial<SavedView>;
+    if (typeof visible !== 'number' || typeof scrollY !== 'number') return null;
+    return { visible: Math.max(BATCH_SIZE, visible), scrollY };
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedView(key: string, view: SavedView) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(view));
+  } catch {
+    /* armazenamento indisponível: segue sem restauração */
+  }
+}
+
+const numberFormat = new Intl.NumberFormat('pt-BR');
+
+function parseFilter(value: string | null): FilterTab {
+  return TABS.find((tab) => tab.key === value)?.key ?? 'all';
+}
+
+function parsePlatform(value: string | null): PlatformTab {
+  return PLATFORM_TABS.find((tab) => tab.key === value)?.key ?? 'all';
+}
 
 export default function Library() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { gamesWithStats, loading, error, completionMap } = useSteam();
   const { db, toggleBacklog, togglePinned, createCollection, renameCollection, deleteCollection, setCollection } = useLocalDb();
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterTab>(() => (searchParams.get('status') as FilterTab) || 'all');
-  const [platform, setPlatform] = useState<PlatformTab>(() => (searchParams.get('platform') as PlatformTab) || 'all');
   const [sort, setSort] = useState<SortMode>('name');
-  const [view, setView] = useState<'grid' | 'list' | 'collections'>(() => (searchParams.get('view') === 'collections' ? 'collections' : 'grid'));
-  const [page, setPage] = useState(1);
+  const storageKey = STORAGE_PREFIX + searchParams.toString();
+  const [restored] = useState(() => readSavedView(storageKey));
+  const [visibleCount, setVisibleCount] = useState(restored?.visible ?? BATCH_SIZE);
+  const pendingScrollRef = useRef<number | null>(restored?.scrollY ?? null);
+  const listTopRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setPage(1); }, [search, filter, platform, sort]);
+  /* filtro, plataforma, visão e layout vêm da URL: o subnav (Jogos/Coleções) muda a rota sem remontar a página */
+  const filter = parseFilter(searchParams.get('status'));
+  const platform = parsePlatform(searchParams.get('platform'));
+  const isCollections = searchParams.get('view') === 'collections';
+  const layout: LibraryLayout = searchParams.get('layout') === 'grid' ? 'grid' : 'list';
 
-  function setFilterAndUrl(nextFilter: FilterTab) {
-    setFilter(nextFilter);
+  /* qualquer mudança de busca, filtro, plataforma, ordem ou layout volta ao primeiro lote (sem rodar na montagem) */
+  const resetKey = `${search}|${filter}|${platform}|${sort}|${layout}`;
+  const lastResetKeyRef = useRef(resetKey);
+  useEffect(() => {
+    if (lastResetKeyRef.current === resetKey) return;
+    lastResetKeyRef.current = resetKey;
+    setVisibleCount(BATCH_SIZE);
+    if (listTopRef.current && listTopRef.current.getBoundingClientRect().top < 0) {
+      listTopRef.current.scrollIntoView({ block: 'start' });
+    }
+  }, [resetKey]);
+
+  /* guarda o scroll para voltar ao mesmo ponto depois de abrir um jogo.
+     useLayoutEffect: o cleanup roda no commit, antes de o scroll ser zerado pela página seguinte */
+  useLayoutEffect(() => {
+    const scroller = findScrollParent(listTopRef.current);
+    const target: HTMLElement | Window = scroller === document.scrollingElement ? window : scroller;
+    function onScroll() {
+      const saved = readSavedView(storageKey);
+      writeSavedView(storageKey, { visible: saved?.visible ?? BATCH_SIZE, scrollY: scroller.scrollTop });
+    }
+    const list = listTopRef.current;
+    target.addEventListener('scroll', onScroll, { passive: true });
+    /* captura também no clique: a navegação pode ocorrer antes do próximo evento de scroll */
+    list?.addEventListener('click', onScroll, true);
+    return () => {
+      target.removeEventListener('scroll', onScroll);
+      list?.removeEventListener('click', onScroll, true);
+    };
+  }, [storageKey]);
+
+  useEffect(() => {
+    writeSavedView(storageKey, { visible: visibleCount, scrollY: pendingScrollRef.current ?? findScrollParent(listTopRef.current).scrollTop });
+  }, [storageKey, visibleCount]);
+
+  function updateParams(change: (next: URLSearchParams) => void) {
     const next = new URLSearchParams(searchParams);
-    if (nextFilter === 'all') next.delete('status');
-    else next.set('status', nextFilter);
+    change(next);
     setSearchParams(next, { replace: true });
   }
 
-  function setViewAndUrl(nextView: 'grid' | 'list' | 'collections') {
-    setView(nextView);
-    const next = new URLSearchParams(searchParams);
-    if (nextView === 'collections') next.set('view', 'collections');
-    else next.delete('view');
-    setSearchParams(next, { replace: true });
+  function setFilterAndUrl(nextFilter: FilterTab) {
+    updateParams((next) => (nextFilter === 'all' ? next.delete('status') : next.set('status', nextFilter)));
+  }
+
+  function setLayoutAndUrl(nextLayout: LibraryLayout) {
+    updateParams((next) => (nextLayout === 'grid' ? next.set('layout', 'grid') : next.delete('layout')));
   }
 
   function setPlatformAndUrl(nextPlatform: PlatformTab) {
-    setPlatform(nextPlatform);
-    const next = new URLSearchParams(searchParams);
-    if (nextPlatform === 'all') next.delete('platform');
-    else next.set('platform', nextPlatform);
-    setSearchParams(next, { replace: true });
+    updateParams((next) => (nextPlatform === 'all' ? next.delete('platform') : next.set('platform', nextPlatform)));
   }
 
   const platformCounts = useMemo(() => {
@@ -87,32 +157,40 @@ export default function Library() {
     return counts;
   }, [gamesWithStats]);
 
-  const filtered = useMemo(() => {
-    let list = [...gamesWithStats];
+  const matchesStatus = useMemo(() => {
+    const isDropped = (g: Game) => db.dropped.includes(String(g.appid));
+    return (g: Game, tab: FilterTab): boolean => {
+      const c = completionMap.get(g.appid);
+      switch (tab) {
+        case 'pinned': return db.pinned.includes(String(g.appid));
+        case 'dropped': return isDropped(g);
+        case 'platinum': return hasPsnPlatinum(g) && !isDropped(g);
+        case 'completed': return c?.percent === 100 && !isDropped(g);
+        case 'inprogress': return Boolean(c && c.percent > 0 && c.percent < 100) && !isDropped(g);
+        case 'notstarted': return (!c || c.percent === 0) && !isDropped(g);
+        default: return true;
+      }
+    };
+  }, [completionMap, db.pinned, db.dropped]);
 
-    if (platform !== 'all') {
-      list = list.filter((g) => g.platform === platform);
-    }
-
+  /** Jogos após plataforma e busca: base das contagens das abas e da lista. */
+  const scoped = useMemo(() => {
+    let list = gamesWithStats;
+    if (platform !== 'all') list = list.filter((g) => g.platform === platform);
     if (search) {
       const q = search.toLowerCase();
       list = list.filter((g) => g.name.toLowerCase().includes(q));
     }
+    return list;
+  }, [gamesWithStats, platform, search]);
 
-    if (filter === 'pinned') {
-      list = list.filter((g) => db.pinned.includes(String(g.appid)));
-    } else if (filter === 'dropped') {
-      list = list.filter((g) => db.dropped.includes(String(g.appid)));
-    } else if (filter === 'platinum') {
-      list = list.filter((g) => hasPsnPlatinum(g) && !db.dropped.includes(String(g.appid)));
-    } else if (filter === 'completed') {
-      list = list.filter((g) => completionMap.get(g.appid)?.percent === 100 && !db.dropped.includes(String(g.appid)));
-    } else if (filter === 'inprogress') {
-      list = list.filter((g) => { const c = completionMap.get(g.appid); return c && c.percent > 0 && c.percent < 100 && !db.dropped.includes(String(g.appid)); });
-    } else if (filter === 'notstarted') {
-      list = list.filter((g) => { const c = completionMap.get(g.appid); return (!c || c.percent === 0) && !db.dropped.includes(String(g.appid)); });
-    }
+  const tabCounts = useMemo(
+    () => Object.fromEntries(TABS.map(({ key }) => [key, scoped.filter((g) => matchesStatus(g, key)).length])) as Record<FilterTab, number>,
+    [scoped, matchesStatus],
+  );
 
+  const filtered = useMemo(() => {
+    const list = scoped.filter((g) => matchesStatus(g, filter));
     return list.sort((a, b) => {
       if (sort === 'name') return a.name.localeCompare(b.name);
       if (sort === 'playtime') return b.playtime_forever - a.playtime_forever;
@@ -125,41 +203,52 @@ export default function Library() {
       }
       return (completionMap.get(b.appid)?.percent ?? -1) - (completionMap.get(a.appid)?.percent ?? -1);
     });
-  }, [gamesWithStats, completionMap, db.pinned, db.dropped, db.backlog, search, filter, platform, sort]);
+  }, [scoped, matchesStatus, filter, completionMap, db.backlog, sort]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageItems = filtered.slice(0, visibleCount);
+  const hasMore = visibleCount < filtered.length;
+
+  function loadMore() {
+    setVisibleCount((count) => Math.min(count + BATCH_SIZE, filtered.length));
+  }
+
+  const sentinelRef = useInfiniteScroll({ onLoadMore: loadMore, rearmKey: visibleCount });
+
+  /* restaura o scroll uma única vez, quando as linhas restauradas já estão no DOM */
+  useLayoutEffect(() => {
+    if (pendingScrollRef.current === null || pageItems.length === 0) return;
+    findScrollParent(listTopRef.current).scrollTo({ top: pendingScrollRef.current });
+    pendingScrollRef.current = null;
+  }, [pageItems.length]);
 
   const activeFilters = (platform !== 'all' ? 1 : 0) + (sort !== 'name' ? 1 : 0);
 
   function clearAll() {
     setSearch('');
-    setFilter('all');
-    setPlatform('all');
     setSort('name');
-    setSearchParams(view === 'collections' ? { view: 'collections' } : {}, { replace: true });
+    setSearchParams(isCollections ? { view: 'collections' } : {}, { replace: true });
   }
 
   return (
-    <div className="library-page">
-      <h1 className="sr-only">Biblioteca</h1>
-      <div className="library-toolbar">
-        <div className="subtabs" role="group" aria-label="Filtrar por status">
-          {TABS.map(({ key, label }) => (
-            <button key={key} onClick={() => setFilterAndUrl(key)} className="subtab" aria-pressed={filter === key}>{label}</button>
-          ))}
-        </div>
-        <div className="library-tools">
+    <div className="page biblioteca">
+      <header className="lib-head">
+        <h1 className="lib-title">
+          {isCollections ? 'Coleções' : 'Biblioteca'}
+          <small>{filtered.length === gamesWithStats.length ? `${numberFormat.format(gamesWithStats.length)} jogos` : `${numberFormat.format(filtered.length)} de ${numberFormat.format(gamesWithStats.length)} jogos`}</small>
+        </h1>
+        <div className="lib-tools">
           <label className="search-pill"><Search size={16} aria-hidden="true" /><span className="sr-only">Buscar na biblioteca</span>
-            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar na biblioteca" />
+            <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar na biblioteca…" />
           </label>
-          <div className="segmented" role="group" aria-label="Visualização da biblioteca">
-            {([{ key: 'grid', label: 'Grade', icon: LayoutGrid }, { key: 'list', label: 'Lista', icon: List }, { key: 'collections', label: 'Coleções', icon: Boxes }] as const).map(({ key, label, icon: Icon }) => (
-              <button key={key} onClick={() => setViewAndUrl(key)} aria-pressed={view === key} aria-label={label} title={label}>
-                <Icon size={16} aria-hidden="true" />
-              </button>
-            ))}
-          </div>
+          {!isCollections && (
+            <div className="segmented" role="group" aria-label="Visualização da biblioteca">
+              {([{ key: 'list', label: 'Lista', icon: List }, { key: 'grid', label: 'Grade', icon: LayoutGrid }] as const).map(({ key, label, icon: Icon }) => (
+                <button key={key} onClick={() => setLayoutAndUrl(key)} aria-pressed={layout === key} aria-label={label} title={label}>
+                  <Icon size={16} aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          )}
           <FilterSortMenu
             sort={sort} onSort={setSort}
             platform={platform} onPlatform={setPlatformAndUrl}
@@ -167,79 +256,85 @@ export default function Library() {
             onClear={() => { setSort('name'); setPlatformAndUrl('all'); }}
           />
         </div>
-      </div>
+      </header>
 
-      <div className="library-summary">
-        <span>{filtered.length === gamesWithStats.length ? `${gamesWithStats.length} jogos` : `${filtered.length} de ${gamesWithStats.length} jogos`}</span>
-        {platform !== 'all' && <span className="active-filter">
-          <img src={PLATFORM_META[platform].logo} alt="" />{PLATFORM_TABS.find((item) => item.key === platform)?.label}
-          <button onClick={() => setPlatformAndUrl('all')} aria-label="Remover filtro de plataforma"><X size={12} /></button>
-        </span>}
-        {sort !== 'name' && <span className="active-filter">
-          {SORTS.find((item) => item.key === sort)?.label}
-          <button onClick={() => setSort('name')} aria-label="Voltar à ordem alfabética"><X size={12} /></button>
-        </span>}
-      </div>
-
-      {error && <div className="mb-6 rounded-xl border border-red-800/30 bg-red-900/20 p-4 text-sm text-red-400">{error}</div>}
-
-      {view !== 'collections' && <details className="library-organizer">
-        <summary>Organizar jogos em coleções</summary>
-        <LibraryGameRail games={filtered} collections={db.collections} collectionOf={db.collectionOf} onAssign={setCollection} />
-      </details>}
-      <div className="min-w-0">
-
-      {loading && filtered.length === 0 ? (
-        <div className="library-grid">
-          {Array.from({ length: 14 }).map((_, i) => <SkeletonCard key={i} portrait />)}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="gallery-empty"><Search size={28} aria-hidden="true" /><p className="text-lg font-medium text-gray-200">Nenhum jogo corresponde a este filtro.</p><p>Tente outro nome, plataforma ou status.</p><button className="btn btn-secondary" onClick={clearAll}>Limpar filtros</button></div>
-      ) : view === 'collections' ? (
-        <CollectionsView
-          games={filtered} completionMap={completionMap}
-          collections={db.collections} collectionOf={db.collectionOf}
-          onCreate={createCollection} onRename={renameCollection}
-          onDelete={deleteCollection} onAssign={setCollection}
-          showGameRail={false}
-        />
-      ) : view === 'list' ? (
-        <div className="library-list">
-          {pageItems.map((g) => (
-            <LibraryRow key={g.appid} game={g} completion={completionMap.get(g.appid) ?? null}
-              isPinned={db.pinned.includes(String(g.appid))} inBacklog={db.backlog.includes(String(g.appid))}
-              isDropped={db.dropped.includes(String(g.appid))}
-              onToggleBacklog={toggleBacklog} onTogglePinned={togglePinned} />
+      <div className="lib-tabs">
+        <div className="subtabs" role="group" aria-label="Filtrar por status">
+          {TABS.map(({ key, label }) => (
+            <button key={key} onClick={() => setFilterAndUrl(key)} className="subtab" aria-pressed={filter === key}>
+              {label}<span className="count">{numberFormat.format(tabCounts[key])}</span>
+            </button>
           ))}
         </div>
-      ) : (
-        <div className="library-grid">
-          {pageItems.map((g) => (
-            <LibraryCard key={g.appid} game={g} completion={completionMap.get(g.appid) ?? null}
-              isPinned={db.pinned.includes(String(g.appid))} inBacklog={db.backlog.includes(String(g.appid))}
-              isDropped={db.dropped.includes(String(g.appid))}
-              onToggleBacklog={toggleBacklog} onTogglePinned={togglePinned} />
-          ))}
+      </div>
+
+      {activeFilters > 0 && (
+        <div className="lib-filters">
+          <span>Filtros:</span>
+          {platform !== 'all' && <span className="active-filter">
+            <img src={PLATFORM_META[platform].logo} alt="" />{PLATFORM_TABS.find((item) => item.key === platform)?.label}
+            <button onClick={() => setPlatformAndUrl('all')} aria-label="Remover filtro de plataforma"><X size={12} /></button>
+          </span>}
+          {sort !== 'name' && <span className="active-filter">
+            Ordem: {SORTS.find((item) => item.key === sort)?.label}
+            <button onClick={() => setSort('name')} aria-label="Voltar à ordem alfabética"><X size={12} /></button>
+          </span>}
         </div>
       )}
 
-      {view !== 'collections' && filtered.length > PAGE_SIZE && (
-        <nav className="pager" aria-label="Paginação">
-          <button aria-label="Página anterior" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-            <ChevronLeft className="mx-auto h-4 w-4" />
-          </button>
-          {pageNumbers(page, totalPages).map((p, i) =>
-            p === '…' ? (
-              <span key={`gap-${i}`}>…</span>
-            ) : (
-              <button key={p} aria-label={`Página ${p}`} aria-current={p === page ? 'page' : undefined} onClick={() => setPage(p as number)}>{p}</button>
-            ),
-          )}
-          <button aria-label="Próxima página" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-            <ChevronRight className="mx-auto h-4 w-4" />
-          </button>
-        </nav>
-      )}
+      {error && <p role="alert" className="text-sm text-zk-danger">{error}</p>}
+
+      <div className="min-w-0" ref={listTopRef}>
+        {loading && filtered.length === 0 ? (
+          <div className="library-grid">
+            {Array.from({ length: 14 }).map((_, i) => <SkeletonCard key={i} portrait />)}
+          </div>
+        ) : filtered.length === 0 && !isCollections ? (
+          <div className="gallery-empty"><p className="font-display text-lg font-bold text-gray-100">Nenhum jogo corresponde a este filtro.</p><p>Tente outro nome, plataforma ou status.</p><button className="btn btn-secondary" onClick={clearAll}>Limpar filtros</button></div>
+        ) : isCollections ? (
+          <CollectionsView
+            games={filtered} completionMap={completionMap}
+            collections={db.collections} collectionOf={db.collectionOf}
+            onCreate={createCollection} onRename={renameCollection}
+            onDelete={deleteCollection} onAssign={setCollection}
+          />
+        ) : layout === 'list' ? (
+          <div className="lib-table" role="table" aria-label="Jogos da biblioteca">
+            <div className="lib-head-row col-head" role="row">
+              <span role="columnheader" className="r hide-sm">#</span>
+              <span role="columnheader"><span className="sr-only">Capa</span></span>
+              <span role="columnheader">Jogo</span>
+              <span role="columnheader" className="hide-sm hide-md">Plat.</span>
+              <span role="columnheader" className="r hide-sm">Troféus</span>
+              <span role="columnheader" className="hide-sm">Progresso</span>
+              <span role="columnheader" className="r hide-sm hide-md">Tempo</span>
+              <span role="columnheader"><span className="sr-only">Ações</span></span>
+            </div>
+            {pageItems.map((g, index) => (
+              <LibraryRow key={g.appid} game={g} rank={index + 1} completion={completionMap.get(g.appid) ?? null}
+                isPinned={db.pinned.includes(String(g.appid))} inBacklog={db.backlog.includes(String(g.appid))}
+                isDropped={db.dropped.includes(String(g.appid))}
+                onToggleBacklog={toggleBacklog} onTogglePinned={togglePinned} />
+            ))}
+          </div>
+        ) : (
+          <div className="library-grid">
+            {pageItems.map((g) => (
+              <LibraryCard key={g.appid} game={g} completion={completionMap.get(g.appid) ?? null}
+                isPinned={db.pinned.includes(String(g.appid))} inBacklog={db.backlog.includes(String(g.appid))}
+                isDropped={db.dropped.includes(String(g.appid))}
+                onToggleBacklog={toggleBacklog} onTogglePinned={togglePinned} />
+            ))}
+          </div>
+        )}
+
+        {!isCollections && filtered.length > 0 && (
+          <div className="lib-more">
+            <p role="status" aria-live="polite">Mostrando {numberFormat.format(pageItems.length)} de {numberFormat.format(filtered.length)} jogos</p>
+            {hasMore && <button className="btn btn-secondary" onClick={loadMore}>Carregar mais</button>}
+            {hasMore && <div ref={sentinelRef} aria-hidden="true" className="lib-sentinel" />}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -312,17 +407,4 @@ function FilterSortMenu({ sort, onSort, platform, onPlatform, counts, activeCoun
       </div>}
     </div>
   );
-}
-
-/** Compact page list with ellipses, e.g. 1 … 4 5 [6] 7 8 … 12 */
-function pageNumbers(current: number, total: number): (number | '…')[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const pages: (number | '…')[] = [1];
-  const start = Math.max(2, current - 1);
-  const end = Math.min(total - 1, current + 1);
-  if (start > 2) pages.push('…');
-  for (let p = start; p <= end; p += 1) pages.push(p);
-  if (end < total - 1) pages.push('…');
-  pages.push(total);
-  return pages;
 }
