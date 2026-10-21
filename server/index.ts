@@ -171,7 +171,10 @@ app.get('/api/health', (_req, res) => {
 app.use('/media', async (req, res, next) => {
   try {
     const parts = req.path.replace(/^\/+/, '').split('/').filter(Boolean);
-    const resolved = await serveMedia(parts);
+    // Backfill CLI bypasses the failure TTL; honored only from loopback, never for browser (Origin) requests.
+    const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.ip ?? '');
+    const bypassFailureTtl = req.get('x-zenkuri-backfill') === '1' && loopback && !req.get('origin');
+    const resolved = await serveMedia(parts, { bypassFailureTtl });
     if (!resolved) return res.status(404).end();
     const isPlaceholder = resolved.filePath.toLowerCase().endsWith('.svg');
     res.setHeader('Content-Type', resolved.contentType);

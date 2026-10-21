@@ -12,7 +12,8 @@ import {
   getUserTrophiesEarnedForTitle,
 } from 'psn-api';
 import { psnServiceAuth } from '../serviceAuth';
-import { requireVerifiedLink } from '../verification';
+import { psnAccountId } from './psnAccount';
+import { refreshPsnConceptArt, type PsnTrophyTitleRef } from './psnArt';
 
 const platform: Platform = 'psn';
 
@@ -24,13 +25,6 @@ function trophyUnlocked(counts: any) {
   return trophyTotal(counts);
 }
 
-function psnAccountId(userId: number) {
-  // Conta de serviço (.env) consultando o accountId público vinculado.
-  const link = requireVerifiedLink(userId, platform);
-  const accountId = String(link.accountId ?? '');
-  if (!accountId) throw new Error('PSN is not configured.');
-  return accountId;
-}
 
 export async function syncPsnLibrary(userId: number) {
   const accountId = psnAccountId(userId);
@@ -39,6 +33,7 @@ export async function syncPsnLibrary(userId: number) {
   const limit = 800;
   let received = 0;
   const seen: string[] = [];
+  const trophyTitles: PsnTrophyTitleRef[] = [];
 
   while (true) {
     const response = await getUserTitles(authorization, accountId, { limit, offset });
@@ -50,6 +45,7 @@ export async function syncPsnLibrary(userId: number) {
       const totalTrophies = trophyTotal(title.definedTrophies);
       const earned = trophyUnlocked(title.earnedTrophies);
       seen.push(String(title.npCommunicationId));
+      trophyTitles.push({ npCommunicationId: title.npCommunicationId, name: title.trophyTitleName });
       const game = upsertGame(userId, {
         platform,
         externalId: title.npCommunicationId,
@@ -67,6 +63,8 @@ export async function syncPsnLibrary(userId: number) {
     offset += limit;
     if (received >= total || titles.length === 0) break;
   }
+
+  await refreshPsnConceptArt(userId, trophyTitles);
 
   // Destaca jogos que não pertencem mais a esta conta PSN (ex.: accountId trocado).
   pruneUserGames(userId, platform, seen);
