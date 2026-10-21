@@ -44,6 +44,8 @@ import { syncSteamAchievementsForGame, syncSteamLibrary } from './providers/stea
 import { clearMediaCache, serveMedia, warmAchievementMedia, warmGameMedia } from './media';
 import { getUserLevel, invalidateUserLevel } from './level';
 import { getPlatformLevels, invalidatePlatformLevels } from './platformLevels';
+import { getAutoCollections } from './collections/auto';
+import { scheduleStoreMetaFill } from './storeMeta';
 
 const app = express();
 const port = Number(process.env.ZENKURI_API_PORT ?? 4343);
@@ -130,6 +132,8 @@ async function runPlatformSync(userId: number, platform: Platform) {
   const count = await syncLibrary(userId, platform);
   // Mirror every cover + game icon locally (best effort, never blocks the sync).
   await warmGameMedia(platform).catch(() => 0);
+  // Dev/pub/franquias para as coleções automáticas (não bloqueia; falha não derruba o sync).
+  scheduleStoreMetaFill(platform);
   const games = listGames(userId, platform);
   let achievementSets = 0;
   let detailErrors = 0;
@@ -411,6 +415,12 @@ app.patch('/api/planning/:gameId', (req, res) => {
 app.post('/api/planning/backlog/reorder', (req, res) => {
   const order = Array.isArray(req.body?.order) ? req.body.order.map(String) : [];
   res.json(reorderBacklog(req.userId!, order));
+});
+
+// ─── Coleções automáticas (franquias e empresas, derivadas na leitura) ──────
+
+app.get('/api/collections/auto', (req, res) => {
+  res.json(getAutoCollections(req.userId!));
 });
 
 // ─── Coleções (franquias manuais) ───────────────────────────────────────────
