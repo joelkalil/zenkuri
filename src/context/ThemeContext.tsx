@@ -1,13 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-export type ThemeMode = 'epic' | 'dark' | 'light' | 'steam' | 'psnprofiles';
+export type ThemeMode = 'zenkuri' | 'zenkuri-claro';
 
 export const THEMES: { id: ThemeMode; label: string; description: string }[] = [
-  { id: 'epic', label: 'Launcher', description: 'Preto neutro e azul Epic' },
-  { id: 'dark', label: 'Zenkuri escuro', description: 'Grafite e violeta suave' },
-  { id: 'light', label: 'Zenkuri claro', description: 'Branco mineral e violeta' },
-  { id: 'steam', label: 'Steam', description: 'Azul-petróleo e ciano' },
-  { id: 'psnprofiles', label: 'PSNProfiles', description: 'Cinza claro e azul PlayStation' },
+  { id: 'zenkuri', label: 'Zenkuri', description: 'Sumi quente e vermilhão' },
+  { id: 'zenkuri-claro', label: 'Papel', description: 'Papel claro e vermilhão' },
 ];
 
 interface ThemeContextValue {
@@ -18,20 +15,26 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-/* Versão 2 = redesign "Launcher" (out/2026). Quem já tinha preferência salva
-   passa uma única vez para o tema novo; depois disso a escolha volta a ser
-   respeitada normalmente pelo seletor de Aparência. */
+/* Versão 3 = identidade Zenkuri (hanko + guia de estratégia, out/2026). Na
+   primeira carga: preferência "light" vira zenkuri-claro; qualquer outro valor
+   salvo que não exista mais vira zenkuri. Depois disso a escolha do seletor de
+   Aparência é respeitada normalmente. */
 const THEME_VERSION_KEY = 'zenkuri-theme-version';
-const THEME_VERSION = '2';
+const THEME_VERSION = '3';
+const DEFAULT_THEME: ThemeMode = 'zenkuri';
+
+function isTheme(value: string | null): value is ThemeMode {
+  return THEMES.some((theme) => theme.id === value);
+}
 
 function initialTheme(): ThemeMode {
+  const saved = localStorage.getItem('zenkuri-theme');
   if (localStorage.getItem(THEME_VERSION_KEY) !== THEME_VERSION) {
     localStorage.setItem(THEME_VERSION_KEY, THEME_VERSION);
-    return 'epic';
+    if (saved === 'light') return 'zenkuri-claro';
+    return isTheme(saved) ? saved : DEFAULT_THEME;
   }
-  const saved = localStorage.getItem('zenkuri-theme');
-  if (THEMES.some((theme) => theme.id === saved)) return saved as ThemeMode;
-  return 'epic';
+  return isTheme(saved) ? saved : DEFAULT_THEME;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

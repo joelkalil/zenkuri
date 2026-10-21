@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SteamProvider } from './context/SteamContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TopNav } from './components/TopNav';
-import { StatusBar } from './components/StatusBar';
 import Dashboard from './pages/Dashboard';
 import Library from './pages/Library';
 import GameDetail from './pages/GameDetail';
@@ -68,7 +67,6 @@ function AuthedApp() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
-          <StatusBar />
         </div>
       </BrowserRouter>
     </SteamProvider>

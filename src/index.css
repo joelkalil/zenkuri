@@ -1,202 +1,138 @@
 @import "tailwindcss";
 @import "./gallery.css";
 
-/* Continuous gallery: gray-950 is the canvas, gray-900 a surface,
-   gray-800 a divider, and gray-100 foreground in every theme. */
+/* Zenkuri: gray-950 é o canvas (sumi/papel), gray-900 superfície, gray-800
+   filete e gray-100 texto, em ambos os temas. A escala violet-* carrega o
+   acento vermilhão. Tokens definidos em .artefacts/designs/2026-10-20-brand/brief.md */
 @theme {
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
   --radius-2xl: 0.75rem;
   --radius-3xl: 1rem;
+  --font-display: 'Zen Kaku Gothic New', 'Inter Variable', system-ui, sans-serif;
+  --font-sans: 'Inter Variable', Inter, 'Segoe UI Variable Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-gray-850: #221f1d;
+  --color-zk-bronze: var(--zk-bronze);
+  --color-zk-silver: var(--zk-silver);
+  --color-zk-gold: var(--zk-gold);
+  --color-zk-platinum: var(--zk-platinum);
+  --color-zk-complete: var(--zk-complete);
+  --color-zk-danger: var(--zk-danger);
+  --color-zk-accent-ink: var(--zk-accent-ink);
 }
 
-:root {
+:root,
+[data-theme="zenkuri"] {
   color-scheme: dark;
-  --color-gray-50: #f7f8fa;
-  --color-gray-100: #eceef5;
-  --color-gray-200: #dce0eb;
-  --color-gray-300: #c0c6d5;
-  --color-gray-400: #acb3c4;
-  --color-gray-500: #989fb1;
-  --color-gray-600: #8b94a8;
-  --color-gray-700: #484e60;
-  --color-gray-800: #2e3343;
-  --color-gray-900: #1c202b;
-  --color-gray-950: #131620;
-  --color-violet-200: #d4c9ff;
-  --color-violet-300: #c4b5f5;
-  --color-violet-400: #b09cf0;
-  --color-violet-500: #8973de;
-  --color-violet-600: #6652c7;
-  --color-violet-700: #5440b0;
-  --color-violet-900: #30264e;
-  --color-violet-950: #221d35;
-  --color-indigo-400: #a0a9ef;
-  --color-indigo-600: #535ac5;
-  --color-indigo-700: #444da5;
-  --color-emerald-300: #83d4b3;
-  --color-emerald-400: #60c39b;
-  --color-emerald-500: #339a74;
-}
-
-[data-theme="light"] {
-  color-scheme: light;
-  --color-gray-50: #161924;
-  --color-gray-100: #202330;
-  --color-gray-200: #303646;
-  --color-gray-300: #444b5c;
-  --color-gray-400: #565e70;
-  --color-gray-500: #626879;
-  --color-gray-600: #687082;
-  --color-gray-700: #b6bdcd;
-  --color-gray-800: #e1e5ed;
-  --color-gray-900: #ffffff;
-  --color-gray-950: #f7f8fa;
-  --color-violet-200: #5440a8;
-  --color-violet-300: #5c47b8;
-  --color-violet-400: #6652c7;
-  --color-violet-500: #7058d3;
-  --color-violet-600: #6652c7;
-  --color-violet-700: #5440a8;
-  --color-violet-900: #e8e2fa;
-  --color-violet-950: #f1edf9;
-  --color-indigo-400: #5456b5;
-  --color-indigo-600: #5055ba;
-  --color-indigo-700: #454a9e;
-  --color-blue-200: #315ea0;
-  --color-blue-300: #3564aa;
-  --color-blue-400: #3667ae;
-  --color-sky-300: #226d98;
-  --color-sky-400: #26719d;
-  --color-emerald-300: #1c7656;
-  --color-emerald-400: #197653;
-  --color-emerald-500: #23966c;
-  --color-amber-300: #946114;
-  --color-amber-400: #936017;
-  --color-yellow-400: #8d6611;
-  --color-red-300: #b8464c;
-  --color-red-400: #bb4149;
-  --color-red-500: #c44950;
-  --color-red-600: #ab323d;
-  --color-orange-300: #995b2c;
-  --color-orange-400: #a45d2e;
-  --color-slate-100: #485875;
-  --color-slate-200: #566782;
-  --color-slate-300: #63718a;
-  --color-blue-950: #eef3fb;
-  --color-sky-950: #edf5f9;
-  --color-emerald-900: #e1f2e9;
-  --color-amber-950: #f8f1e4;
-  --color-red-950: #fbf0f0;
-  --color-red-900: #f7e4e6;
-}
-
-/* Steam: biblioteca desktop em azul-petróleo, superfícies densas e ciano. */
-[data-theme="steam"] {
-  color-scheme: dark;
-  --color-gray-50:  oklch(96% 0.010 230);
-  --color-gray-100: oklch(91% 0.015 230);
-  --color-gray-200: oklch(84% 0.018 230);
-  --color-gray-300: oklch(75% 0.020 230);
-  --color-gray-400: oklch(66% 0.025 230);
-  --color-gray-500: oklch(57% 0.030 230);
-  --color-gray-600: oklch(48% 0.032 230);
-  --color-gray-700: oklch(36% 0.040 235);
-  --color-gray-800: oklch(28% 0.038 240);
-  --color-gray-900: oklch(22% 0.032 245);
-  --color-gray-950: oklch(17% 0.027 245);
-  --color-violet-200: oklch(88% 0.090 225);
-  --color-violet-300: oklch(82% 0.115 225);
-  --color-violet-400: oklch(76% 0.135 225);
-  --color-violet-500: oklch(68% 0.145 230);
-  --color-violet-600: oklch(58% 0.145 235);
-  --color-violet-700: oklch(48% 0.120 238);
-  --color-violet-900: oklch(29% 0.060 240);
-  --color-violet-950: oklch(23% 0.045 242);
-  --color-indigo-400: oklch(68% 0.135 235);
-  --color-indigo-600: oklch(50% 0.135 245);
-  --color-indigo-700: oklch(43% 0.110 245);
-  --sun-halo-1: color-mix(in oklab, oklch(68% 0.145 230) 15%, transparent);
-  --sun-halo-2: color-mix(in oklab, oklch(50% 0.100 250) 12%, transparent);
-}
-
-/* PSNProfiles: página clara, painéis brancos, cinza frio e azul PlayStation. */
-[data-theme="psnprofiles"] {
-  color-scheme: light;
-  --color-gray-50:  oklch(18% 0.015 250);
-  --color-gray-100: oklch(24% 0.018 250);
-  --color-gray-200: oklch(31% 0.020 250);
-  --color-gray-300: oklch(39% 0.020 250);
-  --color-gray-400: oklch(47% 0.018 250);
-  --color-gray-500: oklch(54% 0.016 250);
-  --color-gray-600: oklch(61% 0.014 250);
-  --color-gray-700: oklch(76% 0.012 250);
-  --color-gray-800: oklch(87% 0.009 250);
-  --color-gray-900: oklch(98.5% 0.003 250);
-  --color-gray-950: oklch(94% 0.008 250);
-  --color-violet-200: oklch(42% 0.170 255);
-  --color-violet-300: oklch(46% 0.175 255);
-  --color-violet-400: oklch(50% 0.180 255);
-  --color-violet-500: oklch(55% 0.180 255);
-  --color-violet-600: oklch(48% 0.175 255);
-  --color-violet-700: oklch(41% 0.155 255);
-  --color-violet-900: oklch(91% 0.035 250);
-  --color-violet-950: oklch(96% 0.018 250);
-  --color-indigo-400: oklch(50% 0.180 255);
-  --color-indigo-600: oklch(43% 0.170 260);
-  --color-indigo-700: oklch(38% 0.150 260);
-  --color-emerald-300: oklch(44% 0.115 150);
-  --color-emerald-400: oklch(48% 0.120 150);
-  --color-red-400: oklch(50% 0.190 28);
-  --color-red-500: oklch(54% 0.195 28);
+  --color-gray-50: #faf6ee;
+  --color-gray-100: #ede7dd;
+  --color-gray-200: #dad3c8;
+  --color-gray-300: #c4bcb0;
+  --color-gray-400: #a59d92;
+  --color-gray-500: #8f887d;
+  --color-gray-600: #7d766c;
+  --color-gray-700: #4a4540;
+  --color-gray-800: #2e2a27;
+  --color-gray-850: #221f1d;
+  --color-gray-900: #1a1817;
+  --color-gray-950: #121110;
+  --color-violet-200: #f7b4a5;
+  --color-violet-300: #f28b76;
+  --color-violet-400: #ee6e56;
+  --color-violet-500: #e5533a;
+  --color-violet-600: #c8402a;
+  --color-violet-700: #a33222;
+  --color-violet-900: #3d1a14;
+  --color-violet-950: #2a1511;
+  --color-indigo-400: #ee6e56;
+  --color-indigo-600: #c8402a;
+  --color-indigo-700: #a33222;
+  --color-emerald-300: #8fd3ae;
+  --color-emerald-400: #5fb98a;
+  --color-emerald-500: #3f9468;
+  --zk-bronze: #cd8a57;
+  --zk-silver: #b8bec6;
+  --zk-gold: #e3b341;
+  --zk-platinum: #9cc4e8;
+  --zk-complete: #5fb98a;
+  --zk-danger: #f2766b;
+  --zk-accent-ink: #160b08;
+  --accent: #e5533a;
+  --accent-hover: #ee6e56;
+  --accent-ink: #160b08;
   --sun-halo-1: transparent;
   --sun-halo-2: transparent;
 }
 
-/* Epic: launcher contemporâneo — neutros quase-pretos sem matiz, superfícies
-   planas e um único azul de destaque (#26bbff). Os tokens violet-* carregam o
-   acento; violet-600 é a variante escura que aceita texto branco (AA). */
-[data-theme="epic"] {
-  color-scheme: dark;
-  --color-gray-50: #ffffff;
-  --color-gray-100: #f4f4f5;
-  --color-gray-200: #e2e2e5;
-  --color-gray-300: #c4c4c9;
-  --color-gray-400: #a0a0a7;
-  --color-gray-500: #8b8b92;
-  --color-gray-600: #6e6e76;
-  --color-gray-700: #3a3a41;
-  --color-gray-800: #2a2a30;
-  --color-gray-900: #1a1a1f;
-  --color-gray-950: #101014;
-  --color-violet-200: #c4ecff;
-  --color-violet-300: #8fdcff;
-  --color-violet-400: #26bbff;
-  --color-violet-500: #1aa6ea;
-  --color-violet-600: #0a78c2;
-  --color-violet-700: #0a64a3;
-  --color-violet-900: #0c2a3d;
-  --color-violet-950: #0b1b27;
-  --color-indigo-400: #5ccbff;
-  --color-indigo-600: #0a78c2;
-  --color-indigo-700: #0a64a3;
-  --accent: #26bbff;
-  --accent-hover: #5ccbff;
-  --accent-ink: #06121b;
-  --shell-bg: #18181c;
+[data-theme="zenkuri-claro"] {
+  color-scheme: light;
+  --color-gray-50: #0f0e0c;
+  --color-gray-100: #1c1a17;
+  --color-gray-200: #2e2a25;
+  --color-gray-300: #433e37;
+  --color-gray-400: #565047;
+  --color-gray-500: #686157;
+  --color-gray-600: #7a7266;
+  --color-gray-700: #c3b9a8;
+  --color-gray-800: #dcd3c5;
+  --color-gray-850: #eae3d6;
+  --color-gray-900: #fbf8f2;
+  --color-gray-950: #f3eee4;
+  --color-violet-200: #8a2a1a;
+  --color-violet-300: #9c301c;
+  --color-violet-400: #b93a23;
+  --color-violet-500: #b93a23;
+  --color-violet-600: #a23220;
+  --color-violet-700: #8a2a1a;
+  --color-violet-900: #f4dcd4;
+  --color-violet-950: #f8e9e3;
+  --color-indigo-400: #b93a23;
+  --color-indigo-600: #a23220;
+  --color-indigo-700: #8a2a1a;
+  --color-emerald-300: #1f6b44;
+  --color-emerald-400: #1f6b44;
+  --color-emerald-500: #2a7f55;
+  --color-amber-300: #7d5a0a;
+  --color-amber-400: #7d5a0a;
+  --color-yellow-400: #7d5a0a;
+  --color-red-300: #b3261e;
+  --color-red-400: #b3261e;
+  --color-red-500: #b3261e;
+  --color-red-600: #961f18;
+  --color-orange-300: #8f5424;
+  --color-orange-400: #8f5424;
+  --color-red-950: #f8e8e5;
+  --color-red-900: #f2d6d1;
+  --color-emerald-900: #dcebe2;
+  --color-amber-950: #f4ecd9;
+  --zk-bronze: #8f5424;
+  --zk-silver: #5c646e;
+  --zk-gold: #7d5a0a;
+  --zk-platinum: #2f6592;
+  --zk-complete: #1f6b44;
+  --zk-danger: #b3261e;
+  --zk-accent-ink: #ffffff;
+  --accent: #b93a23;
+  --accent-hover: #a23220;
+  --accent-ink: #ffffff;
+  --sun-halo-1: transparent;
+  --sun-halo-2: transparent;
 }
 
-
 * { box-sizing: border-box; }
-body { margin: 0; font-family: 'Inter Variable', Inter, 'Segoe UI Variable Text', system-ui, -apple-system, 'Segoe UI', sans-serif; font-feature-settings: 'cv11', 'ss01'; background: var(--color-gray-950); color: var(--color-gray-200); -webkit-font-smoothing: antialiased; }
+body { margin: 0; font-family: var(--font-sans); font-feature-settings: 'cv11', 'ss01'; font-variant-numeric: tabular-nums; background: var(--color-gray-950); color: var(--color-gray-200); -webkit-font-smoothing: antialiased; }
 button:not(:disabled), summary { cursor: pointer; }
 input::placeholder, textarea::placeholder { color: var(--color-gray-600); }
-:focus-visible { outline: 2px solid var(--color-violet-400); outline-offset: 3px; }
-::selection { background: var(--color-violet-600); color: white; }
+:focus-visible { outline: 2px solid var(--color-violet-400); outline-offset: 2px; }
+::selection { background: var(--color-violet-600); color: var(--zk-accent-ink); }
+h1, h2, h3 { font-family: var(--font-display); }
+h1 { letter-spacing: -0.015em; }
+h2 { letter-spacing: -0.01em; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-gray-700); border-radius: 4px; }
-.font-display, .heading-editorial { font-family: inherit; }
+.heading-editorial { font-family: var(--font-display); }
 .heading-editorial { text-transform: none; letter-spacing: -0.025em; text-wrap: balance; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 input[type="month"]::-webkit-calendar-picker-indicator { cursor: pointer; }
