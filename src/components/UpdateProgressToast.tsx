@@ -45,7 +45,10 @@ function UpdateRow({ item }: UpdateRowProps) {
   return (
     <li className="update-row" data-status={item.status}>
       <div className="update-row-head">
-        <span className="update-row-name">{name}</span>
+        <span className="update-row-name">
+          <img src={PLATFORM_META[item.platform].logo} alt="" className="h-4 w-4 shrink-0 object-contain" />
+          {name}
+        </span>
         <span className="update-row-percent">{percent}</span>
       </div>
       <p className="update-row-step">{step}</p>

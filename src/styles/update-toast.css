@@ -7,8 +7,8 @@
   .update-toast-close { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 4px; color: var(--color-gray-500); transition: background var(--motion-fast), color var(--motion-fast); }
   .update-toast-close:hover { background: var(--color-gray-850); color: var(--color-gray-100); }
   .update-toast-list { display: grid; gap: 0.875rem; margin: 0; padding: 0.875rem 1rem 1rem; list-style: none; }
-  .update-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; font-size: 0.8125rem; }
-  .update-row-name { color: var(--color-gray-100); font-weight: 600; }
+  .update-row-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.8125rem; }
+  .update-row-name { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--color-gray-100); font-weight: 600; }
   .update-row-percent { color: var(--color-gray-300); font-variant-numeric: tabular-nums; }
   .update-row-step { margin-top: 0.125rem; color: var(--color-gray-500); font-size: 0.75rem; }
   .update-row[data-status="error"] .update-row-step { color: var(--zk-danger); }
