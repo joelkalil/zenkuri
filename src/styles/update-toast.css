@@ -1,0 +1,32 @@
+/* Update progress popup: fixed bottom-left, one row per source. Flat, single accent. */
+@layer components {
+  .popover.update-toast { position: fixed; z-index: 58; left: 1rem; bottom: 1rem; width: min(320px, calc(100vw - 2rem)); padding: 0; }
+  .update-toast-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.625rem 0.5rem 0.625rem 1rem; border-bottom: 1px solid var(--color-gray-800); }
+  .update-toast-title { color: var(--color-gray-100); font-size: 0.875rem; font-weight: 600; }
+  .update-toast[data-state="error"] .update-toast-title { color: var(--zk-danger); }
+  .update-toast-close { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 4px; color: var(--color-gray-500); transition: background var(--motion-fast), color var(--motion-fast); }
+  .update-toast-close:hover { background: var(--color-gray-850); color: var(--color-gray-100); }
+  .update-toast-list { display: grid; gap: 0.875rem; margin: 0; padding: 0.875rem 1rem 1rem; list-style: none; }
+  .update-row-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; font-size: 0.8125rem; }
+  .update-row-name { color: var(--color-gray-100); font-weight: 600; }
+  .update-row-percent { color: var(--color-gray-300); font-variant-numeric: tabular-nums; }
+  .update-row-step { margin-top: 0.125rem; color: var(--color-gray-500); font-size: 0.75rem; }
+  .update-row[data-status="error"] .update-row-step { color: var(--zk-danger); }
+  .update-row-bar { height: 3px; margin-top: 0.375rem; border-radius: 1px; background: var(--color-gray-800); overflow: hidden; }
+  .update-row-fill { display: block; height: 100%; background: var(--color-violet-500); transition: width 200ms var(--motion-ease); }
+  /* Failed: neutral stalled fill (never a red close to the accent); danger is carried by the text. */
+  .update-row[data-status="error"] .update-row-percent { color: var(--zk-danger); }
+  .update-row[data-status="error"] .update-row-bar { background: transparent; box-shadow: inset 0 0 0 1px var(--color-gray-800); }
+  .update-row[data-status="error"] .update-row-fill { background: var(--color-gray-500); }
+  .popover.update-toast { animation: update-toast-in 160ms var(--motion-ease); }
+  @keyframes update-toast-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+
+  /* Above the bottom TabBar on phones. */
+  @media (max-width: 767px) {
+    .popover.update-toast { left: 0.75rem; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 0.75rem); width: calc(100vw - 1.5rem); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .popover.update-toast { animation: none; }
+    .update-row-fill { transition: none; }
+  }
+}

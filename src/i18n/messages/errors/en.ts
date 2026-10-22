@@ -32,6 +32,7 @@ export const errorsEn = {
       ra_service_not_configured: 'The RetroAchievements service is not configured on the server. See Tutorials.',
       psn_service_not_configured: 'The PSN service is not configured on the server. See Tutorials.',
       psn_credential_expired: 'The PSN service credential has expired. Update ZENKURI_PSN_NPSSO in .env and restart the server. See Tutorials.',
+      in_progress: 'An update is already running. Wait for it to finish.',
     },
     game: {
       not_found: 'Game not found.',
@@ -85,7 +86,7 @@ export const errorsEn = {
   },
   context: {
     loadGamesFailed: 'Could not load games.',
-    syncFailed: 'Could not sync platforms.',
+    syncFailed: 'Could not update platforms.',
     syncUnknownFailure: 'unknown failure',
     syncPlatformFailure: '{platform}: {reason}',
     syncJoiner: ' · ',

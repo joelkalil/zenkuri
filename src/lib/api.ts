@@ -238,6 +238,31 @@ export function syncPlatform(platform: Platform) {
   return apiFetch<PlatformSyncResult>(`/api/sync/${platform}`, { method: 'POST' });
 }
 
+/** Step of one source during an update; mirrors `SyncStepStatus` on the server. */
+export type SyncStepStatus = 'queued' | 'library' | 'media' | 'achievements' | 'done' | 'error';
+
+export interface PlatformProgress {
+  platform: Platform;
+  status: SyncStepStatus;
+  done: number;
+  total: number;
+  /** Weighted 0-100. */
+  percent: number;
+  errorCode?: string;
+}
+
+export interface SyncProgress {
+  runId: string;
+  startedAt: number;
+  finishedAt?: number;
+  platforms: PlatformProgress[];
+}
+
+/** Progress of the user's current (or just finished) update, or `null` when there is none. */
+export function getSyncProgress() {
+  return apiFetch<{ progress: SyncProgress | null }>('/api/sync/progress').then((res) => res.progress);
+}
+
 export function syncAllPlatforms() {
   return apiFetch<{ ok: boolean; results: PlatformSyncResult[] }>('/api/sync', { method: 'POST' });
 }

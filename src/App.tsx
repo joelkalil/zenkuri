@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SetupTutorials } from './components/SetupTutorials';
 import { SteamProvider } from './context/SteamContext';
+import { UpdateProgressToast } from './components/UpdateProgressToast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TopNav } from './components/TopNav';
 import Dashboard from './pages/Dashboard';
@@ -80,6 +81,7 @@ function AuthedApp() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+        <UpdateProgressToast />
       </div>
     </SteamProvider>
   );

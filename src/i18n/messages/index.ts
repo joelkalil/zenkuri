@@ -36,6 +36,8 @@ import { communityEn } from './community/en';
 import { communityPtBR } from './community/pt-BR';
 import { sagaEn } from './saga/en';
 import { sagaPtBR } from './saga/pt-BR';
+import { updateEn } from './update/en';
+import { updatePtBR } from './update/pt-BR';
 import { errorsEn } from './errors/en';
 import { errorsPtBR } from './errors/pt-BR';
 
@@ -64,6 +66,7 @@ const PT_BR = {
   community: communityPtBR,
   saga: sagaPtBR,
   errors: errorsPtBR,
+  update: updatePtBR,
 };
 
 export type Messages = typeof PT_BR;
@@ -88,6 +91,7 @@ const EN: Shape<Messages> = {
   community: communityEn,
   saga: sagaEn,
   errors: errorsEn,
+  update: updateEn,
 };
 
 export const MESSAGES: Record<Locale, Shape<Messages>> = {

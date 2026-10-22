@@ -17,7 +17,7 @@ import { PLATFORM_META } from '../lib/platforms';
 import {
   authChangePassword, authUpdateProfile, clearMediaCache, deletePlatformConfig, fetchSyncRuns,
   getConfig, importPlanning, linkPlatformAccount,
-  resetPlanning, syncPlatform,
+  resetPlanning,
   type PublicCredential, type SyncRun,
 } from '../lib/api';
 import type { Platform } from '../types/steam';
@@ -317,6 +317,7 @@ function ConnectionsTab({ configured, credByPlatform, latest, onConfigured, flas
   flash: (k: 'ok' | 'err', t: string) => void;
 }) {
   const { t } = useI18n();
+  const { syncOne } = useSteam();
   const describe = useErrorMessage();
   const relativeTime = useRelativeTime();
   const [selected, setSelected] = useState<Platform>('steam');
@@ -327,7 +328,7 @@ function ConnectionsTab({ configured, credByPlatform, latest, onConfigured, flas
     setBusy(true);
     try {
       await linkPlatformAccount(selected, identifier.trim());
-      await syncPlatform(selected);
+      await syncOne(selected);
       flash('ok', t('settings.connections.linked', { platform: PLATFORM_META[selected].label }));
       window.dispatchEvent(new Event('zenkuri-config-updated'));
       onConfigured();
