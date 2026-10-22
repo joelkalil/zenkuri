@@ -60,7 +60,7 @@ function UpdateRow({ item }: UpdateRowProps) {
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        <span className="update-row-fill" style={{ width: `${item.percent}%` }} />
+        <span className="update-row-fill" style={{ transform: `scaleX(${item.percent / 100})` }} />
       </div>
     </li>
   );
