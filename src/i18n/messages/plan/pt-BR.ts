@@ -263,7 +263,7 @@ export const planPtBR = {
       available: 'Disponível',
       outsideLibrary: 'Fora da biblioteca',
     },
-    notSynced: 'Não sincronizado',
+    notSynced: 'Fora da biblioteca',
     done: 'Feito',
     goal: 'meta {target}%',
     inProgress: 'em andamento',

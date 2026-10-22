@@ -32,7 +32,7 @@ export const collectionsPtBR = {
     roleTitles: { dev: 'Desenvolvedora', pub: 'Publicadora', both: 'Desenvolvedora e publicadora' },
     loading: 'Carregando coleções…',
     emptyTitle: 'Nenhuma coleção encontrada.',
-    emptyNone: 'Uma coleção aparece quando pelo menos 2 jogos da biblioteca compartilham a mesma franquia ou empresa. Sincronize a Steam para buscar os metadados.',
+    emptyNone: 'Uma coleção aparece quando pelo menos 2 jogos da biblioteca compartilham a mesma franquia ou empresa. Atualize a Steam para buscar os metadados.',
     emptyFiltered: 'Nenhuma coleção tem jogos dentro dos filtros atuais.',
     colName: 'Nome',
     colGames: 'Jogos',

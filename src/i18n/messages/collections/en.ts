@@ -34,7 +34,7 @@ export const collectionsEn = {
     roleTitles: { dev: 'Developer', pub: 'Publisher', both: 'Developer and publisher' },
     loading: 'Loading collections…',
     emptyTitle: 'No collections found.',
-    emptyNone: 'A collection appears when at least 2 library games share the same franchise or company. Sync Steam to fetch the metadata.',
+    emptyNone: 'A collection appears when at least 2 library games share the same franchise or company. Update Steam to fetch the metadata.',
     emptyFiltered: 'No collection has games within the current filters.',
     colName: 'Name',
     colGames: 'Games',

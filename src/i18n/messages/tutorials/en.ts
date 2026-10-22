@@ -72,7 +72,7 @@ export const tutorialsEn = {
     errors: {
       e1: {
         problem: 'The library shows up, but without achievements.',
-        fix: 'Your profile or "Game details" are not Public. Fix the privacy setting and sync again.',
+        fix: 'Your profile or "Game details" are not Public. Fix the privacy setting and update again.',
       },
       e2: {
         problem: 'The Steam key is invalid or has expired.',
@@ -113,7 +113,7 @@ export const tutorialsEn = {
     },
     errors: {
       e1: {
-        problem: 'Sync fails saying the credential expired.',
+        problem: 'Update fails saying the credential expired.',
         fix: 'The NPSSO expired. Generate a new token, update `ZENKURI_PSN_NPSSO` in `.env` and restart the server.',
       },
       e2: {
@@ -122,7 +122,7 @@ export const tutorialsEn = {
       },
       e3: {
         problem: 'The profile links, but no trophies show up.',
-        fix: 'Your trophy privacy does not allow reading. Change it under Privacy > Gaming | Media and sync again.',
+        fix: 'Your trophy privacy does not allow reading. Change it under Privacy > Gaming | Media and update again.',
       },
       e4: {
         problem: 'The ssocookie address shows an error instead of the `npsso`.',
@@ -153,7 +153,7 @@ export const tutorialsEn = {
     },
     errors: {
       e1: {
-        problem: 'Authentication error while syncing.',
+        problem: 'Authentication error while updating.',
         fix: 'Check that `ZENKURI_RA_USERNAME` owns the key in `ZENKURI_RA_API_KEY`, with no stray spaces, and restart the server.',
       },
       e2: {

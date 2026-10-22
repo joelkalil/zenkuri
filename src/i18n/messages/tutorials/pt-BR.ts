@@ -74,7 +74,7 @@ export const tutorialsPtBR = {
     errors: {
       e1: {
         problem: 'A biblioteca aparece, mas sem conquistas.',
-        fix: 'O perfil ou os "Detalhes do jogo" não estão Públicos. Ajuste a privacidade e sincronize de novo.',
+        fix: 'O perfil ou os "Detalhes do jogo" não estão Públicos. Ajuste a privacidade e atualize de novo.',
       },
       e2: {
         problem: 'A chave da Steam está inválida ou expirou.',
@@ -115,7 +115,7 @@ export const tutorialsPtBR = {
     },
     errors: {
       e1: {
-        problem: 'A sincronização falha dizendo que a credencial expirou.',
+        problem: 'O update falha dizendo que a credencial expirou.',
         fix: 'O NPSSO expirou. Gere um token novo, atualize `ZENKURI_PSN_NPSSO` no `.env` e reinicie o servidor.',
       },
       e2: {
@@ -124,7 +124,7 @@ export const tutorialsPtBR = {
       },
       e3: {
         problem: 'O perfil vincula, mas os troféus não aparecem.',
-        fix: 'A privacidade dos troféus do perfil não permite a leitura. Ajuste em Privacidade > Jogos | Mídia e sincronize de novo.',
+        fix: 'A privacidade dos troféus do perfil não permite a leitura. Ajuste em Privacidade > Jogos | Mídia e atualize de novo.',
       },
       e4: {
         problem: 'O endereço do ssocookie mostra um erro em vez do `npsso`.',
@@ -155,7 +155,7 @@ export const tutorialsPtBR = {
     },
     errors: {
       e1: {
-        problem: 'Erro de autenticação ao sincronizar.',
+        problem: 'Erro de autenticação ao atualizar.',
         fix: 'Confira se `ZENKURI_RA_USERNAME` é o dono da chave em `ZENKURI_RA_API_KEY`, sem espaços sobrando, e reinicie o servidor.',
       },
       e2: {

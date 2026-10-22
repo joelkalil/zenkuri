@@ -265,7 +265,7 @@ export const planEn = {
       available: 'Available',
       outsideLibrary: 'Outside the library',
     },
-    notSynced: 'Not synced',
+    notSynced: 'Not in the library',
     done: 'Done',
     goal: 'goal {target}%',
     inProgress: 'in progress',

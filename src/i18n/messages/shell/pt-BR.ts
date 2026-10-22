@@ -4,12 +4,12 @@ export const shellPtBR = {
     tagline: '全クリ — zerar tudo',
   },
   sync: {
-    never: 'Nunca sincronizado',
-    syncing: 'Sincronizando…',
-    failed: 'Falha ao sincronizar',
-    failedWithReason: 'Falha ao sincronizar: {error}',
-    syncedAgo: 'Sincronizado {when}',
-    syncNow: 'Sincronizar agora',
+    never: 'Nunca atualizado',
+    syncing: 'Updating…',
+    failed: 'Update failed',
+    failedWithReason: 'Update failed: {error}',
+    syncedAgo: 'Updated {when}',
+    syncNow: 'Update now',
   },
   profile: {
     openMenu: 'Abrir menu do perfil',

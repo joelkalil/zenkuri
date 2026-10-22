@@ -26,7 +26,7 @@ export const hallPtBR = {
   levelPanel: {
     title: 'Nível Zenkuri',
     progress: 'Progresso para o nível {next}',
-    empty: 'Sincronize uma plataforma para começar a acumular XP.',
+    empty: 'Atualize uma plataforma para começar a acumular XP.',
     intoLevel: '{into} de {total} XP no nível. Faltam {remaining} para o {next}',
     tierArrives: '; {tier} chega no {minLevel}',
     stats: {

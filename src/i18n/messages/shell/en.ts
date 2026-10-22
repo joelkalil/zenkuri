@@ -7,12 +7,12 @@ export const shellEn = {
     tagline: '全クリ — complete everything',
   },
   sync: {
-    never: 'Never synced',
-    syncing: 'Syncing…',
-    failed: 'Sync failed',
-    failedWithReason: 'Sync failed: {error}',
-    syncedAgo: 'Synced {when}',
-    syncNow: 'Sync now',
+    never: 'Never updated',
+    syncing: 'Updating…',
+    failed: 'Update failed',
+    failedWithReason: 'Update failed: {error}',
+    syncedAgo: 'Updated {when}',
+    syncNow: 'Update now',
   },
   profile: {
     openMenu: 'Open profile menu',

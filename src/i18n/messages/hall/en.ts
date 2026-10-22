@@ -29,7 +29,7 @@ export const hallEn = {
   levelPanel: {
     title: 'Zenkuri level',
     progress: 'Progress to level {next}',
-    empty: 'Sync a platform to start earning XP.',
+    empty: 'Update a platform to start earning XP.',
     intoLevel: '{into} of {total} XP in this level. {remaining} to go for level {next}',
     tierArrives: '; {tier} arrives at level {minLevel}',
     stats: {

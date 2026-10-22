@@ -91,11 +91,11 @@ Zenkuri separates what is only yours from what is shared.
 | **Where it lives** | Local SQLite database in `data/` | Versioned JSON packs in `community/` |
 | **Who edits it** | You, in the app | Anyone, via pull request |
 | **In the app** | Editable | Read-only |
-| **Content** | Synced libraries (Steam, PSN, RetroAchievements), manual collections, automatic collections by franchise or company, plan, game notes and automatic rankings | Curated sagas and rankings |
+| **Content** | Libraries (Steam, PSN, RetroAchievements) loaded by **Update**, manual collections, automatic collections by franchise or company, plan, game notes and automatic rankings | Curated sagas and rankings |
 
 **Your data** never leaves your machine. `data/zenkuri.sqlite` (and `-wal`/`-shm`), `data/media/` and `data/personal/` are git-ignored; `data/imgs/` is versioned (platform icons).
 
-- **Automatic collections** by franchise or company are derived from store metadata (developer, publisher, franchise). To fill in that metadata for games you have already synced: `npm run meta:backfill`.
+- **Automatic collections** by franchise or company are derived from store metadata (developer, publisher, franchise). To fill in that metadata for games you have already updated: `npm run meta:backfill`.
 - **Plan** is manual: you build and edit it at `/plano`. Nothing is AI-generated.
 - **Game notes** are personal and live on each game's page.
 - **Automatic rankings** (**Finish now (Fechar agora)**, **Quick wins (Rápidos)**, **Long hauls (Projetos longos)** and **Demanding (Exigentes)**) are computed from your own library, with deterministic rules and no LLM.
@@ -124,7 +124,7 @@ npm run dev
 
 1. Open <http://localhost:5173> (web, Vite). The API (Express) starts at <http://localhost:4343>.
 2. On the login screen, use **Create account (Criar conta)**. Each account has its own data.
-3. Connect the platforms by entering public identifiers only (SteamID64 or profile URL, PSN Online ID, RetroAchievements username) and sync.
+3. Connect the platforms by entering public identifiers only (SteamID64 or profile URL, PSN Online ID, RetroAchievements username) and press **Update**.
 4. Optional: `npm run meta:backfill` (franchise and company collections) and `npm run media:backfill` (pending artwork; requires the server to be running).
 
 **Install scripts (better-sqlite3).** `package.json` has an `allowScripts` block approving `better-sqlite3`, `esbuild` and `fsevents`. `better-sqlite3` needs its install script to build (or download) the native SQLite binding. On npm versions that block dependency scripts, the block's approval should be enough. If the server fails with a missing binding error (`Could not locate the bindings file`), run:
@@ -156,12 +156,12 @@ Copy `.env.example` to `.env`. **Never commit `.env`** (it is already in `.gitig
 
 The optional variables are commented out in `.env.example`; uncomment only the ones you will change (an empty variable does not fall back to the default).
 
-You only need to configure the platforms you will sync; without the key, syncing that platform fails with a message naming the missing variable.
+You only need to configure the platforms you will update; without the key, updating that platform fails with a message naming the missing variable.
 
 **How to get each credential** (the in-app **Tutorials (Tutoriais)** page at `/tutoriais` covers the same steps)
 
-- **Steam Web API key:** <https://steamcommunity.com/dev/apikey> (requires a Steam account; enter any domain). The profile to sync must have game details set to public.
-- **PSN `npsso`:** sign in at [playstation.com](https://www.playstation.com) with the account, then open <https://ca.account.sony.com/api/v1/ssocookie> and copy the `npsso` value. It expires periodically; when PSN sync fails, generate a new one and restart the server.
+- **Steam Web API key:** <https://steamcommunity.com/dev/apikey> (requires a Steam account; enter any domain). The profile to update must have game details set to public.
+- **PSN `npsso`:** sign in at [playstation.com](https://www.playstation.com) with the account, then open <https://ca.account.sony.com/api/v1/ssocookie> and copy the `npsso` value. It expires periodically; when the PSN update fails, generate a new one and restart the server.
 - **RetroAchievements:** the username is your profile's; the key (Web API Key) is at <https://retroachievements.org/settings>, under **Keys**.
 
 Data is stored in `data/zenkuri.sqlite` (git-ignored).
@@ -186,14 +186,14 @@ Data is stored in `data/zenkuri.sqlite` (git-ignored).
 | `npm run community:validate` | Validates all packs in `community/`, without touching any database. Exits with code 1 on error. |
 | `npm run meta:backfill` | Fills in store metadata (developer, publisher, franchise) for Steam and RetroAchievements games; the basis of automatic collections. Idempotent. |
 | `npm run media:backfill` | Completes pending artwork in the cache (accepts `-- --dry-run`; the server must be running). |
-| `npm run personal:import` | Imports plan and personal notes from a JSON file into an account (`-- --notes-only` imports just the notes, e.g. after syncing games that were skipped) (see [`CONTRIBUTING.md`](CONTRIBUTING.md#legacy-personal-data)). |
+| `npm run personal:import` | Imports plan and personal notes from a JSON file into an account (`-- --notes-only` imports just the notes, e.g. after updating games that were skipped) (see [`CONTRIBUTING.md`](CONTRIBUTING.md#legacy-personal-data)). |
 
 ## 08 · Artwork and local cache
 
 Images are mirrored in `data/media/` (git-ignored), in folders by type: `covers`, `portraits`, `heroes`, `icons` and `achievements`. The `data/media/catalog.json` file records the source and provenance of each image.
 
 - **Steam:** for newer apps, there is a fallback to the store assets.
-- **PSN:** official artwork is fetched during sync (PS4/PS5 only).
+- **PSN:** official artwork is fetched during an update (PS4/PS5 only).
 - **Manual:** put an image with the same base name in the slot's folder. It takes effect and is never overwritten.
 - **Backfill:** `npm run media:backfill` asks the running server for each pending image (placeholders and PSN slots that can be improved). Use `npm run media:backfill -- --dry-run` to only list them.
 

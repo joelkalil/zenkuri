@@ -62,12 +62,12 @@ export const rankingsEn = {
     platinumsSubtitle: 'PSN',
     perfectsTitle: 'Latest 100%',
     perfectsSubtitle: 'Steam and RetroAchievements',
-    empty: 'No synced completions yet.',
+    empty: 'No completions recorded yet.',
   },
   auto: {
     games: { one: 'game', other: 'games' },
     emptyTitle: 'No games fit for now',
-    emptyBody: 'This list only shows games with synced achievements that are not completed yet. Sync again after playing.',
+    emptyBody: 'This list only shows games with achievement data that are not completed yet. Update again after playing.',
   },
   curated: {
     youHave: 'You own {owned} of {total}',
@@ -79,8 +79,8 @@ export const rankingsEn = {
     errorTitle: 'Could not load the ranking',
   },
   noGames: {
-    title: 'No games synced',
-    body: 'Connect a platform and sync the library: the automatic lists are computed from your achievements.',
+    title: 'No games loaded',
+    body: 'Connect a platform and update the library: the automatic lists are computed from your achievements.',
     connect: 'Connect platforms',
   },
   error: { title: 'Could not load the rankings', retry: 'Try again' },

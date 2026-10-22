@@ -20,7 +20,7 @@ Principles: a single accent (vermilion); paper and ink (warm neutrals: sumi in d
 | Achievements (Conquistas) | Hall, Rankings, Almanac (Almanaque) |
 | Community (Comunidade) | Community, Sagas |
 
-56px top bar (brand, 4 uppercase groups with an accent underline on the active one, `SyncButton`, level chip, `ProfileMenu`) and a 40px subnav with an underline on the active item. The `ProfileMenu` gathers profile, platforms, Settings (Ajustes), Tutorials (Tutoriais) and appearance. Below 768px the navigation becomes a bottom `TabBar` and the profile opens as a sheet.
+56px top bar (brand, 4 uppercase groups with an accent underline on the active one, `SyncButton` (labelled "Update"), level chip, `ProfileMenu`) and a 40px subnav with an underline on the active item. The `ProfileMenu` gathers profile, platforms, Settings (Ajustes), Tutorials (Tutoriais) and appearance. Below 768px the navigation becomes a bottom `TabBar` and the profile opens as a sheet. While an update runs, `UpdateProgressToast` (popover style, fixed bottom-left, above the `TabBar` on phones) shows one row per source with a step label, a 3px accent bar and the percent; it closes itself 5s after a clean finish and stays open on error until closed.
 
 ## Colors
 

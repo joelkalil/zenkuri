@@ -15,7 +15,7 @@ npm run dev
 ```
 
 - Web: <http://localhost:5173>. API: <http://localhost:4343>.
-- On first launch, create an account (**Create account (Criar conta)** tab), connect the platforms and sync.
+- On first launch, create an account (**Create account (Criar conta)** tab), connect the platforms and press **Update**.
 - The keys (Steam Web API, PSN `npsso`, RetroAchievements) and where to get them are in section 06 of the README. Never commit `.env`.
 - Data is stored in `data/zenkuri.sqlite`, which is git-ignored. For a throwaway database, point `ZENKURI_DB_PATH` to another file.
 
@@ -210,7 +210,7 @@ npm run personal:import -- --user <username> [--file data/personal/<username>.js
 - The `<username>` account must exist in the database (create it in the app first).
 - Without `--file`, the default is `data/personal/<username>.json`. That folder is git-ignored: **never commit personal data**.
 - If the account already has a plan, the command refuses; `--replace` replaces the plan. Notes in the file overwrite those for the same game; the rest are kept.
-- Notes for games that are not synced yet are skipped with a warning. After syncing, run the command again with `--notes-only`: it skips the plan (no "already has a plan" error) and imports only the notes.
+- Notes for games that are not in the library yet are skipped with a warning. After running **Update**, run the command again with `--notes-only`: it skips the plan (no "already has a plan" error) and imports only the notes.
 - The database used is the one from `ZENKURI_DB_PATH` (default `data/zenkuri.sqlite`).
 
 Format (`zenkuri.personal/v1`), abridged. The full definition is in `server/personal/file.ts`:

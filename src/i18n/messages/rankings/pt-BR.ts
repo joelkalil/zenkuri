@@ -60,12 +60,12 @@ export const rankingsPtBR = {
     platinumsSubtitle: 'PSN',
     perfectsTitle: 'Últimos 100%',
     perfectsSubtitle: 'Steam e RetroAchievements',
-    empty: 'Nenhuma conclusão sincronizada ainda.',
+    empty: 'Nenhuma conclusão registrada ainda.',
   },
   auto: {
     games: { one: 'jogo', other: 'jogos' },
     emptyTitle: 'Nenhum jogo se encaixa por enquanto',
-    emptyBody: 'Esta lista só mostra jogos com conquistas sincronizadas que ainda não foram concluídos. Sincronize de novo depois de jogar.',
+    emptyBody: 'Esta lista só mostra jogos com conquistas carregadas que ainda não foram concluídos. Atualize de novo depois de jogar.',
   },
   curated: {
     youHave: 'Você tem {owned} de {total}',
@@ -77,8 +77,8 @@ export const rankingsPtBR = {
     errorTitle: 'Não foi possível carregar o ranking',
   },
   noGames: {
-    title: 'Nenhum jogo sincronizado',
-    body: 'Conecte uma plataforma e sincronize a biblioteca: as listas automáticas são calculadas a partir das suas conquistas.',
+    title: 'Nenhum jogo carregado',
+    body: 'Conecte uma plataforma e atualize a biblioteca: as listas automáticas são calculadas a partir das suas conquistas.',
     connect: 'Conectar plataformas',
   },
   error: { title: 'Não foi possível carregar os rankings', retry: 'Tentar de novo' },
