@@ -52,6 +52,7 @@ import { scheduleStoreMetaFill } from './storeMeta';
 import { importCommunityPacksOnStart } from './community/importPacks';
 import { communityRouter } from './routes/community';
 import { gameNotesRouter, planRouter } from './routes/plan';
+import { syncProgress, type SyncReporter } from './syncProgress';
 
 const app = express();
 const port = envInt('ZENKURI_API_PORT', 4343);
@@ -128,9 +129,9 @@ function shouldHydrateAchievements(platform: Platform, game: ApiGame) {
     || game.completion.unlocked !== unlocked;
 }
 
-async function syncPlatform(userId: number, platform: Platform) {
+async function syncPlatform(userId: number, platform: Platform, report?: SyncReporter) {
   try {
-    return await runPlatformSync(userId, platform);
+    return await runPlatformSync(userId, platform, report);
   } finally {
     // New achievements change the XP. Invalidating in `finally` also covers a
     // sync that fails midway: whatever already reached the database must count.
@@ -139,8 +140,10 @@ async function syncPlatform(userId: number, platform: Platform) {
   }
 }
 
-async function runPlatformSync(userId: number, platform: Platform) {
+async function runPlatformSync(userId: number, platform: Platform, report?: SyncReporter) {
+  report?.({ status: 'library' });
   const count = await syncLibrary(userId, platform);
+  report?.({ status: 'media' });
   // Mirror every cover + game icon locally (best effort, never blocks the sync).
   await warmGameMedia(platform).catch(() => 0);
   // Dev/pub/franchises for the automatic collections (non-blocking; a failure does not break the sync).
@@ -153,7 +156,10 @@ async function runPlatformSync(userId: number, platform: Platform) {
   // in isolation in the try/catch below).
   let lastDetailError: string | undefined;
 
-  for (const game of games.filter((item) => shouldHydrateAchievements(platform, item))) {
+  const pending = games.filter((item) => shouldHydrateAchievements(platform, item));
+  report?.({ status: 'achievements', done: 0, total: pending.length });
+
+  for (const [index, game] of pending.entries()) {
     try {
       const synced = await syncAchievements(userId, platform, game.id);
       if (synced > 0) {
@@ -164,6 +170,7 @@ async function runPlatformSync(userId: number, platform: Platform) {
       detailErrors += 1;
       lastDetailError = err instanceof Error ? err.message : String(err);
     }
+    report?.({ status: 'achievements', done: index + 1, total: pending.length });
   }
 
   return { count, achievementSets, detailErrors, lastDetailError };
@@ -300,44 +307,71 @@ app.get('/api/games/:id/achievements', async (req, res, next) => {
   }
 });
 
+// Progress of the user's current (or last finished) update; polled by the client.
+app.get('/api/sync/progress', (req, res) => {
+  res.json({ progress: syncProgress.get(req.userId!) });
+});
+
 app.post('/api/sync/:platform', async (req, res, next) => {
   const platform = assertPlatform(req.params.platform);
-  const runId = createSyncRun(req.userId!, platform);
+  const userId = req.userId!;
+  // Only one update per user at a time, otherwise the shared progress state would be corrupted.
+  const progressRunId = syncProgress.start(userId, [platform]);
+  if (!progressRunId) return void sendError(res, 409, 'sync.in_progress');
+  const report: SyncReporter = (update) => syncProgress.update(userId, progressRunId, platform, update);
+  // Everything after a successful start() lives in try/finally so the run is always finished.
+  let runId: number | undefined;
   try {
-    const result = await syncPlatform(req.userId!, platform);
+    runId = createSyncRun(userId, platform);
+    const result = await syncPlatform(userId, platform, report);
     finishSyncRun(runId, 'success', describeSyncResult(result));
+    syncProgress.complete(userId, progressRunId, platform);
     // `ok` reflects whether the sync came out 100% clean — even without
     // throwing, individual games may have failed (e.g. an invalid key midway
     // through achievement hydration), and the UI needs to know to warn the user.
     res.json({ ok: result.detailErrors === 0, platform, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown sync error';
-    finishSyncRun(runId, 'error', message);
+    // runId is undefined when createSyncRun itself failed; there is no run row to close.
+    if (runId !== undefined) finishSyncRun(runId, 'error', message);
+    syncProgress.fail(userId, progressRunId, platform, error instanceof ApiError ? error.code : undefined);
     next(error);
+  } finally {
+    syncProgress.finish(userId, progressRunId);
   }
 });
 
 app.post('/api/sync', async (req, res, next) => {
+  const userId = req.userId!;
+  let progressRunId: string | null = null;
   try {
-    const configured = listConfiguredPlatforms(req.userId!)
+    const configured = listConfiguredPlatforms(userId)
       .filter((entry) => entry.verified)
       .map((entry) => entry.platform);
+    const startedRunId = syncProgress.start(userId, configured);
+    if (!startedRunId) return void sendError(res, 409, 'sync.in_progress');
+    progressRunId = startedRunId;
     const results = [];
     for (const platform of configured) {
-      const runId = createSyncRun(req.userId!, platform);
+      const runId = createSyncRun(userId, platform);
       try {
-        const result = await syncPlatform(req.userId!, platform);
+        const result = await syncPlatform(userId, platform, (update) => syncProgress.update(userId, startedRunId, platform, update));
         finishSyncRun(runId, 'success', describeSyncResult(result));
+        syncProgress.complete(userId, startedRunId, platform);
         results.push({ platform, ok: result.detailErrors === 0, ...result });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown sync error';
         finishSyncRun(runId, 'error', message);
-        results.push({ platform, ok: false, error: message, code: error instanceof ApiError ? error.code : undefined });
+        const code = error instanceof ApiError ? error.code : undefined;
+        syncProgress.fail(userId, startedRunId, platform, code);
+        results.push({ platform, ok: false, error: message, code });
       }
     }
     res.json({ ok: results.every((r) => r.ok), results });
   } catch (error) {
     next(error);
+  } finally {
+    if (progressRunId) syncProgress.finish(userId, progressRunId);
   }
 });
 

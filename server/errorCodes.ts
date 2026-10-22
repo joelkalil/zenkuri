@@ -29,6 +29,7 @@ export const API_ERROR_CODES = [
   'sync.ra_service_not_configured',
   'sync.psn_service_not_configured',
   'sync.psn_credential_expired',
+  'sync.in_progress',
   'game.not_found',
   'collections.name_required',
   'plan.not_found',

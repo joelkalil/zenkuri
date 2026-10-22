@@ -30,6 +30,7 @@ const DEFAULT_MESSAGES: Record<ApiErrorCode, string> = {
   'sync.ra_service_not_configured': 'ZENKURI_RA_USERNAME / ZENKURI_RA_API_KEY are not configured on the server.',
   'sync.psn_service_not_configured': 'ZENKURI_PSN_NPSSO is not configured on the server.',
   'sync.psn_credential_expired': 'The PSN service credential has expired. Update ZENKURI_PSN_NPSSO in .env and restart the server.',
+  'sync.in_progress': 'An update is already running.',
   'game.not_found': 'Game not found.',
   'collections.name_required': 'The collection name is required.',
   'plan.not_found': 'Plan not found.',
